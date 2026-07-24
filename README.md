@@ -8,7 +8,7 @@ An open source library of creative, framework-agnostic components drawn on canva
 
 **[canvasui.dev](https://canvasui.dev)** · [Docs](https://canvasui.dev/docs) · [Components](https://canvasui.dev/components)
 
-## What makes it different
+## What Makes It Different
 
 Most of the library is built on the experimental [html-in-canvas](https://chromestatus.com/feature/5162535032373248) API, which lets WebGL effects read and redraw your live DOM. Text stays selectable, links stay clickable, and the whole page becomes a texture that fire, fluid, and glass can distort in real time.
 
@@ -20,7 +20,7 @@ Where html-in-canvas is not supported, components degrade gracefully to pure Web
 - **Zero config**: each component is self-contained with sensible defaults and typed props
 - **MCP ready**: point the shadcn MCP server at the registry and let your AI assistant install components
 
-## Quick start
+## Quick Start
 
 Add a component with the shadcn CLI (run `npx shadcn@latest init` first if you have not used it before):
 
@@ -32,7 +32,7 @@ Swap `liquid` for any component and `react` for `vue`, `svelte`, or `vanilla`. T
 
 See the [installation guide](https://canvasui.dev/docs/installation) for manual setup and framework notes.
 
-## Browser support
+## Browser Support
 
 The full html-in-canvas experience currently requires Chrome or Edge 140+ with the `#enable-experimental-web-platform-features` flag. Everywhere else, components automatically fall back to WebGL overlay rendering. Details in the [docs](https://canvasui.dev/docs).
 
