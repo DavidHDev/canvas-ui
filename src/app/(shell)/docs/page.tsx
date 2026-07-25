@@ -7,7 +7,7 @@ import { Footer } from "@/components/landing/footer";
 export const metadata: Metadata = {
   title: "Introduction",
   description:
-    "Canvas UI is a free, open source component library of creative canvas and WebGL effects for React, Solid, Vue, Svelte, and vanilla JS.",
+    "Canvas UI is a free, open source component library of creative canvas and WebGL effects for React, Solid, Preact, Lit, Vue, Svelte, and vanilla JS.",
   alternates: { canonical: "/docs" },
 };
 
@@ -23,7 +23,7 @@ Most of the library is built on the html-in-canvas API, an experimental browser 
 
 ## Framework agnostic
 
-Every component ships in five flavors: React, Solid, Vue, Svelte, and vanilla TypeScript. Each one is a single standalone file, built on the same engine with the same options. Pick your framework once in the docs and every install command and code example follows.
+          Every component ships in seven flavors: React, Solid, Preact, Lit, Vue, Svelte, and vanilla TypeScript. Each one is a single standalone file, built on the same engine with the same options. Pick your framework once in the docs and every install command and code example follows.
 
 ## You own the code
 

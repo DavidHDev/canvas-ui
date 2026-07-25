@@ -42,6 +42,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "preact": "^10.25.4",
+    "lit": "^3.2.0",
     "solid-js": "^1.9.14",
     "tailwindcss": "^4",
     "typescript": "^5",

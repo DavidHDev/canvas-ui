@@ -20,6 +20,12 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-explicit-any": "off",
     },
   },
+  {
+    files: ["src/lib/**/*.lit.ts"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
   globalIgnores([
     "prompts/**",
     "skills/**",

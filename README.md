@@ -15,7 +15,7 @@ Most of the library is built on the experimental [html-in-canvas](https://chrome
 Where html-in-canvas is not supported, components degrade gracefully to pure WebGL overlays, so every visitor gets a working page.
 
 - **25 components** and counting: Liquid, Blaze, Glass, Shatter, VHS, Particle Reveal, and more
-- **Framework agnostic**: React, Solid, Preact, Vue, Svelte, and vanilla JS builds for every component
+- **Framework agnostic**: React, Solid, Preact, Lit, Vue, Svelte, and vanilla JS builds for every component
 - **Copy, do not install**: components ship as source through a shadcn-compatible registry
 - **Zero config**: each component is self-contained with sensible defaults and typed props
 - **MCP ready**: point the shadcn MCP server at the registry and let your AI assistant install components
@@ -28,7 +28,7 @@ Add a component with the shadcn CLI (run `npx shadcn@latest init` first if you h
 npx shadcn@latest add @canvas-ui/liquid-react
 ```
 
-Swap `liquid` for any component and `react` for `solid`, `preact`, `vue`, `svelte`, or `vanilla`. The source lands in `components/canvasui/` in your project, yours to edit.
+Swap `liquid` for any component and `react` for `solid`, `preact`, `lit`, `vue`, `svelte`, or `vanilla`. The source lands in `components/canvasui/` in your project, yours to edit.
 
 See the [installation guide](https://canvasui.dev/docs/installation) for manual setup and framework notes.
 

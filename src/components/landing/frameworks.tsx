@@ -78,6 +78,22 @@ export function Hero() {
 }`,
   },
   {
+    id: "lit",
+    label: "Lit",
+    fileName: "hero.ts",
+    lang: "ts",
+    source: `import { html } from "lit";
+import "@/components/canvasui/ParticleReveal.lit";
+
+export function hero() {
+  return html\`
+    <canvas-ui-particle-reveal .radius=${300}>
+      <your-content></your-content>
+    </canvas-ui-particle-reveal>
+  \`;
+}`,
+  },
+  {
     id: "vanilla",
     label: "Vanilla",
     fileName: "main.ts",
@@ -118,10 +134,10 @@ export async function Frameworks() {
               id="frameworks-heading"
               className="mt-3 text-3xl font-medium tracking-tighter text-balance sm:text-4xl"
             >
-              One component, six flavors.
+              One component, seven flavors.
             </h2>
             <p className="mt-4 max-w-md text-base leading-7 text-muted-foreground">
-              Every effect ships as React, Solid, Preact, Vue, Svelte, and
+              Every effect ships as React, Solid, Preact, Lit, Vue, Svelte, and
               dependency-free vanilla TypeScript. Same engine, same props,
               native to your stack.
             </p>

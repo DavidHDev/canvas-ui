@@ -8,7 +8,7 @@ import { COMPONENTS } from "@/data/components";
 export const metadata: Metadata = {
   title: "Components",
   description:
-    "Browse the Canvas UI components. Creative canvas effects for React, Solid, Vue, Svelte, and vanilla JS.",
+    "Browse the Canvas UI components. Creative canvas effects for React, Solid, Preact, Lit, Vue, Svelte, and vanilla JS.",
   alternates: { canonical: "/components" },
 };
 

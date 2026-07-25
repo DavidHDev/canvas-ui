@@ -17,6 +17,7 @@ const FRAMEWORKS = [
   { id: "svelte", label: "Svelte" },
   { id: "solid", label: "Solid" },
   { id: "preact", label: "Preact" },
+  { id: "lit", label: "Lit" },
   { id: "vanilla", label: "Vanilla" },
 ] as const;
 

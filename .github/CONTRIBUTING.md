@@ -4,7 +4,7 @@ Thanks for your interest in contributing. Issues, bug reports, and pull requests
 
 ## Repo layout
 
-- `src/lib/` is the library itself. Each component has one folder containing the framework wrappers (React `*.tsx`, Solid `*.solid.tsx`, Preact `*.preact.tsx`, Vue `*.vue`, Svelte `*.svelte`, and vanilla `*.ts`) and a shared `*Vanilla.ts` engine where the canvas/WebGL logic lives.
+- `src/lib/` is the library itself. Each component has one folder containing the framework wrappers (React `*.tsx`, Solid `*.solid.tsx`, Preact `*.preact.tsx`, Lit `*.lit.ts`, Vue `*.vue`, Svelte `*.svelte`, and vanilla `*.ts`) and a shared `*Vanilla.ts` engine where the canvas/WebGL logic lives.
 - `src/app/` is the documentation site (Next.js 16, Tailwind v4), deployed to Cloudflare Workers.
 - `src/components/demos/` holds the interactive demos shown in the docs.
 - `scripts/build-registry.mts` generates the shadcn-compatible registry in `public/r/` from `src/lib`. It runs automatically before `dev` and `build`.
