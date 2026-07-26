@@ -6,6 +6,7 @@ import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { GlassObjectDemo } from "@/demos/glass-object-demo";
+import { HeadingAnchor } from "@/components/docs/heading-anchor";
 
 export const metadata: Metadata = {
   title: "Glass Object",
@@ -226,9 +227,15 @@ export default async function GlassObjectPage() {
         installItem="glass-object"
         tags={["webgl", "three.js", "3D"]}
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <section className="mt-8" aria-label="Demo">
-            <h2 className="text-lg font-semibold tracking-[-0.01em]">Demo</h2>
+            <h2
+              id="demo"
+              className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
+            >
+              <HeadingAnchor id="demo">Demo</HeadingAnchor>
+            </h2>
             <p className="mt-2 text-[13px] text-muted-foreground">
               Drag to orbit the glass, then open the controls to tune the
               refraction or swap in your own model, SVG, or image by URL or from

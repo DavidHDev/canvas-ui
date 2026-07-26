@@ -96,6 +96,7 @@ export default async function GlitchPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Photos make the tears and RGB splits easy to see. Drop the interval to 0 for a constant broadcast failure."

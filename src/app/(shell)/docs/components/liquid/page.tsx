@@ -135,6 +135,7 @@ export default async function LiquidPage() {
         installItem="liquid"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Drag across the photo to stir it like liquid."

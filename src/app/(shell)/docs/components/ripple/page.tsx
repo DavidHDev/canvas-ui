@@ -110,6 +110,7 @@ export default async function RipplePage() {
         installItem="ripple"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Click the photos. Refraction and dispersion show best over imagery."

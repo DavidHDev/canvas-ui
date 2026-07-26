@@ -5,6 +5,7 @@ import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
+import { HeadingAnchor } from "@/components/docs/heading-anchor";
 import { LaserDemo } from "@/demos/laser-demo";
 
 export const metadata: Metadata = {
@@ -139,6 +140,20 @@ export default async function LaserPage() {
         installItem="laser"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
+        demoSection
+        beforeInstall={
+          <section className="mt-8" aria-label="Demo">
+            <h2
+              id="demo"
+              className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
+            >
+              <HeadingAnchor id="demo">Demo</HeadingAnchor>
+            </h2>
+            <p className="mt-2 text-[13px] text-muted-foreground">
+              Scroll to see new content print in from behind the laser beam, hot and shimmering.
+            </p>
+          </section>
+        }
       />
       <div className="mx-auto mt-24 w-full max-w-3xl">
         <Footer variant="docs" />

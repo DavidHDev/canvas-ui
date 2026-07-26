@@ -5,6 +5,7 @@ import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
+import { HeadingAnchor } from "@/components/docs/heading-anchor";
 import { ParticleRevealDemo } from "@/demos/particle-reveal-demo";
 
 export const metadata: Metadata = {
@@ -120,7 +121,23 @@ export default async function ParticleRevealPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
-        beforeInstall={<ParticleRevealDemo />}
+        demoSection
+        beforeInstall={
+          <section className="mt-8" aria-label="Demo">
+            <h2
+              id="demo"
+              className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
+            >
+              <HeadingAnchor id="demo">Demo</HeadingAnchor>
+            </h2>
+            <p className="mt-2 text-[13px] text-muted-foreground">
+              Bring the cursor close to merge the dust back into crisp, full-color UI.
+            </p>
+            <div className="mt-3">
+              <ParticleRevealDemo />
+            </div>
+          </section>
+        }
       />
       <div className="mx-auto mt-24 w-full max-w-3xl">
         <Footer variant="docs" />

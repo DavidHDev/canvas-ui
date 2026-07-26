@@ -141,6 +141,7 @@ export default async function VHSPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Photos show the tape playback treatment best, wave, chroma bleed, and grain included."

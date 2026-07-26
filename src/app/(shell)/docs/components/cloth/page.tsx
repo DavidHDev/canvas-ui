@@ -134,6 +134,7 @@ export default async function ClothPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="This whole page is hanging on the fabric. Brush it with your cursor, and open the controls to change the wind."

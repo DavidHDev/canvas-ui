@@ -151,6 +151,7 @@ export default async function DropletsPage() {
         installItem="droplets"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Raindrops refract the photo beneath them as they slide down the page."

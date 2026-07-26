@@ -6,6 +6,7 @@ import { DocsMobileNav } from "@/components/docs/docs-mobile-nav";
 import { GitHubStars } from "@/components/common/github-stars";
 import { SearchButton, SearchDialog } from "@/components/common/site-search";
 import { ThemeToggle } from "@/components/common/theme-toggle";
+import { TOCLayout } from "@/components/docs/toc-layout";
 
 export default function ShellLayout({
   children,
@@ -41,9 +42,7 @@ export default function ShellLayout({
 
       <SearchDialog />
 
-      <main className="flex-1 px-5 py-10 sm:px-8 lg:pt-16 lg:pr-8 lg:pl-72">
-        {children}
-      </main>
+      <TOCLayout>{children}</TOCLayout>
     </div>
   );
 }

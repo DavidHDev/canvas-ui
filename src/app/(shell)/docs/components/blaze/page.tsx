@@ -121,6 +121,7 @@ export default async function BlazePage() {
         installItem="blaze"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Sweep your cursor across the photo to set it alight."

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { HtmlInCanvasBanner } from "@/components/common/html-in-canvas-banner";
 import { ApiReference, type ApiProp } from "@/components/docs/api-reference";
@@ -8,8 +8,12 @@ import { CodeTabs, type CodeVariant } from "@/components/docs/code-tabs";
 import { CopyMenu } from "@/components/docs/copy-menu";
 import { DependencyTabs } from "@/components/docs/dependency-tabs";
 import { InstallTabs } from "@/components/docs/install-tabs";
+import type { TOCItemType } from "@/components/docs/toc-minimap";
+import { TOCSetter } from "@/components/docs/toc-layout";
+import { HeadingAnchor } from "@/components/docs/heading-anchor";
 import { getComponentDependencies, getDemoSource } from "@/lib/registry";
 import { COMPONENTS } from "@/data/components";
+import { TOCMobile } from "./toc-mobile";
 
 export interface ComponentDocProps {
   title: string;
@@ -32,6 +36,11 @@ export interface ComponentDocProps {
   requiresHtmlInCanvas?: boolean;
   /** Props table shown in the API reference section. */
   apiReference?: ApiProp[];
+  /**
+   * Add a "Demo" entry at the top of the auto-generated TOC minimap.
+   * Set true when beforeInstall contains a section with id="demo".
+   */
+  demoSection?: boolean;
 }
 
 export function ComponentDoc({
@@ -43,121 +52,144 @@ export function ComponentDoc({
   installItem,
   tags,
   apiReference,
+  demoSection = false,
   requiresHtmlInCanvas = false,
 }: ComponentDocProps) {
   const { dependencies, devDependencies } =
     getComponentDependencies(installItem);
   const demoSource = getDemoSource(installItem);
 
+  const hasDependencies = dependencies.length > 0 || devDependencies.length > 0;
+  const hasApiReference = !!apiReference && apiReference.length > 0;
+  const toc: TOCItemType[] = [
+    ...(demoSection ? [{ title: "Demo", url: "#demo", depth: 2 }] : []),
+    { title: "Install", url: "#install", depth: 2 },
+    ...(hasDependencies
+      ? [{ title: "Dependencies", url: "#dependencies", depth: 2 }]
+      : []),
+    { title: "Code", url: "#code", depth: 2 },
+    ...(hasApiReference
+      ? [{ title: "API reference", url: "#api-reference", depth: 2 }]
+      : []),
+  ];
+
   return (
-    <article className="mx-auto w-full max-w-3xl">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-[-0.02em]">{title}</h1>
-          <p className="mt-3 max-w-xl text-base leading-7 text-muted-foreground">
-            {description}
-          </p>
-          {tags && tags.length > 0 ? (
-            <div className="mt-4 flex flex-wrap gap-1.5">
-              {tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full border border-border/60 px-2.5 py-0.5 text-[11.5px] text-muted-foreground"
-                >
-                  {tag}
-                </span>
-              ))}
+    <>
+      <article className="mx-auto w-full max-w-3xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-[-0.02em]">
+              {title}
+            </h1>
+            <p className="mt-3 max-w-xl text-base leading-7 text-muted-foreground">
+              {description}
+            </p>
+            {tags && tags.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full border border-border/60 px-2.5 py-0.5 text-[11.5px] text-muted-foreground"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <CopyMenu
+            title={title}
+            description={description}
+            installItem={installItem}
+            variants={variants}
+            apiReference={apiReference}
+            dependencies={dependencies}
+            devDependencies={devDependencies}
+            demoSource={demoSource}
+          />
+        </div>
+
+        {requiresHtmlInCanvas ? <HtmlInCanvasBanner /> : null}
+
+        <TOCMobile items={toc} />
+
+        {preview ? (
+          <section className="mt-8" aria-label="Preview">
+            <div className="relative h-105 touch-none overflow-hidden rounded-xl border border-border/60 bg-background">
+              {preview}
             </div>
-          ) : null}
-        </div>
-        <CopyMenu
-          title={title}
-          description={description}
-          installItem={installItem}
-          variants={variants}
-          apiReference={apiReference}
-          dependencies={dependencies}
-          devDependencies={devDependencies}
-          demoSource={demoSource}
-        />
-      </div>
+          </section>
+        ) : null}
 
-      {requiresHtmlInCanvas ? <HtmlInCanvasBanner /> : null}
+        {beforeInstall}
 
-      {preview ? (
-        <section className="mt-8" aria-label="Preview">
-          <div className="relative h-105 touch-none overflow-hidden rounded-xl border border-border/60 bg-background">
-            {preview}
-          </div>
-        </section>
-      ) : null}
-
-      {beforeInstall}
-
-      <section className="mt-8" aria-label="Installation">
-        <h2
-          id="install"
-          className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
-        >
-          Install
-        </h2>
-        <div className="mt-3">
-          <InstallTabs item={installItem} />
-        </div>
-        <p className="mt-2 text-[13px] text-muted-foreground">
-          Or copy the source below into your project.
-        </p>
-      </section>
-
-      {dependencies.length > 0 || devDependencies.length > 0 ? (
-        <section className="mt-8" aria-label="Dependencies">
+        <section className="mt-8" aria-label="Installation">
           <h2
-            id="dependencies"
+            id="install"
             className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
           >
-            Dependencies
+            <HeadingAnchor id="install">Install</HeadingAnchor>
           </h2>
+          <div className="mt-3">
+            <InstallTabs item={installItem} />
+          </div>
           <p className="mt-2 text-[13px] text-muted-foreground">
-            The install command above adds these automatically. If you copy the
-            source by hand, install them yourself.
+            Or copy the source below into your project.
           </p>
-          <div className="mt-3">
-            <DependencyTabs
-              dependencies={dependencies}
-              devDependencies={devDependencies}
-            />
-          </div>
         </section>
-      ) : null}
 
-      <section className="mt-8" aria-label="Code">
-        <h2
-          id="code"
-          className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
-        >
-          Code
-        </h2>
-        <div className="mt-3">
-          <CodeTabs variants={variants} />
-        </div>
-      </section>
+        {dependencies.length > 0 || devDependencies.length > 0 ? (
+          <section className="mt-8" aria-label="Dependencies">
+            <h2
+              id="dependencies"
+              className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
+            >
+              <HeadingAnchor id="dependencies">Dependencies</HeadingAnchor>
+            </h2>
+            <p className="mt-2 text-[13px] text-muted-foreground">
+              The install command above adds these automatically. If you copy
+              the source by hand, install them yourself.
+            </p>
+            <div className="mt-3">
+              <DependencyTabs
+                dependencies={dependencies}
+                devDependencies={devDependencies}
+              />
+            </div>
+          </section>
+        ) : null}
 
-      {apiReference && apiReference.length > 0 ? (
-        <section className="mt-8" aria-label="API reference">
+        <section className="mt-8" aria-label="Code">
           <h2
-            id="api-reference"
+            id="code"
             className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
           >
-            API reference
+            <HeadingAnchor id="code">Code</HeadingAnchor>
           </h2>
           <div className="mt-3">
-            <ApiReference props={apiReference} />
+            <CodeTabs variants={variants} />
           </div>
         </section>
-      ) : null}
 
-      <ComponentPager slug={installItem} />
-    </article>
+        {apiReference && apiReference.length > 0 ? (
+          <section className="mt-8" aria-label="API reference">
+            <h2
+              id="api-reference"
+              className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
+            >
+              <HeadingAnchor id="api-reference">API reference</HeadingAnchor>
+            </h2>
+            <div className="mt-3">
+              <ApiReference props={apiReference} />
+            </div>
+          </section>
+        ) : null}
+
+        <ComponentPager slug={installItem} />
+      </article>
+
+      <TOCSetter items={toc} />
+    </>
   );
 }
 
@@ -180,12 +212,12 @@ function ComponentPager({ slug }: { slug: string }) {
           rel="prev"
           className="group min-w-0 rounded-xl border border-border/60 p-4 transition-colors duration-150 hover:bg-muted/40"
         >
-          <span className="flex items-center justify-between gap-2 text-sm font-medium text-foreground">
-            {prev.name}
-            <ChevronRight
+          <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <ChevronLeft
               aria-hidden
-              className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-out group-hover:translate-x-0.5"
+              className="-mx-1 size-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-out group-hover:-translate-x-0.5"
             />
+            {prev.name}
           </span>
           <span className="mt-1 block truncate text-[13px] text-muted-foreground">
             {prev.description}
@@ -198,11 +230,11 @@ function ComponentPager({ slug }: { slug: string }) {
           rel="next"
           className="group min-w-0 rounded-xl border border-border/60 p-4 transition-colors duration-150 hover:bg-muted/40 sm:col-start-2"
         >
-          <span className="flex items-center justify-between gap-2 text-sm font-medium text-foreground">
+          <span className="flex items-center justify-end gap-2 text-sm font-medium text-foreground">
             {next.name}
             <ChevronRight
               aria-hidden
-              className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-out group-hover:translate-x-0.5"
+              className="-mx-1 size-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-out group-hover:translate-x-0.5"
             />
           </span>
           <span className="mt-1 block truncate text-[13px] text-muted-foreground">

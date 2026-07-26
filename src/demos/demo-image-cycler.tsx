@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useReducedMotion } from "motion/react";
 
+import { HeadingAnchor } from "@/components/docs/heading-anchor";
+
 const EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
 
 
@@ -25,8 +27,13 @@ export function DemoImageSection({
   images?: string[];
 }) {
   return (
-    <section className="mt-8" aria-label="Demo image">
-      <h2 className="text-lg font-semibold tracking-[-0.01em]">Demo image</h2>
+    <section className="mt-8" aria-label="Demo">
+      <h2
+        id="demo"
+        className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
+      >
+        <HeadingAnchor id="demo">Demo</HeadingAnchor>
+      </h2>
       <p className="mt-2 text-[13px] text-muted-foreground">{hint}</p>
       <div className="mt-3 overflow-hidden rounded-xl border border-border/60">
         <DemoImageCycler images={images} alt={alt} />

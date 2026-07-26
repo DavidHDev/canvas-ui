@@ -158,6 +158,7 @@ export default async function ShatterPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Move your cursor over the photo to break it into floating glass shards."

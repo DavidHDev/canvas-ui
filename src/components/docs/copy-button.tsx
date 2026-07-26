@@ -40,18 +40,18 @@ export function CopyButton({
         className,
       )}
     >
-      <span className="grid size-[15px]">
+      <span className="grid size-3.75">
         <Copy
           aria-hidden
           className={cn(
-            "col-start-1 row-start-1 size-[15px] transition-[opacity,filter] duration-200 ease-out motion-reduce:transition-none",
+            "col-start-1 row-start-1 size-3.75 transition-[opacity,filter] duration-200 ease-out motion-reduce:transition-none",
             copied ? "opacity-0 blur-[3px]" : "opacity-100 blur-none",
           )}
         />
         <Check
           aria-hidden
           className={cn(
-            "col-start-1 row-start-1 size-[15px] transition-[opacity,filter] duration-200 ease-out motion-reduce:transition-none",
+            "col-start-1 row-start-1 size-3.75 transition-[opacity,filter] duration-200 ease-out motion-reduce:transition-none",
             copied ? "opacity-100 blur-none" : "opacity-0 blur-[3px]",
           )}
         />

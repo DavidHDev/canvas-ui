@@ -5,6 +5,7 @@ import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
+import { HeadingAnchor } from "@/components/docs/heading-anchor";
 import { ParticleObjectDemo } from "@/demos/particle-object-demo";
 
 export const metadata: Metadata = {
@@ -211,9 +212,15 @@ export default async function ParticleObjectPage() {
         installItem="particle-object"
         tags={["webgl", "three.js", "3D"]}
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <section className="mt-8" aria-label="Demo">
-            <h2 className="text-lg font-semibold tracking-[-0.01em]">Demo</h2>
+            <h2
+              id="demo"
+              className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
+            >
+              <HeadingAnchor id="demo">Demo</HeadingAnchor>
+            </h2>
             <p className="mt-2 text-[13px] text-muted-foreground">
               Sweep the cursor through the particles, drag to orbit, then open
               the controls to swap in your own model, SVG, or image by URL or

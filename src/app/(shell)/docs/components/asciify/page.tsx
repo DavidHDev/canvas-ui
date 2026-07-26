@@ -135,6 +135,7 @@ export default async function AsciifyPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Move your cursor over the photo to see how it reads as ascii characters."

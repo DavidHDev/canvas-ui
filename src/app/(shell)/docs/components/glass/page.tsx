@@ -147,6 +147,7 @@ export default async function GlassPage() {
         installItem="glass"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Move the lens over the photo to magnify every detail."

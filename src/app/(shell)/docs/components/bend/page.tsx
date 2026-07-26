@@ -121,6 +121,7 @@ export default async function BendPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Scroll to watch the photo bend over the fold along with the rest of the page."

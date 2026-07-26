@@ -158,6 +158,7 @@ export default async function BubblePage() {
         installItem="bubble"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Drag the droplet across the photo, then stop and watch it pool back together."

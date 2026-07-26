@@ -128,6 +128,7 @@ export default async function ParticleScrollPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Rich imagery makes the effect shine, watch every pixel of the photo scatter into dust and settle back as it crosses the line."

@@ -5,6 +5,7 @@ import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
+import { HeadingAnchor } from "@/components/docs/heading-anchor";
 import { PeelDemo } from "@/demos/peel-demo";
 
 export const metadata: Metadata = {
@@ -141,7 +142,23 @@ export default async function PeelPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
-        beforeInstall={<PeelDemo />}
+        demoSection
+        beforeInstall={
+          <section className="mt-8" aria-label="Demo">
+            <h2
+              id="demo"
+              className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
+            >
+              <HeadingAnchor id="demo">Demo</HeadingAnchor>
+            </h2>
+            <p className="mt-2 text-[13px] text-muted-foreground">
+              Move the cursor to an edge and watch the live page peel back like a sticker.
+            </p>
+            <div className="mt-3">
+              <PeelDemo />
+            </div>
+          </section>
+        }
       />
       <div className="mx-auto mt-24 w-full max-w-3xl">
         <Footer variant="docs" />

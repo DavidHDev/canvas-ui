@@ -155,6 +155,7 @@ export default async function GridPage() {
         installItem="grid"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Move your cursor across the photo to ripple it tile by tile."

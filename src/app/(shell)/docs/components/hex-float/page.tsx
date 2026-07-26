@@ -159,6 +159,7 @@ export default async function HexFloatPage() {
         installItem="hex-float"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Move your cursor over the photos to open a readable window and watch the ring of tiles glint."

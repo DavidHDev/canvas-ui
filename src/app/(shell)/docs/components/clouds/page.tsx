@@ -154,6 +154,7 @@ export default async function CloudsPage() {
         installItem="clouds"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Watch the clouds drift across the photo, and push them around with your cursor."

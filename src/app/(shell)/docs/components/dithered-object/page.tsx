@@ -5,6 +5,7 @@ import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
+import { HeadingAnchor } from "@/components/docs/heading-anchor";
 import { DitheredObjectDemo } from "@/demos/dithered-object-demo";
 
 export const metadata: Metadata = {
@@ -204,9 +205,15 @@ export default async function DitheredObjectPage() {
         installItem="dithered-object"
         tags={["webgl", "three.js", "3D"]}
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <section className="mt-8" aria-label="Demo">
-            <h2 className="text-lg font-semibold tracking-[-0.01em]">Demo</h2>
+            <h2
+              id="demo"
+              className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
+            >
+              <HeadingAnchor id="demo">Demo</HeadingAnchor>
+            </h2>
             <p className="mt-2 text-[13px] text-muted-foreground">
               Drag to orbit the object, switch the dither pattern, then open the
               controls to swap in your own GLB/glTF model, SVG, or image by URL

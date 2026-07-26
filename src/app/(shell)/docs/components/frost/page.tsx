@@ -210,6 +210,7 @@ export default async function FrostPage() {
         installItem="frost"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Hover across the photo to melt a hole through the ice."

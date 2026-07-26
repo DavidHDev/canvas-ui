@@ -192,6 +192,7 @@ export default async function MagnifyPage() {
         installItem="magnify"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
+        demoSection
         beforeInstall={
           <DemoImageSection
             hint="Scan the photo with the lens, then click to send a ripple through it."
