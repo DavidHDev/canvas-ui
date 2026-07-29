@@ -87,6 +87,13 @@ export const COMPONENTS: ComponentEntry[] = [
     video: "/assets/videos/glass.webm",
   },
   {
+    href: "/docs/components/hologram",
+    name: "Hologram",
+    description:
+      "A sci-fi holographic overlay with vertical scanlines, chromatic RGB fringing, phase shifting wave distortion, and a cyan/blue tint.",
+    video: "/assets/videos/hologram.webm",
+  },
+  {
     href: "/docs/components/glass-object",
     name: "Glass Object",
     description:

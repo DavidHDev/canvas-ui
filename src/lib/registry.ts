@@ -138,6 +138,11 @@ const COMPONENTS: Record<string, ComponentDef> = {
     description:
       "A cursor-following glass lens that refracts your page like real glass, with a crystal ball zoom over target elements. The HTML stays interactive. No dependencies.",
   },
+  hologram: {
+    base: "Hologram",
+    description:
+      "A sci-fi holographic overlay with vertical scanlines, chromatic RGB fringing, phase shifting wave distortion, and a cyan/blue tint. The HTML stays interactive. No dependencies.",
+  },
   "glass-object": {
     base: "GlassObject",
     description:
