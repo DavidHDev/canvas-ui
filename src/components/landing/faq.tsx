@@ -26,7 +26,7 @@ const ITEMS = [
   {
     question: "Do I need React?",
     answer:
-      "No. Every component ships in six flavors: React, Solid, Preact, Vue, Svelte, and dependency-free vanilla TypeScript. Same engine and the same options in all of them.",
+      "No. Every component ships in seven flavors: React, Solid, Preact, Vue, Svelte, Angular, and dependency-free vanilla TypeScript. Same engine and the same options in all of them.",
   },
   {
     question: "How do updates work?",

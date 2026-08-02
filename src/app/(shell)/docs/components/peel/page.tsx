@@ -110,7 +110,7 @@ const API_REFERENCE: ApiProp[] = [
   {
     name: "under",
     description:
-      "Content revealed underneath the peel. A prop in React and Solid, a named slot in Vue and Svelte. In vanilla, place your own element behind the source canvas.",
+      "Content revealed underneath the peel. A prop in React and Solid, a named slot in Vue and Svelte, an element with the under attribute in Angular. In vanilla, place your own element behind the source canvas.",
     type: "ReactNode",
   },
   {

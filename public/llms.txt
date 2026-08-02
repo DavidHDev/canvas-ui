@@ -1,6 +1,6 @@
 # Canvas UI
 
-> An open source library of creative, framework-agnostic components drawn on canvas. Most of the library is built on the experimental html-in-canvas API, which lets WebGL effects run over live, fully interactive HTML. Components ship as source through a shadcn-compatible registry for React, Solid, Vue, Svelte, and vanilla JS.
+> An open source library of creative, framework-agnostic components drawn on canvas. Most of the library is built on the experimental html-in-canvas API, which lets WebGL effects run over live, fully interactive HTML. Components ship as source through a shadcn-compatible registry for React, Solid, Preact, Vue, Svelte, Angular, and vanilla JS.
 
 ## Docs
 
@@ -40,7 +40,7 @@
 ## Registry
 
 - [Registry index](https://canvasui.dev/r/registry.json): shadcn-compatible registry index
-- Install with: npx shadcn@latest add @canvas-ui/liquid-react (also liquid-solid, liquid-vue, liquid-svelte, liquid-vanilla)
+- Install with: npx shadcn@latest add @canvas-ui/liquid-react (also liquid-solid, liquid-preact, liquid-vue, liquid-svelte, liquid-angular, liquid-vanilla)
 - @canvas-ui is a trusted shadcn registry, so no components.json configuration is needed
 
 ## Notes

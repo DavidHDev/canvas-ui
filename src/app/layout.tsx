@@ -9,7 +9,7 @@ import { UrlStateProvider } from "@/components/common/url-state-provider";
 
 const SITE_URL = "https://canvasui.dev";
 const DESCRIPTION =
-  "An open source component library of creative html-in-canvas and WebGL effects for React, Solid, Preact, Vue, Svelte, and vanilla JS. Creative effects running over live HTML.";
+  "An open source component library of creative html-in-canvas and WebGL effects for React, Solid, Preact, Vue, Svelte, Angular, and vanilla JS. Creative effects running over live HTML.";
 
 const ORIGIN_TRIAL_TOKEN =
   process.env.NEXT_PUBLIC_HTML_IN_CANVAS_OT_TOKEN ?? "";
