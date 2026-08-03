@@ -88,6 +88,7 @@ import { ParticleRevealComponent } from "@/components/canvasui/ParticleReveal.co
 
 @Component({
   selector: "app-hero",
+  standalone: true,
   imports: [ParticleRevealComponent],
   template: \`
     <cui-particle-reveal [options]="{ radius: 300 }">

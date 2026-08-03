@@ -100,6 +100,7 @@ import { LiquidComponent } from "@/components/canvasui/Liquid.component";
 
 @Component({
   selector: "app-root",
+  standalone: true,
   imports: [LiquidComponent],
   template: \`
     <cui-liquid [options]="{ rainbow: true }" style="height: 480px">
