@@ -33,6 +33,7 @@
   <picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/Svelte.svg?variant=secondary&size=sm&logo=svelte&logoColor=FF3E00&mode=dark" /><img alt="Svelte" src="https://shieldcn.dev/badge/Svelte.svg?variant=secondary&size=sm&logo=svelte&logoColor=FF3E00&mode=light" /></picture>
   <picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/Solid.svg?variant=secondary&size=sm&logo=solid&logoColor=4F88C6&mode=dark" /><img alt="Solid" src="https://shieldcn.dev/badge/Solid.svg?variant=secondary&size=sm&logo=solid&logoColor=4F88C6&mode=light" /></picture>
   <picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/Preact.svg?variant=secondary&size=sm&logo=preact&logoColor=673AB8&mode=dark" /><img alt="Preact" src="https://shieldcn.dev/badge/Preact.svg?variant=secondary&size=sm&logo=preact&logoColor=673AB8&mode=light" /></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/Angular.svg?variant=secondary&size=sm&logo=angular&logoColor=DD0031&mode=dark" /><img alt="Angular" src="https://shieldcn.dev/badge/Angular.svg?variant=secondary&size=sm&logo=angular&logoColor=DD0031&mode=light" /></picture>
   <picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/TypeScript.svg?variant=secondary&size=sm&logo=typescript&logoColor=3178C6&mode=dark" /><img alt="TypeScript" src="https://shieldcn.dev/badge/TypeScript.svg?variant=secondary&size=sm&logo=typescript&logoColor=3178C6&mode=light" /></picture>
 </p>
 
@@ -51,7 +52,7 @@ Where it is not supported, components fall back to WebGL overlays, so every visi
 </tr>
 <tr>
 <td align="center">🧩</td>
-<td><b>Framework agnostic</b>: every component ships for React, Solid, Preact, Vue, Svelte, and vanilla</td>
+<td><b>Framework agnostic</b>: every component ships for React, Solid, Preact, Vue, Svelte, Angular, and vanilla</td>
 </tr>
 <tr>
 <td align="center">📋</td>
@@ -75,7 +76,7 @@ Add a component with the shadcn CLI (run `npx shadcn@latest init` first if you h
 npx shadcn@latest add @canvas-ui/liquid-react
 ```
 
-Swap `liquid` for any component, `react` for `solid`, `preact`, `vue`, `svelte`, or `vanilla`. Source lands in `components/canvasui/`, yours to edit.
+Swap `liquid` for any component, `react` for `solid`, `preact`, `vue`, `svelte`, `angular`, or `vanilla`. Source lands in `components/canvasui/`, yours to edit.
 
 ```tsx
 import { Liquid } from "@/components/canvasui/Liquid";

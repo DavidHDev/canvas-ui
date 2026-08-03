@@ -50,6 +50,7 @@ const LANG_BY_ID: Record<string, string> = {
   preact: "tsx",
   vue: "vue",
   svelte: "svelte",
+  angular: "ts",
   vanilla: "ts",
 };
 

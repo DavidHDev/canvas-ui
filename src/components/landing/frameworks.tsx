@@ -78,6 +78,27 @@ export function Hero() {
 }`,
   },
   {
+    id: "angular",
+    label: "Angular",
+    fileName: "hero.component.ts",
+    lang: "ts",
+    source: `import { Component } from "@angular/core";
+
+import { ParticleRevealComponent } from "@/components/canvasui/ParticleReveal.component";
+
+@Component({
+  selector: "app-hero",
+  standalone: true,
+  imports: [ParticleRevealComponent],
+  template: \`
+    <cui-particle-reveal [options]="{ radius: 300 }">
+      <your-content />
+    </cui-particle-reveal>
+  \`,
+})
+export class HeroComponent {}`,
+  },
+  {
     id: "vanilla",
     label: "Vanilla",
     fileName: "main.ts",
@@ -118,11 +139,11 @@ export async function Frameworks() {
               id="frameworks-heading"
               className="mt-3 text-3xl font-medium tracking-tighter text-balance sm:text-4xl"
             >
-              One component, six flavors.
+              One component, seven flavors.
             </h2>
             <p className="mt-4 max-w-md text-base leading-7 text-muted-foreground">
-              Every effect ships as React, Solid, Preact, Vue, Svelte, and
-              dependency-free vanilla TypeScript. Same engine, same props,
+              Every effect ships as React, Solid, Preact, Vue, Svelte, Angular,
+              and dependency-free vanilla TypeScript. Same engine, same props,
               native to your stack.
             </p>
           </Reveal>

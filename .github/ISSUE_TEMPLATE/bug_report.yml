@@ -48,4 +48,4 @@ body:
     id: framework
     attributes:
       label: Framework
-      placeholder: React 19, Solid 1.9, Preact 10, Vue 3, Svelte 5, vanilla
+      placeholder: React 19, Solid 1.9, Preact 10, Vue 3, Svelte 5, Angular 21, vanilla

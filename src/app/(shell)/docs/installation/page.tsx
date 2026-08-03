@@ -90,6 +90,27 @@ export default function App() {
 }`,
   },
   {
+    id: "angular",
+    label: "Angular",
+    fileName: "app.component.ts",
+    lang: "typescript",
+    source: `import { Component } from "@angular/core";
+
+import { LiquidComponent } from "@/components/canvasui/Liquid.component";
+
+@Component({
+  selector: "app-root",
+  standalone: true,
+  imports: [LiquidComponent],
+  template: \`
+    <cui-liquid [options]="{ rainbow: true }" style="height: 480px">
+      <your-content />
+    </cui-liquid>
+  \`,
+})
+export class AppComponent {}`,
+  },
+  {
     id: "vanilla",
     label: "Vanilla",
     fileName: "main.ts",
@@ -124,11 +145,11 @@ chrome://flags/#canvas-draw-element
 
 For production, Chrome offers an [origin trial](https://developer.chrome.com/blog/html-in-canvas-origin-trial) that enables the API for your visitors without any flags. This site runs on an origin trial token itself, which is why the effects work here in a plain Chrome install. Tokens are bound to a specific domain, so this only benefits canvasui.dev: to get the same on your own site, register your domain for the trial and serve the token via a meta tag or HTTP header. In browsers without support, components fall back automatically: your content renders as regular HTML and no errors are thrown.
 
-Beyond that, TypeScript is recommended, since every file ships as typed source. React components target React 19, Solid components target Solid 1.9, Preact components target Preact 10, Vue components target Vue 3.5, and Svelte components target Svelte 5. Any dependencies a component needs are installed by the CLI and listed on its docs page.
+Beyond that, TypeScript is recommended, since every file ships as typed source. React components target React 19, Solid components target Solid 1.9, Preact components target Preact 10, Vue components target Vue 3.5, Svelte components target Svelte 5, and Angular components target Angular 21. Any dependencies a component needs are installed by the CLI and listed on its docs page.
 
 ## Install with the CLI
 
-Every component has a registry entry per framework (react, solid, preact, vue, svelte, vanilla):
+Every component has a registry entry per framework (react, solid, preact, vue, svelte, angular, vanilla):
 
 \`\`\`sh
 npx shadcn@latest add @canvas-ui/liquid-react
@@ -213,9 +234,9 @@ export default async function InstallationPage() {
           Beyond that, TypeScript is recommended, since every file ships as
           typed source. React components target React 19, Solid components
           target Solid 1.9, Preact components target Preact 10, Vue components
-          target Vue 3.5, and Svelte components target Svelte 5. Any
-          dependencies a component needs are installed by the CLI and listed on
-          its docs page.
+          target Vue 3.5, Svelte components target Svelte 5, and Angular
+          components target Angular 21. Any dependencies a component needs are
+          installed by the CLI and listed on its docs page.
         </p>
 
         <h2>Install with the CLI</h2>
