@@ -3,6 +3,7 @@
 import { FileUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
+import { useReducedMotion } from "motion/react";
 
 import {
   color,
@@ -49,6 +50,7 @@ const CONTROLS = {
 
 export function GlassObjectDemo() {
   const { resolvedTheme } = useTheme();
+  const shouldReduceMotion = useReducedMotion();
   const controls = useDemoControls(CONTROLS);
   const {
     src,
@@ -100,13 +102,33 @@ export function GlassObjectDemo() {
   };
 
   useEffect(() => {
-    if (!backdrop) return;
-    const id = setInterval(
-      () => setImageIndex((prev) => (prev + 1) % DEMO_IMAGES.length),
-      10000,
-    );
-    return () => clearInterval(id);
-  }, [backdrop]);
+    if (!backdrop || shouldReduceMotion) return;
+
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const stop = () => {
+      if (timer === null) return;
+      clearInterval(timer);
+      timer = null;
+    };
+    const start = () => {
+      if (timer !== null || document.hidden) return;
+      timer = setInterval(
+        () => setImageIndex((prev) => (prev + 1) % DEMO_IMAGES.length),
+        10000,
+      );
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) stop();
+      else start();
+    };
+
+    start();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [backdrop, shouldReduceMotion]);
 
   const effectiveBackground =
     background !== ""
