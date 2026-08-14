@@ -1,3 +1,5 @@
+import { createRectCache } from "../rect-cache";
+
 export interface RetroDitherOptions {
   /** Radius of the dither lens around the cursor, relative to the screen height. */
   radius?: number;
@@ -645,8 +647,10 @@ export function createRetroDither(
 
   const listenTarget = output.parentElement ?? output;
 
+  const rectCache = createRectCache(output);
+
   function onPointerMove(event: PointerEvent) {
-    const rect = output.getBoundingClientRect();
+    const rect = rectCache.current;
     pointer.tx = (event.clientX - rect.left) / Math.max(rect.width, 1);
     pointer.ty = 1 - (event.clientY - rect.top) / Math.max(rect.height, 1);
     pointer.target = 1;
@@ -660,7 +664,7 @@ export function createRetroDither(
 
   function onPointerDown(event: PointerEvent) {
     if (reducedMotion || config.degauss <= 0.001) return;
-    const rect = output.getBoundingClientRect();
+    const rect = rectCache.current;
     ripples.push({
       x: (event.clientX - rect.left) / Math.max(rect.width, 1),
       y: 1 - (event.clientY - rect.top) / Math.max(rect.height, 1),
@@ -708,6 +712,7 @@ export function createRetroDither(
     },
     destroy() {
       destroyed = true;
+      rectCache.destroy();
       cancelAnimationFrame(raf);
       window.clearTimeout(maskTimer);
       observer.disconnect();

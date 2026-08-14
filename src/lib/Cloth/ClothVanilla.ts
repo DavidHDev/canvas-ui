@@ -1,3 +1,5 @@
+import { createRectCache } from "../rect-cache";
+
 export type ClothPin = "top" | "bottom" | "left" | "right";
 
 export interface ClothOptions {
@@ -823,9 +825,11 @@ export function createCloth(
 
   const listenTarget = wrapper;
 
+  const rectCache = createRectCache(wrapper);
+
   function onPointerMove(event: PointerEvent) {
     if (!htmlInCanvas) return;
-    const rect = wrapper.getBoundingClientRect();
+    const rect = rectCache.current;
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     if (touch.s < 0.01) {
@@ -865,6 +869,7 @@ export function createCloth(
     },
     destroy() {
       destroyed = true;
+      rectCache.destroy();
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();

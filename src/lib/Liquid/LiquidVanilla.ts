@@ -1,3 +1,5 @@
+import { createRectCache } from "../rect-cache";
+
 export interface LiquidOptions {
   /** Resolution of the simulation grid. */
   simResolution?: number;
@@ -850,9 +852,11 @@ export function createLiquid(
 
   const pointers = new Map<number, { x: number; y: number }>();
 
+  const rectCache = createRectCache(output);
+
   function onPointerMove(event: PointerEvent) {
     if (reducedMotion) return;
-    const rect = output.getBoundingClientRect();
+    const rect = rectCache.current;
     const px = event.clientX - rect.left;
     const py = event.clientY - rect.top;
     if (px < 0 || px > rect.width || py < 0 || py > rect.height) {
@@ -949,6 +953,7 @@ export function createLiquid(
     },
     destroy() {
       destroyed = true;
+      rectCache.destroy();
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();

@@ -1,3 +1,5 @@
+import { createRectCache } from "../rect-cache";
+
 export interface DropletsOptions {
   /** How much rain falls, from a light drizzle to a downpour (0 to 1.25). */
   intensity?: number;
@@ -679,9 +681,11 @@ export function createDroplets(
 
   const listenTarget = output.parentElement ?? output;
 
+  const rectCache = createRectCache(output);
+
   function onPointerMove(event: PointerEvent) {
     if (!config.interactive || reducedMotion) return;
-    const rect = output.getBoundingClientRect();
+    const rect = rectCache.current;
     const x = (event.clientX - rect.left) / Math.max(rect.width, 1);
     const y = 1 - (event.clientY - rect.top) / Math.max(rect.height, 1);
     if (!pointer.seen) {
@@ -720,6 +724,7 @@ export function createDroplets(
     },
     destroy() {
       destroyed = true;
+      rectCache.destroy();
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();

@@ -1,3 +1,5 @@
+import { createRectCache } from "../rect-cache";
+
 export type ForceFieldShape = "hexagon" | "triangle" | "square";
 
 export type ForceFieldGridReveal = "always" | "hover" | "click" | "both";
@@ -1106,8 +1108,10 @@ export function createForceField(
     config.onHit?.(x, y);
   }
 
+  const rectCache = createRectCache(output);
+
   function onPointerMove(event: PointerEvent) {
-    const rect = output.getBoundingClientRect();
+    const rect = rectCache.current;
     mouseX = event.clientX - rect.left;
     mouseY = event.clientY - rect.top;
     lastInput = performance.now();
@@ -1180,6 +1184,7 @@ export function createForceField(
     },
     destroy() {
       destroyed = true;
+      rectCache.destroy();
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();

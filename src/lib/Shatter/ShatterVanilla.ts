@@ -1,3 +1,5 @@
+import { createRectCache } from "../rect-cache";
+
 export interface ShatterOptions {
   /** Radius of the shatter lens around the cursor, relative to the screen height. */
   radius?: number;
@@ -656,8 +658,10 @@ export function createShatter(
 
   const listenTarget = output.parentElement ?? output;
 
+  const rectCache = createRectCache(output);
+
   function onPointerMove(event: PointerEvent) {
-    const rect = output.getBoundingClientRect();
+    const rect = rectCache.current;
     pointer.tx = (event.clientX - rect.left) / Math.max(rect.width, 1);
     pointer.ty = 1 - (event.clientY - rect.top) / Math.max(rect.height, 1);
     pointer.target = 1;
@@ -690,6 +694,7 @@ export function createShatter(
     },
     destroy() {
       destroyed = true;
+      rectCache.destroy();
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();
