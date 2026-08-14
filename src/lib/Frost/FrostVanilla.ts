@@ -845,7 +845,9 @@ export function createFrost(
   let prevPointerY = 0.5;
   let lastScrollX = 0;
   let lastScrollY = 0;
-  let queuedMelts: Array<[number, number]> = [];
+  const MAX_PENDING_MELTS = 32;
+  const MAX_MELTS_PER_FRAME = 4;
+  const queuedMelts: Array<[number, number]> = [];
 
   function renderPointer() {
     if (!pointer) return;
@@ -885,7 +887,9 @@ export function createFrost(
       config.meltEdges ? 0 : config.edgeFade,
     );
     if (queuedMelts.length > 0) {
-      for (const [mx, my] of queuedMelts) {
+      const count = Math.min(queuedMelts.length, MAX_MELTS_PER_FRAME);
+      for (let i = 0; i < count; i++) {
+        const [mx, my] = queuedMelts.shift()!;
         gl!.uniform2f(pointerProgram.uniforms.uPoint, mx, 1 - my);
         gl!.uniform2f(pointerProgram.uniforms.uPrevPoint, mx, 1 - my);
         gl!.uniform1f(pointerProgram.uniforms.uTouching, 1);
@@ -897,7 +901,6 @@ export function createFrost(
         );
         gl!.uniform2f(pointerProgram.uniforms.uBackShift, 0, 0);
       }
-      queuedMelts = [];
     } else {
       gl!.uniform2f(pointerProgram.uniforms.uPoint, pointerX, 1 - pointerY);
       gl!.uniform2f(
@@ -1048,7 +1051,8 @@ export function createFrost(
       now < activeUntil ||
       now < introStart + Math.max(config.introDuration, 0) * 1000 + 120 ||
       contentDirty ||
-      config.shimmer > 0.001;
+      config.shimmer > 0.001 ||
+      queuedMelts.length > 0;
     if (!animating) {
       running = false;
       return;
@@ -1060,6 +1064,13 @@ export function createFrost(
     if (destroyed || running || !visible) return;
     running = true;
     raf = requestAnimationFrame(frame);
+  }
+
+  function enqueueMelt(x: number, y: number) {
+    if (destroyed || !visible) return false;
+    if (queuedMelts.length >= MAX_PENDING_MELTS) queuedMelts.shift();
+    queuedMelts.push([x, y]);
+    return true;
   }
 
   wake = start;
@@ -1118,13 +1129,14 @@ export function createFrost(
   const intersection = new IntersectionObserver((entries) => {
     visible = entries[entries.length - 1]?.isIntersecting ?? true;
     if (visible) start();
+    else queuedMelts.length = 0;
   });
   intersection.observe(output);
 
   return {
     melt(x, y) {
       if (reducedMotion) return;
-      queuedMelts.push([x, y]);
+      if (!enqueueMelt(x, y)) return;
       activeUntil = performance.now() + refreezeDelayMs();
       start();
     },
