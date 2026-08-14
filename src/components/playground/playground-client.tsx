@@ -28,7 +28,7 @@ function useIsLg() {
 }
 
 export function PlaygroundClient() {
-  const [param] = useQueryState("c");
+  const [param, setParam] = useQueryState("c");
   const [controlsHost, setControlsHost] = useState<HTMLElement | null>(null);
   const isLg = useIsLg();
 
@@ -37,12 +37,9 @@ export function PlaygroundClient() {
 
   const select = (next: string) => {
     const resolved = getPlaygroundDemo(next).slug;
-    window.history.replaceState(
-      null,
-      "",
-      resolved === DEFAULT_PLAYGROUND_SLUG
-        ? "/playground"
-        : `/playground?c=${resolved}`,
+    void setParam(
+      resolved === DEFAULT_PLAYGROUND_SLUG ? null : resolved,
+      { history: "replace" },
     );
   };
 
