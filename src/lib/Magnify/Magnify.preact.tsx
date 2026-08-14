@@ -19,7 +19,7 @@ function useSyncExternalStore<T>(
   useEffect(() => {
     const unsubscribe = subscribe(() => setValue(getSnapshot()));
     return unsubscribe;
-  }, []);
+  }, [subscribe, getSnapshot]);
   return value;
 }
 
