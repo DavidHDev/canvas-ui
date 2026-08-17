@@ -33,6 +33,7 @@ const ROUTES: { path: string; priority: number }[] = [
   { path: "/docs/components/glyph-rain", priority: 0.8 },
   { path: "/docs/components/grid", priority: 0.8 },
   { path: "/docs/components/hex-float", priority: 0.8 },
+  { path: "/docs/components/ink-object", priority: 0.8 },
   { path: "/docs/components/laser", priority: 0.8 },
   { path: "/docs/components/liquid", priority: 0.8 },
   { path: "/docs/components/magnify", priority: 0.8 },

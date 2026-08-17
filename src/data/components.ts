@@ -17,6 +17,7 @@ export const LIGHT_VIDEOS = new Set([
   "/assets/videos/glitch.webm",
   "/assets/videos/glyph-rain.webm",
   "/assets/videos/hex-float.webm",
+  "/assets/videos/ink-object.webm",
   "/assets/videos/liquid-object.webm",
   "/assets/videos/ripple.webm",
 ]);
@@ -170,6 +171,13 @@ export const COMPONENTS: ComponentEntry[] = [
     description:
       "Your live HTML on shiny floating hex tiles with perspective tilt and cursor lift.",
     video: "/assets/videos/hex-float.webm",
+  },
+  {
+    href: "/docs/components/ink-object",
+    name: "Ink Object",
+    description:
+      "Any GLB/glTF model, SVG, or image floating in a studio scene, printed as rough hand-pressed ink strokes.",
+    video: "/assets/videos/ink-object.webm",
   },
   {
     href: "/docs/components/laser",

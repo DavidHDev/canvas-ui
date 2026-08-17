@@ -189,6 +189,12 @@ const ENTRIES: SearchEntry[] = [
     hint: "hexagon tiles shiny perspective tilt cursor lift",
   },
   {
+    href: "/docs/components/ink-object",
+    label: "Ink Object",
+    section: "Components",
+    hint: "3d model gltf glb svg png ink hatching strokes dashes print linocut woodcut",
+  },
+  {
     href: "/docs/components/laser",
     label: "Laser",
     section: "Components",

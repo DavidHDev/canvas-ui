@@ -14,8 +14,7 @@ import { ColorRow, DemoControls } from "@/components/demos/demo-controls";
 import { useDemoControls } from "@/hooks/use-demo-controls";
 import { ParticleObject } from "@/lib/ParticleObject/ParticleObject";
 
-const DEFAULT_MODEL =
-  "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Duck/glTF-Binary/Duck.glb";
+const DEFAULT_MODEL = "/assets/models/duck.glb";
 const AUTO_COLOR = "auto";
 const LIGHT_BACKGROUND = "#ffffff";
 const DARK_BACKGROUND = "#0a0a0a";

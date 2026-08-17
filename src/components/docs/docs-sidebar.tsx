@@ -36,6 +36,7 @@ const NEW_HREFS = new Set([
   "/docs/components/flame-wrap",
   "/docs/components/force-field",
   "/docs/components/glyph-rain",
+  "/docs/components/ink-object",
   "/docs/components/liquid-object",
 ]);
 
@@ -79,6 +80,7 @@ const sections = [
       { href: "/docs/components/glyph-rain", label: "Glyph Rain" },
       { href: "/docs/components/grid", label: "Grid" },
       { href: "/docs/components/hex-float", label: "Hex Float" },
+      { href: "/docs/components/ink-object", label: "Ink Object" },
       { href: "/docs/components/laser", label: "Laser" },
       { href: "/docs/components/liquid", label: "Liquid" },
       { href: "/docs/components/magnify", label: "Magnify" },

@@ -145,6 +145,13 @@ const COMPONENTS: Record<string, ComponentDef> = {
     description:
       "Renders the live page onto a floor of shiny beveled hex tiles that lean back in perspective, bob gently, and rise toward the cursor. The HTML stays interactive. No dependencies.",
   },
+  "ink-object": {
+    base: "InkObject",
+    description:
+      "Renders any GLB/glTF model, SVG, or image in a floating studio scene as hand-pressed ink strokes that break into dashes as the tone lightens, with ragged bleed and dry-brush grain. Built on three.js.",
+    dependencies: ["three"],
+    devDependencies: ["@types/three"],
+  },
   "retro-dither": {
     base: "RetroDither",
     description:

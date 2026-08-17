@@ -230,6 +230,17 @@ export const PLAYGROUND_DEMOS: PlaygroundDemo[] = [
     ),
   },
   {
+    slug: "ink-object",
+    name: "Ink Object",
+    description: "A 3D model or image printed as rough ink strokes.",
+    kind: "custom",
+    Component: load(() =>
+      import("@/components/playground/entries/ink-object-entry").then(
+        (m) => m.InkObjectEntry,
+      ),
+    ),
+  },
+  {
     slug: "laser",
     name: "Laser",
     description: "A beam that reveals the page on scroll.",
