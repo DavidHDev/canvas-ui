@@ -1,3 +1,5 @@
+import { createRectCache } from "../rect-cache";
+
 export interface GridOptions {
   /** Size of each grid tile in CSS pixels. */
   tileSize?: number;
@@ -719,9 +721,11 @@ export function createGrid(
 
   const listenTarget = output.parentElement ?? output;
 
+  const rectCache = createRectCache(output);
+
   function onPointerMove(event: PointerEvent) {
     if (reducedMotion) return;
-    const rect = output.getBoundingClientRect();
+    const rect = rectCache.current;
     const aspect = Math.max(rect.width, 1) / Math.max(rect.height, 1);
     const fx = (event.clientX - rect.left) / Math.max(rect.width, 1);
     const fy = (event.clientY - rect.top) / Math.max(rect.height, 1);
@@ -779,6 +783,7 @@ export function createGrid(
     },
     destroy() {
       destroyed = true;
+      rectCache.destroy();
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();

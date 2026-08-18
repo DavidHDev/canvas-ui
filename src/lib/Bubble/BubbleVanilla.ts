@@ -1,3 +1,5 @@
+import { createRectCache } from "../rect-cache";
+
 export type BubbleOptions = {
   size?: number;
   trail?: number;
@@ -561,8 +563,10 @@ export function createBubble(
   wake = start;
   start();
 
+  const rectCache = createRectCache(output);
+
   function onPointerMove(event: PointerEvent) {
-    const rect = output.getBoundingClientRect();
+    const rect = rectCache.current;
     targetX = event.clientX - rect.left;
     targetY = event.clientY - rect.top;
     if (!hasPointer) {
@@ -626,6 +630,7 @@ export function createBubble(
     },
     destroy() {
       destroyed = true;
+      rectCache.destroy();
       cancelAnimationFrame(raf);
       content.removeEventListener("pointermove", onPointerMove);
       content.removeEventListener("pointerleave", onPointerLeave);

@@ -1,3 +1,5 @@
+import { createRectCache } from "../rect-cache";
+
 export interface FrostOptions {
   /** Base frozen coverage added on top of the frost pattern (0-1). */
   frost?: number;
@@ -1074,9 +1076,11 @@ export function createFrost(
   }
   motionQuery.addEventListener("change", onMotionChange);
 
+  const rectCache = createRectCache(output);
+
   function onPointerMove(event: PointerEvent) {
     if (reducedMotion) return;
-    const rect = output.getBoundingClientRect();
+    const rect = rectCache.current;
     pointerX = (event.clientX - rect.left) / Math.max(rect.width, 1);
     pointerY = (event.clientY - rect.top) / Math.max(rect.height, 1);
     pointerOn = true;
@@ -1152,6 +1156,7 @@ export function createFrost(
     },
     destroy() {
       destroyed = true;
+      rectCache.destroy();
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();

@@ -1,3 +1,5 @@
+import { createRectCache } from "../rect-cache";
+
 export interface DecryptRevealOptions {
   /** Decrypt radius around the cursor in CSS pixels. */
   radius?: number;
@@ -957,8 +959,10 @@ export function createDecryptReveal(
 
   const listenTarget = output.parentElement ?? output;
 
+  const rectCache = createRectCache(output);
+
   function onPointerMove(event: PointerEvent) {
-    const rect = output.getBoundingClientRect();
+    const rect = rectCache.current;
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     if (pointer.target === 0 && pointer.active < 1e-3) {
@@ -1018,6 +1022,7 @@ export function createDecryptReveal(
     },
     destroy() {
       destroyed = true;
+      rectCache.destroy();
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();

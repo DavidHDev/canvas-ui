@@ -1,3 +1,5 @@
+import { createRectCache } from "../rect-cache";
+
 export interface CloudsOptions {
   scale?: number;
   speed?: number;
@@ -690,8 +692,10 @@ export function createClouds(
   });
   intersection.observe(output);
 
+  const rectCache = createRectCache(output);
+
   function onPointerMove(event: PointerEvent) {
-    const rect = output.getBoundingClientRect();
+    const rect = rectCache.current;
     const x = (event.clientX - rect.left) / Math.max(rect.width, 1);
     const y = 1 - (event.clientY - rect.top) / Math.max(rect.height, 1);
     if (!hasPointer) {
@@ -751,6 +755,7 @@ export function createClouds(
     },
     destroy() {
       destroyed = true;
+      rectCache.destroy();
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();

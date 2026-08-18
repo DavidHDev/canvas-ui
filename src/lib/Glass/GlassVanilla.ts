@@ -1,3 +1,5 @@
+import { createRectCache } from "../rect-cache";
+
 export interface GlassOptions {
   /** Lens shape. */
   shape?: "circle" | "square" | "rectangle";
@@ -530,8 +532,10 @@ export function createGlass(
   wake = start;
   start();
 
+  const rectCache = createRectCache(output);
+
   function onPointerMove(event: PointerEvent) {
-    const rect = output.getBoundingClientRect();
+    const rect = rectCache.current;
     targetX = event.clientX - rect.left;
     targetY = event.clientY - rect.top;
     if (!hasPointer) {
@@ -599,6 +603,7 @@ export function createGlass(
     },
     destroy() {
       destroyed = true;
+      rectCache.destroy();
       cancelAnimationFrame(raf);
       content.removeEventListener("pointermove", onPointerMove);
       content.removeEventListener("pointerleave", onPointerLeave);

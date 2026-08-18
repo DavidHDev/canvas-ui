@@ -1160,12 +1160,23 @@ function initializeAsciify(
   const schemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
   schemeQuery.addEventListener("change", onThemeShift);
 
+  let outputRect = output.getBoundingClientRect();
+  const refreshOutputRect = () => {
+    outputRect = output.getBoundingClientRect();
+  };
+
   const observer = new ResizeObserver(() => {
+    refreshOutputRect();
     if (syncCanvasSize()) queueFallbackCapture();
     start();
   });
   observer.observe(output);
   observer.observe(content);
+  window.addEventListener("resize", refreshOutputRect, { passive: true });
+  window.addEventListener("scroll", refreshOutputRect, {
+    capture: true,
+    passive: true,
+  });
 
   const intersection = new IntersectionObserver((entries) => {
     visible = entries[entries.length - 1]?.isIntersecting ?? true;
@@ -1216,9 +1227,10 @@ function initializeAsciify(
   }
 
   function onPointerMove(event: PointerEvent) {
-    const rect = output.getBoundingClientRect();
-    pointer.tx = (event.clientX - rect.left) / Math.max(rect.width, 1);
-    pointer.ty = 1 - (event.clientY - rect.top) / Math.max(rect.height, 1);
+    pointer.tx =
+      (event.clientX - outputRect.left) / Math.max(outputRect.width, 1);
+    pointer.ty =
+      1 - (event.clientY - outputRect.top) / Math.max(outputRect.height, 1);
     pointer.target = 1;
     queueFallbackCapture();
     start();
@@ -1279,6 +1291,8 @@ function initializeAsciify(
       window.clearTimeout(fallbackScrollCaptureTimer);
       window.clearTimeout(maskTimer);
       observer.disconnect();
+      window.removeEventListener("resize", refreshOutputRect);
+      window.removeEventListener("scroll", refreshOutputRect, true);
       intersection.disconnect();
       themeObserver.disconnect();
       contentObserver?.disconnect();

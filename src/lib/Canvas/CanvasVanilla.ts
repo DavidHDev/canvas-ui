@@ -1,3 +1,5 @@
+import { createRectCache } from "../rect-cache";
+
 export interface CanvasOptions {
   /** Height of one woven thread in CSS pixels. */
   threadSize?: number;
@@ -843,8 +845,10 @@ export function createCanvas(
 
   const listenTarget = output.parentElement ?? output;
 
+  const rectCache = createRectCache(output);
+
   function onPointerMove(event: PointerEvent) {
-    const rect = output.getBoundingClientRect();
+    const rect = rectCache.current;
     pointer.tx = (event.clientX - rect.left) / Math.max(rect.width, 1);
     pointer.ty = 1 - (event.clientY - rect.top) / Math.max(rect.height, 1);
     pointer.target = 1;
@@ -898,6 +902,7 @@ export function createCanvas(
     },
     destroy() {
       destroyed = true;
+      rectCache.destroy();
       cancelAnimationFrame(raf);
       window.clearTimeout(maskTimer);
       observer.disconnect();

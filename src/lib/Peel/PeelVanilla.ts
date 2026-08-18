@@ -1,3 +1,5 @@
+import { createRectCache } from "../rect-cache";
+
 export type PeelSide = "left" | "right" | "top" | "bottom";
 
 export type PeelMode = "cursor" | "hover";
@@ -566,9 +568,11 @@ export function createPeel(
     return x;
   }
 
+  const rectCache = createRectCache(output);
+
   function onPointerMove(event: PointerEvent) {
     if (!htmlInCanvas) return;
-    const rect = output.getBoundingClientRect();
+    const rect = rectCache.current;
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     pointer.u = sideDistance(x, y, rect);
@@ -604,6 +608,7 @@ export function createPeel(
     },
     destroy() {
       destroyed = true;
+      rectCache.destroy();
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();

@@ -1,3 +1,5 @@
+import { createRectCache } from "../rect-cache";
+
 export interface DisplacementOptions {
   /** Cells across the width of the wrapped area (4 to 100). */
   grid?: number;
@@ -474,9 +476,11 @@ export function createDisplacement(
 
   const pointerHost = output.parentElement ?? output;
 
+  const rectCache = createRectCache(output);
+
   function onPointerMove(event: PointerEvent) {
     if (reducedMotion) return;
-    const box = output.getBoundingClientRect();
+    const box = rectCache.current;
     if (box.width < 1 || box.height < 1) return;
     const x = (event.clientX - box.left) / box.width;
     const y = (event.clientY - box.top) / box.height;
@@ -558,6 +562,7 @@ export function createDisplacement(
     },
     destroy() {
       destroyed = true;
+      rectCache.destroy();
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();

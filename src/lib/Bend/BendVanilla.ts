@@ -1,3 +1,5 @@
+import { createRectCache } from "../rect-cache";
+
 export interface BendOptions {
   /** Height of the folded region at each edge in CSS pixels. */
   zone?: number;
@@ -585,6 +587,8 @@ export function createBend(
   }
   content.addEventListener("wheel", onWheel, { passive: true });
 
+  const rectCache = createRectCache(output);
+
   function onPointerMove(event: PointerEvent) {
     if (!event.isPrimary) return;
     hoverClientX = event.clientX;
@@ -592,7 +596,7 @@ export function createBend(
     hoverOn = true;
     updateHover(event.clientX, event.clientY);
     if (config.tilt > 0 && !reducedMotion) {
-      const rect = output.getBoundingClientRect();
+      const rect = rectCache.current;
       if (rect.width > 0 && rect.height > 0) {
         const nx = (event.clientX - rect.left) / rect.width - 0.5;
         const ny = 0.5 - (event.clientY - rect.top) / rect.height;
@@ -984,6 +988,7 @@ export function createBend(
     },
     destroy() {
       destroyed = true;
+      rectCache.destroy();
       cancelAnimationFrame(raf);
       setHoverTarget(null);
       content.removeAttribute(CONTENT_ATTR);
