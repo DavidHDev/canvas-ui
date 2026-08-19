@@ -45,6 +45,17 @@ export const PLAYGROUND_DEMOS: PlaygroundDemo[] = [
     ),
   },
   {
+    slug: "ascii-sweep",
+    name: "ASCII Sweep",
+    description: "An ascii band that rewrites the whole page as it sweeps.",
+    kind: "custom",
+    Component: load(() =>
+      import("@/components/playground/entries/ascii-sweep-entry").then(
+        (m) => m.AsciiSweepEntry,
+      ),
+    ),
+  },
+  {
     slug: "asciify",
     name: "Asciify",
     description: "An ascii lens that follows your cursor.",

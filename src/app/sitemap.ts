@@ -13,6 +13,7 @@ const ROUTES: { path: string; priority: number }[] = [
   { path: "/docs/installation", priority: 0.9 },
   { path: "/docs/mcp", priority: 0.7 },
   { path: "/docs/components/ascii-object", priority: 0.8 },
+  { path: "/docs/components/ascii-sweep", priority: 0.8 },
   { path: "/docs/components/asciify", priority: 0.8 },
   { path: "/docs/components/bend", priority: 0.8 },
   { path: "/docs/components/blaze", priority: 0.8 },

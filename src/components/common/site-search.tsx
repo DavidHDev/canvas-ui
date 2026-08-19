@@ -69,6 +69,12 @@ const ENTRIES: SearchEntry[] = [
     hint: "ascii 3d model glb gltf svg image studio three.js characters glyph shape terminal",
   },
   {
+    href: "/docs/components/ascii-sweep",
+    label: "ASCII Sweep",
+    section: "Components",
+    hint: "ascii sweep swap transition tabs text swap band glow terminal glyph scan",
+  },
+  {
     href: "/docs/components/asciify",
     label: "Asciify",
     section: "Components",

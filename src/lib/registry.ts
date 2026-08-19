@@ -21,6 +21,11 @@ const COMPONENTS: Record<string, ComponentDef> = {
     dependencies: ["three"],
     devDependencies: ["@types/three"],
   },
+  "ascii-sweep": {
+    base: "AsciiSweep",
+    description:
+      "Swaps two panels of live HTML with a band of glowing ascii characters that sweeps across the exact text lines, tearing rows and trailing phosphor as it passes. Any angle, any charset. The HTML stays interactive.",
+  },
   asciify: {
     base: "Asciify",
     description:

@@ -33,6 +33,13 @@ export const COMPONENTS: ComponentEntry[] = [
     video: "/assets/videos/ascii-object.webm",
   },
   {
+    href: "/docs/components/ascii-sweep",
+    name: "ASCII Sweep",
+    description:
+      "A band of glowing ascii characters sweeps across the text lines and swaps one set of content for another.",
+    video: "/assets/videos/ascii-sweep.webm",
+  },
+  {
     href: "/docs/components/asciify",
     name: "Asciify",
     description:

@@ -30,6 +30,7 @@ const HOVER_QUERY = "(hover: hover) and (pointer: fine)";
 
 const NEW_HREFS = new Set([
   "/docs/components/ascii-object",
+  "/docs/components/ascii-sweep",
   "/docs/components/canvas",
   "/docs/components/decrypt-reveal",
   "/docs/components/displacement",
@@ -60,6 +61,7 @@ const sections = [
     items: [
       { href: "/components", label: "Browse All" },
       { href: "/docs/components/ascii-object", label: "ASCII Object" },
+      { href: "/docs/components/ascii-sweep", label: "ASCII Sweep" },
       { href: "/docs/components/asciify", label: "Asciify" },
       { href: "/docs/components/bend", label: "Bend" },
       { href: "/docs/components/blaze", label: "Blaze" },

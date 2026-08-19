@@ -278,82 +278,219 @@ export function MockDashboard({
   );
 }
 
-const NAV_LINKS = ["Product", "Pricing", "Docs", "Changelog"];
+export interface MockSiteCopy {
+  brand: string;
+  navLinks: string[];
+  signIn: string;
+  navCta: string;
+  heroTitle: string;
+  heroSub: string;
+  heroCta: string;
+  heroAlt: string;
+  press: string[];
+  howEyebrow: string;
+  howTitle: string;
+  features: { title: string; copy: string }[];
+  stats: { value: string; label: string }[];
+  quote: string;
+  quoteAuthor: string;
+  quoteRole: string;
+  galleryEyebrow: string;
+  galleryTitle: string;
+  pricingTitle: string;
+  tiers: {
+    name: string;
+    price: string;
+    copy: string;
+    perks: string[];
+    featured: boolean;
+  }[];
+  finalTitle: string;
+  finalSub: string;
+  finalCta: string;
+  footerTagline: string;
+  footerColumns: { title: string; links: string[] }[];
+  footerFinePrint: string;
+}
 
-const FEATURES = [
+/**
+ * Two complete versions of the page copy. Effects that swap one body of
+ * content for another render the same layout with a different entry, so every
+ * line of text differs between them.
+ */
+export const MOCK_SITE_COPY: [MockSiteCopy, MockSiteCopy] = [
   {
-    title: "Previews for every branch",
-    copy: "Every push gets a live environment with its own URL, so reviews happen on the real thing instead of screenshots.",
-    image: MOCK_IMAGES.features[0],
-    alt: "A laptop screen filled with source code",
-  },
-  {
-    title: "Reviews that keep moving",
-    copy: "Assign, comment, and approve in one place. bolt nudges the right people so nothing sits in a queue overnight.",
-    image: MOCK_IMAGES.features[1],
-    alt: "Two engineers sketching a plan on a whiteboard",
-  },
-  {
-    title: "Rollbacks in one click",
-    copy: "Every deploy is a snapshot. If something breaks in production, restore the last good release in seconds.",
-    image: MOCK_IMAGES.features[2],
-    alt: "Network cables wired into a server rack",
-  },
-];
-
-const PRESS = [
-  "LaunchWire",
-  "DevStack",
-  "The Standup",
-  "Console Weekly",
-  "Shipped",
-];
-
-const STATS = [
-  { value: "40,000+", label: "teams shipping with bolt" },
-  { value: "99.99%", label: "uptime over the last twelve months" },
-  { value: "2.3s", label: "median time from merge to live" },
-];
-
-const TIERS = [
-  {
-    name: "Starter",
-    price: "$0",
-    copy: "For side projects and first launches.",
-    perks: [
-      "Unlimited preview branches",
-      "2 concurrent deploys",
-      "Community support",
+    brand: "bolt",
+    navLinks: ["Product", "Pricing", "Docs", "Changelog"],
+    signIn: "Sign in",
+    navCta: "Start free",
+    heroTitle: "Ship in days, not quarters.",
+    heroSub:
+      "bolt is the home for your team's builds, reviews, and releases. Plan the work, preview every change, and deploy with one click.",
+    heroCta: "Start shipping free",
+    heroAlt: "Book a demo",
+    press: ["LaunchWire", "DevStack", "The Standup", "Console Weekly", "Shipped"],
+    howEyebrow: "How it works",
+    howTitle: "Less waiting. More shipping.",
+    features: [
+      {
+        title: "Previews for every branch",
+        copy: "Every push gets a live environment with its own URL, so reviews happen on the real thing instead of screenshots.",
+      },
+      {
+        title: "Reviews that keep moving",
+        copy: "Assign, comment, and approve in one place. bolt nudges the right people so nothing sits in a queue overnight.",
+      },
+      {
+        title: "Rollbacks in one click",
+        copy: "Every deploy is a snapshot. If something breaks in production, restore the last good release in seconds.",
+      },
     ],
-    featured: false,
+    stats: [
+      { value: "40,000+", label: "teams shipping with bolt" },
+      { value: "99.99%", label: "uptime over the last twelve months" },
+      { value: "2.3s", label: "median time from merge to live" },
+    ],
+    quote:
+      "We went from shipping once a month to shipping every day. bolt paid for itself in the first week.",
+    quoteAuthor: "Maya R.",
+    quoteRole: "CTO at Northwind",
+    galleryEyebrow: "From our customers",
+    galleryTitle: "Teams that ship with bolt.",
+    pricingTitle: "Pricing that scales with you.",
+    tiers: [
+      {
+        name: "Starter",
+        price: "$0",
+        copy: "For side projects and first launches.",
+        perks: [
+          "Unlimited preview branches",
+          "2 concurrent deploys",
+          "Community support",
+        ],
+        featured: false,
+      },
+      {
+        name: "Scale",
+        price: "$39",
+        copy: "For teams shipping every day.",
+        perks: [
+          "Everything in Starter",
+          "Unlimited concurrent deploys",
+          "One-click rollbacks",
+          "Priority support",
+        ],
+        featured: true,
+      },
+    ],
+    finalTitle: "Ready to ship faster?",
+    finalSub:
+      "Start free, no credit card. Your first deploy is live in under two minutes.",
+    finalCta: "Start shipping free",
+    footerTagline: "The home for teams who would rather ship than wait.",
+    footerColumns: [
+      { title: "Product", links: ["Features", "Pricing", "Changelog"] },
+      { title: "Resources", links: ["Docs", "Guides", "Status"] },
+      { title: "Company", links: ["About", "Careers", "Blog"] },
+    ],
+    footerFinePrint:
+      "A mock landing page for the Canvas UI playground. bolt is not a real company, but it would ship.",
   },
   {
-    name: "Scale",
-    price: "$39",
-    copy: "For teams shipping every day.",
-    perks: [
-      "Everything in Starter",
-      "Unlimited concurrent deploys",
-      "One-click rollbacks",
-      "Priority support",
+    brand: "atlas",
+    navLinks: ["Platform", "Pricing", "Guides", "Releases"],
+    signIn: "Log in",
+    navCta: "Start free",
+    heroTitle: "Debug in minutes, not days.",
+    heroSub:
+      "atlas is the home for your team's traces, alerts, and incidents. Follow the request, read the payload, and fix the real cause.",
+    heroCta: "Start tracing free",
+    heroAlt: "Book a demo",
+    press: ["SignalRoom", "TraceStack", "The Pager", "Console Weekly", "Observed"],
+    howEyebrow: "How it works",
+    howTitle: "Less guessing. More knowing.",
+    features: [
+      {
+        title: "Traces for every request",
+        copy: "Every call is followed through each hop with its payload kept, so you debug the real thing instead of a hunch.",
+      },
+      {
+        title: "Alerts that stay quiet",
+        copy: "Thresholds learn your normal traffic. atlas pages the right people when a pattern breaks, and stays quiet otherwise.",
+      },
+      {
+        title: "Replay any incident",
+        copy: "Every minute is recorded. If something breaks in production, scrub back and watch it happen again.",
+      },
     ],
-    featured: true,
+    stats: [
+      { value: "12M+", label: "spans ingested every minute" },
+      { value: "94.5%", label: "of incidents traced to a root cause" },
+      { value: "1.8s", label: "median time from alert to answer" },
+    ],
+    quote:
+      "We went from a day of guesswork to a minute of reading traces. atlas paid for itself the first night.",
+    quoteAuthor: "Dev P.",
+    quoteRole: "CTO at Cardinal",
+    galleryEyebrow: "From our customers",
+    galleryTitle: "Teams that debug with atlas.",
+    pricingTitle: "Pricing that fits your stack.",
+    tiers: [
+      {
+        name: "Solo",
+        price: "$0",
+        copy: "For side projects and first services.",
+        perks: [
+          "Seven day trace retention",
+          "1 million spans",
+          "Community support",
+        ],
+        featured: false,
+      },
+      {
+        name: "Team",
+        price: "$49",
+        copy: "For services people rely on.",
+        perks: [
+          "Everything in Solo",
+          "Ninety day trace retention",
+          "One-click incident replay",
+          "Priority support",
+        ],
+        featured: true,
+      },
+    ],
+    finalTitle: "Ready to stop guessing?",
+    finalSub:
+      "Start free, no credit card. Your first full trace lands in under two minutes.",
+    finalCta: "Start tracing free",
+    footerTagline: "The home for teams who would rather know than guess.",
+    footerColumns: [
+      { title: "Platform", links: ["Tracing", "Pricing", "Releases"] },
+      { title: "Resources", links: ["Guides", "Recipes", "Status"] },
+      { title: "Company", links: ["About", "Careers", "Journal"] },
+    ],
+    footerFinePrint:
+      "A mock landing page for the Canvas UI playground. atlas is not a real company, but it would page you.",
   },
 ];
 
-const FOOTER_COLUMNS = [
-  { title: "Product", links: ["Features", "Pricing", "Changelog"] },
-  { title: "Resources", links: ["Docs", "Guides", "Status"] },
-  { title: "Company", links: ["About", "Careers", "Blog"] },
+const FEATURE_MEDIA = [
+  { image: MOCK_IMAGES.features[0], alt: "A laptop screen filled with source code" },
+  { image: MOCK_IMAGES.features[1], alt: "Two engineers sketching a plan on a whiteboard" },
+  { image: MOCK_IMAGES.features[2], alt: "Network cables wired into a server rack" },
 ];
 
 export function MockSite({
   heroMedia,
   heroBleed = false,
+  copy = MOCK_SITE_COPY[0],
 }: {
   heroMedia?: React.ReactNode;
   /** Lets 3D hero scenes overflow the panel instead of clipping at its edge. */
   heroBleed?: boolean;
+  /** Which body of page copy to render. Defaults to the first variant. */
+  copy?: MockSiteCopy;
 }) {
   return (
     <div
@@ -364,13 +501,13 @@ export function MockSite({
       <header className="flex items-center justify-between gap-4 border-b border-border/50 px-6 py-4 sm:px-10">
         <span className="flex items-center gap-1.5 text-lg font-semibold tracking-tight">
           <Zap aria-hidden className="size-4.5 fill-current" />
-          bolt
+          {copy.brand}
         </span>
         <nav
           aria-label="Mock site"
           className="hidden items-center gap-1 md:flex"
         >
-          {NAV_LINKS.map((label) => (
+          {copy.navLinks.map((label) => (
             <MockLink
               key={label}
               className="rounded-full px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -381,28 +518,27 @@ export function MockSite({
         </nav>
         <div className="flex items-center gap-2">
           <MockLink className="hidden px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground sm:block">
-            Sign in
+            {copy.signIn}
           </MockLink>
           <MockLink className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/85">
-            Start free
+            {copy.navCta}
           </MockLink>
         </div>
       </header>
 
       <section className="px-6 pt-16 pb-10 text-center sm:px-10 sm:pt-24">
         <h1 className="mx-auto max-w-3xl text-4xl font-semibold tracking-[-0.03em] text-balance sm:text-6xl">
-          Ship in days, not quarters.
+          {copy.heroTitle}
         </h1>
         <p className="mx-auto mt-6 max-w-xl text-base leading-7 text-balance text-muted-foreground sm:text-lg sm:leading-8">
-          bolt is the home for your team&apos;s builds, reviews, and releases.
-          Plan the work, preview every change, and deploy with one click.
+          {copy.heroSub}
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <MockLink className="rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background hover:bg-foreground/85">
-            Start shipping free
+            {copy.heroCta}
           </MockLink>
           <MockLink className="rounded-full border border-border px-5 py-2.5 text-sm font-medium hover:bg-muted/60">
-            Book a demo
+            {copy.heroAlt}
           </MockLink>
         </div>
       </section>
@@ -421,7 +557,7 @@ export function MockSite({
         aria-label="Featured in"
         className="flex flex-wrap items-center justify-center gap-x-10 gap-y-3 px-6 py-12 sm:px-10"
       >
-        {PRESS.map((name) => (
+        {copy.press.map((name) => (
           <span
             key={name}
             className="font-mono text-[13px] tracking-[0.12em] text-muted-foreground/70 uppercase"
@@ -433,19 +569,22 @@ export function MockSite({
 
       <section className="border-t border-border/50 px-6 py-16 sm:px-10">
         <p className="font-mono text-xs tracking-[0.2em] text-muted-foreground uppercase">
-          How it works
+          {copy.howEyebrow}
         </p>
         <h2 className="mt-3 max-w-lg text-3xl font-semibold tracking-[-0.02em] text-balance">
-          Less waiting. More shipping.
+          {copy.howTitle}
         </h2>
         <div className="mt-10 grid gap-4 sm:grid-cols-3">
-          {FEATURES.map((feature) => (
+          {copy.features.map((feature, index) => (
             <article
               key={feature.title}
               className="flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-muted/30"
             >
               <div className="aspect-4/3 overflow-hidden">
-                <MockImage src={feature.image} alt={feature.alt} />
+                <MockImage
+                  src={FEATURE_MEDIA[index].image}
+                  alt={FEATURE_MEDIA[index].alt}
+                />
               </div>
               <div className="p-5">
                 <h3 className="text-[15px] font-medium tracking-tight">
@@ -461,7 +600,7 @@ export function MockSite({
       </section>
 
       <section className="grid gap-8 border-t border-border/50 px-6 py-14 sm:grid-cols-3 sm:px-10">
-        {STATS.map((stat) => (
+        {copy.stats.map((stat) => (
           <div key={stat.label} className="text-center sm:text-left">
             <p className="text-4xl font-semibold tracking-[-0.02em]">
               {stat.value}
@@ -481,23 +620,23 @@ export function MockSite({
           ))}
         </div>
         <blockquote className="mx-auto mt-6 max-w-2xl text-2xl leading-9 font-medium tracking-[-0.01em] text-balance sm:text-3xl sm:leading-11">
-          &ldquo;We went from shipping once a month to shipping every day. bolt
-          paid for itself in the first week.&rdquo;
+          &ldquo;{copy.quote}&rdquo;
         </blockquote>
         <p className="mt-6 flex items-center justify-center gap-2.5 text-sm text-muted-foreground">
           <span className="size-7 overflow-hidden rounded-full border border-border/60">
-            <MockImage src={MOCK_IMAGES.avatar} alt="Maya R." />
+            <MockImage src={MOCK_IMAGES.avatar} alt={copy.quoteAuthor} />
           </span>
-          Maya R. <span className="mx-1">&middot;</span> CTO at Northwind
+          {copy.quoteAuthor} <span className="mx-1">&middot;</span>{" "}
+          {copy.quoteRole}
         </p>
       </section>
 
       <section className="border-t border-border/50 px-6 py-16 sm:px-10">
         <p className="font-mono text-xs tracking-[0.2em] text-muted-foreground uppercase">
-          From our customers
+          {copy.galleryEyebrow}
         </p>
         <h2 className="mt-3 text-3xl font-semibold tracking-[-0.02em]">
-          Teams that ship with bolt.
+          {copy.galleryTitle}
         </h2>
         <div className="mt-10 grid grid-cols-2 gap-4">
           {MOCK_IMAGES.gallery.map((src, index) => (
@@ -515,10 +654,10 @@ export function MockSite({
 
       <section className="border-t border-border/50 px-6 py-16 sm:px-10">
         <h2 className="text-center text-3xl font-semibold tracking-[-0.02em]">
-          Pricing that scales with you.
+          {copy.pricingTitle}
         </h2>
         <div className="mx-auto mt-10 grid max-w-3xl gap-4 sm:grid-cols-2">
-          {TIERS.map((tier) => (
+          {copy.tiers.map((tier) => (
             <article
               key={tier.name}
               className={`rounded-2xl border p-6 ${
@@ -569,14 +708,13 @@ export function MockSite({
 
       <section className="border-t border-border/50 px-6 py-20 text-center sm:px-10">
         <h2 className="mx-auto max-w-xl text-3xl font-semibold tracking-[-0.02em] text-balance sm:text-4xl">
-          Ready to ship faster?
+          {copy.finalTitle}
         </h2>
         <p className="mx-auto mt-4 max-w-md text-base leading-7 text-muted-foreground">
-          Start free, no credit card. Your first deploy is live in under two
-          minutes.
+          {copy.finalSub}
         </p>
         <MockLink className="mt-8 rounded-full bg-foreground px-6 py-3 text-sm font-medium text-background hover:bg-foreground/85">
-          Start shipping free
+          {copy.finalCta}
         </MockLink>
       </section>
 
@@ -585,14 +723,14 @@ export function MockSite({
           <div>
             <span className="flex items-center gap-1.5 text-lg font-semibold tracking-tight">
               <Zap aria-hidden className="size-4.5 fill-current" />
-              bolt
+              {copy.brand}
             </span>
             <p className="mt-3 max-w-55 text-sm leading-6 text-muted-foreground">
-              The home for teams who would rather ship than wait.
+              {copy.footerTagline}
             </p>
           </div>
           <div className="grid grid-cols-3 gap-8">
-            {FOOTER_COLUMNS.map((column) => (
+            {copy.footerColumns.map((column) => (
               <div key={column.title}>
                 <p className="text-[13px] font-medium">{column.title}</p>
                 <ul className="mt-3 flex flex-col gap-2">
@@ -609,8 +747,7 @@ export function MockSite({
           </div>
         </div>
         <p className="mt-12 text-xs text-muted-foreground/70">
-          A mock landing page for the Canvas UI playground. bolt is not a real
-          company, but it would ship.
+          {copy.footerFinePrint}
         </p>
       </footer>
     </div>
