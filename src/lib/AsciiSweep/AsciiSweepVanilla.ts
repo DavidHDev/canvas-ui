@@ -1286,10 +1286,16 @@ function initializeAsciiSweep(
   const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
   let reducedMotion = motionQuery.matches;
 
-  function easeInOut(t: number): number {
-    // Smoothstep. A cubic ease-in leaves progress under one percent for the
-    // first tenth of the sweep, so the band appears to hang before it moves.
-    return t * t * (3 - 2 * t);
+  function ease(t: number): number {
+    // Ease out. Velocity is highest at the very start, so the band reacts the
+    // instant the panel changes instead of easing in from a standstill.
+    const c = 1 - Math.min(Math.max(t, 0), 1);
+    return 1 - c * c * c;
+  }
+
+  /** Exact inverse of ease(), used to re-anchor the clock mid sweep. */
+  function easeInverse(p: number): number {
+    return 1 - Math.cbrt(1 - Math.min(Math.max(p, 0), 1));
   }
 
   function frame(now: number) {
@@ -1327,7 +1333,7 @@ function initializeAsciiSweep(
       const linear = reducedMotion
         ? 1
         : Math.min(1, (now - sweepStart) / 1000 / duration);
-      progress = easeInOut(linear);
+      progress = ease(linear);
       if (linear >= 1) {
         progress = 1;
         sweeping = false;
@@ -1380,17 +1386,43 @@ function initializeAsciiSweep(
   function sweep(to: 0 | 1, sweepOptions?: { angle?: number }) {
     if (destroyed || controlled()) return;
     const target: 0 | 1 = to === 1 ? 1 : 0;
-    if (target === currentSlot && !sweeping) return;
-    fromSlot = currentSlot;
-    toSlot = target;
+    // Already resting on this panel, or already on the way to it.
+    if (sweeping ? target === toSlot : target === currentSlot) return;
+
+    if (sweeping) {
+      // Interrupting a sweep in flight. Run the band backwards from wherever
+      // it currently is instead of restarting it at the edge, which would make
+      // it jump across the panel. Mirroring the progress and the direction
+      // together keeps the band in the same place on screen, and the swap it
+      // has already made is hidden under the characters as it passes back.
+      progress = 1 - progress;
+      const previousFrom = fromSlot;
+      fromSlot = toSlot;
+      toSlot = previousFrom;
+      // Wrapped, so a long run of reversals cannot drift the angle.
+      sweepAngle = (sweepAngle + 180) % 360;
+      // Anchor the clock to the progress being resumed so the band keeps its
+      // speed. The remaining travel then takes exactly as long as it should:
+      // an immediate change of mind snaps back, a late one has further to go.
+      sweepStart =
+        performance.now() -
+        easeInverse(progress) * Math.max(config.duration, 0.05) * 1000;
+      sweepClockSet = true;
+    } else {
+      fromSlot = currentSlot;
+      toSlot = target;
+      progress = 0;
+      sweepAngle = sweepOptions?.angle ?? config.angle;
+      // Anchor on the first rendered frame instead, so the one-off cost of the
+      // first paint and texture upload is not deducted from the animation.
+      sweepClockSet = false;
+    }
+
     currentSlot = target;
-    progress = 0;
     sweeping = true;
     settleFrames = 0;
     fadingOut = false;
     active = 1;
-    sweepAngle = sweepOptions?.angle ?? config.angle;
-    sweepClockSet = false;
     // Raise the destination panel now. Both panels are always captured, so the
     // textures for either side of the sweep are already valid.
     applyStacking(currentSlot);
