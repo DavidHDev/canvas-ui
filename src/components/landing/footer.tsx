@@ -28,7 +28,7 @@ const columns = [
 
 const socials = [
   {
-    href: "https://x.com/davidhdev",
+    href: "https://x.com/davidhaz",
     label: "David Haz on X",
     icon: (
       <svg aria-hidden viewBox="0 0 24 24" className="size-4 fill-current">

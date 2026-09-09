@@ -57,8 +57,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    site: "@davidhdev",
-    creator: "@davidhdev",
+    site: "@davidhaz",
+    creator: "@davidhaz",
     images: ["/og.png"],
   },
   icons: {

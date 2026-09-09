@@ -228,7 +228,7 @@ Issues and pull requests welcome. See [CONTRIBUTING.md](.github/CONTRIBUTING.md)
 
 <div align="center">
 <br />
-<sub>Built by <a href="https://github.com/DavidHDev">David Haz</a> · <a href="https://x.com/davidhdev">@davidhdev</a></sub>
+<sub>Built by <a href="https://github.com/DavidHDev">David Haz</a> · <a href="https://x.com/davidhaz">@davidhaz</a></sub>
 <br /><br />
 <a href="https://canvasui.dev"><b>canvasui.dev</b></a>
 
