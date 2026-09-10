@@ -188,6 +188,8 @@ Point these at a GLB/glTF model, SVG, or image to render it as a 3D scene.
 
 Html-in-canvas needs Chrome with the `chrome://flags/#canvas-draw-element` flag. An [origin trial](https://canvasui.dev/docs/installation) token lifts that for your visitors. That is how canvasui.dev runs in a plain Chrome install. Details in the [docs](https://canvasui.dev/docs).
 
+Chrome 150's changes to `texElementImage2D()` and `copyElementImageToTexture()` do not require a migration in Canvas UI. The HTML effects capture content with the 2D `drawElementImage()` API, then upload the canvas with standard `texImage2D()` (WebGL) or `copyExternalImageToTexture()` (WebGPU). Those upload methods keep their existing signatures. This also applies to the generated registry components for all six frameworks.
+
 ## Use with AI
 
 The registry is [MCP](https://canvasui.dev/docs/mcp) ready, so your assistant can browse and install components:
