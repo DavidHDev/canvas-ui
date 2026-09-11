@@ -792,6 +792,8 @@ export function createLiquid(
     blit(null);
   }
 
+  const MAX_PENDING_SPLATS = 64;
+  const MAX_SPLATS_PER_FRAME = 8;
   const queued: Array<[number, number, number, number]> = [];
 
   let raf = 0;
@@ -817,8 +819,9 @@ export function createLiquid(
     lastTime = now;
     if (queued.length > 0) {
       idleAt = now + idleDelayMs();
-      while (queued.length > 0) {
-        const [x, y, dx, dy] = queued.pop()!;
+      const count = Math.min(queued.length, MAX_SPLATS_PER_FRAME);
+      for (let i = 0; i < count; i++) {
+        const [x, y, dx, dy] = queued.shift()!;
         applySplat(x, y, dx, dy);
       }
     }
@@ -829,6 +832,12 @@ export function createLiquid(
       return;
     }
     raf = requestAnimationFrame(frame);
+  }
+
+  function enqueueSplat(x: number, y: number, dx: number, dy: number) {
+    if (destroyed || !visible) return;
+    if (queued.length >= MAX_PENDING_SPLATS) queued.shift();
+    queued.push([x, y, dx, dy]);
   }
 
   function start() {
@@ -868,7 +877,7 @@ export function createLiquid(
     if (!previous) return;
     const dx = (px - previous.x) * config.force;
     const dy = -(py - previous.y) * config.force;
-    queued.push([px / rect.width, 1 - py / rect.height, dx, dy]);
+    enqueueSplat(px / rect.width, 1 - py / rect.height, dx, dy);
     start();
   }
 
@@ -879,7 +888,7 @@ export function createLiquid(
     const y = event.clientY - rect.top;
     if (x < 0 || x > rect.width || y < 0 || y > rect.height) return;
     pointers.set(event.pointerId, { x, y });
-    queued.push([x / rect.width, 1 - y / rect.height, 1, 1]);
+    enqueueSplat(x / rect.width, 1 - y / rect.height, 1, 1);
     start();
   }
 
@@ -915,13 +924,14 @@ export function createLiquid(
   const intersection = new IntersectionObserver((entries) => {
     visible = entries[entries.length - 1]?.isIntersecting ?? true;
     if (visible) start();
+    else queued.length = 0;
   });
   intersection.observe(output);
 
   return {
     splat(x, y, dx, dy) {
       if (reducedMotion) return;
-      queued.push([x, y, dx, dy]);
+      enqueueSplat(x, y, dx, dy);
       start();
     },
     setOptions(next) {
