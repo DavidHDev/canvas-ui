@@ -2,7 +2,7 @@
 
 import { Quote } from "lucide-react";
 import Image from "next/image";
-import { useCallback, type ReactNode } from "react";
+import { useCallback, useSyncExternalStore, type ReactNode } from "react";
 
 import { Reveal } from "@/components/landing/reveal";
 import { Bend } from "@/components/docs/live/Bend";
@@ -130,6 +130,22 @@ const ROWS = [
   { items: QUOTES.slice(9), duration: "88s", reverse: true },
 ] as const;
 
+const DESKTOP_QUERY = "(min-width: 48rem)";
+
+function subscribeDesktop(onChange: () => void) {
+  const query = window.matchMedia(DESKTOP_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function useIsDesktop() {
+  return useSyncExternalStore(
+    subscribeDesktop,
+    () => window.matchMedia(DESKTOP_QUERY).matches,
+    () => false,
+  );
+}
+
 function HorizontalBend({ children }: { children: ReactNode }) {
   const setSpacerRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return;
@@ -217,7 +233,25 @@ function QuoteCard({
   );
 }
 
+function MobileQuotes() {
+  return (
+    <div className="flex flex-col gap-4">
+      {ROWS.map((row, rowIndex) => (
+        <ul key={rowIndex} className="community-quotes-scroller flex gap-4">
+          {row.items.map((quote) => (
+            <li key={quote.url} className="community-quote-snap">
+              <QuoteCard quote={quote} focusable />
+            </li>
+          ))}
+        </ul>
+      ))}
+    </div>
+  );
+}
+
 export function CommunityQuotes() {
+  const isDesktop = useIsDesktop();
+
   return (
     <div className="mt-28 sm:mt-36">
       <Reveal>
@@ -230,42 +264,43 @@ export function CommunityQuotes() {
       </Reveal>
 
       <Reveal delay={80} className="-mx-5 mt-12 sm:-mx-8">
-        <HorizontalBend>
-          <div className="community-quotes-marquee overflow-hidden">
-            <div className="flex flex-col gap-4">
-              {ROWS.map((row, rowIndex) => (
-                <div key={rowIndex} className="community-marquee">
-                  <div
-                    className="community-marquee-track flex w-max"
-                    data-direction={row.reverse ? "reverse" : undefined}
-                    style={
-                      {
-                        "--community-marquee-duration": row.duration,
-                      } as React.CSSProperties
-                    }
-                  >
-                    {[0, 1].map((copy) => (
-                      <ul
-                        key={copy}
-                        aria-hidden={copy === 1 || undefined}
-                        className="flex gap-4 pr-4"
-                      >
-                        {row.items.map((quote) => (
-                          <li key={quote.url}>
-                            <QuoteCard
-                              quote={quote}
-                              focusable={copy === 0}
-                            />
-                          </li>
-                        ))}
-                      </ul>
-                    ))}
+        {isDesktop ? (
+          <HorizontalBend>
+            <div className="community-quotes-marquee overflow-hidden">
+              <div className="flex flex-col gap-4">
+                {ROWS.map((row, rowIndex) => (
+                  <div key={rowIndex} className="community-marquee">
+                    <div
+                      className="community-marquee-track flex w-max"
+                      data-direction={row.reverse ? "reverse" : undefined}
+                      style={
+                        {
+                          "--community-marquee-duration": row.duration,
+                        } as React.CSSProperties
+                      }
+                    >
+                      {[0, 1].map((copy) => (
+                        <ul
+                          key={copy}
+                          aria-hidden={copy === 1 || undefined}
+                          className="flex gap-4 pr-4"
+                        >
+                          {row.items.map((quote) => (
+                            <li key={quote.url}>
+                              <QuoteCard quote={quote} focusable={copy === 0} />
+                            </li>
+                          ))}
+                        </ul>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        </HorizontalBend>
+          </HorizontalBend>
+        ) : (
+          <MobileQuotes />
+        )}
       </Reveal>
     </div>
   );

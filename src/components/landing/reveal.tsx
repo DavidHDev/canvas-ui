@@ -25,8 +25,10 @@ export function Reveal({
       el.dataset.inView = "true";
       return;
     }
+    let delivered = false;
     const observer = new IntersectionObserver(
       (entries) => {
+        delivered = true;
         if (entries.some((entry) => entry.isIntersecting)) {
           el.dataset.inView = "true";
           observer.disconnect();
@@ -35,7 +37,18 @@ export function Reveal({
       { rootMargin: "0px 0px -60px 0px" },
     );
     observer.observe(el);
-    return () => observer.disconnect();
+
+    const safety = window.setTimeout(() => {
+      if (!delivered) {
+        el.dataset.inView = "true";
+        observer.disconnect();
+      }
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(safety);
+      observer.disconnect();
+    };
   }, []);
 
   return (

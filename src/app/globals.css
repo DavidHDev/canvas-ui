@@ -379,9 +379,32 @@ li:nth-child(3) .featured-video-card strong {
 }
 
 .community-marquee-track {
-  will-change: transform;
   animation: community-marquee-scroll
     var(--community-marquee-duration, 80s) linear infinite;
+}
+
+@media (min-width: 48rem) {
+  .community-marquee-track {
+    will-change: transform;
+  }
+}
+
+.community-quotes-scroller {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 1.25rem;
+  padding-inline: 1.25rem;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.community-quotes-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.community-quote-snap {
+  scroll-snap-align: center;
 }
 
 .community-marquee-track[data-direction="reverse"] {
