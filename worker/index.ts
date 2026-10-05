@@ -56,13 +56,23 @@ function sameOrigin(request: Request, env: Env): boolean {
     });
 }
 
-async function allowed(limiter: RateLimiter | undefined, key: string) {
-  if (!limiter) return true;
+type LimitResult = "ok" | "limited" | "error";
+
+async function checkLimit(
+  limiter: RateLimiter | undefined,
+  name: string,
+  key: string,
+): Promise<LimitResult> {
+  if (!limiter) {
+    console.error(`Rate limiter binding ${name} is not configured.`);
+    return "error";
+  }
   try {
     const { success } = await limiter.limit({ key });
-    return success;
-  } catch {
-    return true;
+    return success ? "ok" : "limited";
+  } catch (error) {
+    console.error(`Rate limiter ${name} check failed:`, error);
+    return "error";
   }
 }
 
@@ -119,11 +129,27 @@ async function subscribe(request: Request, env: Env): Promise<Response> {
 
   const ip = request.headers.get("cf-connecting-ip") ?? "";
 
-  if (!(await allowed(env.SUBSCRIBE_IP_LIMIT, ip || "unknown"))) {
+  const ipLimit = await checkLimit(
+    env.SUBSCRIBE_IP_LIMIT,
+    "SUBSCRIBE_IP_LIMIT",
+    ip || "unknown",
+  );
+  if (ipLimit === "error") {
+    return json({ error: UNAVAILABLE }, 503);
+  }
+  if (ipLimit === "limited") {
     return json({ error: TOO_MANY }, 429);
   }
 
-  if (!(await allowed(env.SUBSCRIBE_GLOBAL_LIMIT, "global"))) {
+  const globalLimit = await checkLimit(
+    env.SUBSCRIBE_GLOBAL_LIMIT,
+    "SUBSCRIBE_GLOBAL_LIMIT",
+    "global",
+  );
+  if (globalLimit === "error") {
+    return json({ error: UNAVAILABLE }, 503);
+  }
+  if (globalLimit === "limited") {
     return json({ error: TOO_MANY }, 429);
   }
 
