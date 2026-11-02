@@ -110,6 +110,9 @@ liquid.destroy();`,
   },
 ] as const;
 
+const VANILLA_STRUCTURE_NOTE =
+  "For vanilla HTML-in-Canvas components, content must reference a direct child of the source canvas that wraps your HTML. Do not pass the outer container: HTML capture will fail, even if the effect itself still renders.";
+
 const PAGE_MARKDOWN = `# Installation
 
 Install any component with the shadcn CLI, or copy the source straight from its docs page. Either way, the code ends up in your project.
@@ -151,6 +154,8 @@ Wrap the part of your interface the effect should run over. Props are optional a
 \`\`\`tsx
 ${USAGE[0].source}
 \`\`\`
+
+${VANILLA_STRUCTURE_NOTE}
 
 For vanilla WebGPU, import from LiquidWebGPU.ts instead of LiquidVanilla.ts. The createLiquid call is the same.
 
@@ -268,6 +273,8 @@ export default async function InstallationPage() {
         <div className="not-typeset my-6">
           <CodeTabs variants={usageVariants} />
         </div>
+
+        <p>{VANILLA_STRUCTURE_NOTE}</p>
         <p>
           For vanilla WebGPU, import from <code>LiquidWebGPU.ts</code> instead
           of <code>LiquidVanilla.ts</code>. The <code>createLiquid</code> call is
