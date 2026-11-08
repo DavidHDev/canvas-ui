@@ -21,7 +21,7 @@ const API_REFERENCE: ApiProp[] = [
   {
     name: "src",
     description:
-      "URL of the asset: GLB/glTF, SVG, PNG, JPEG, WebP, or GIF. Object URLs from a file input work too. The format is detected from the bytes, not the extension. SVGs and images are traced and extruded into a rounded glass slab; models keep their geometry. Draco-compressed models are supported via a decoder fetched on demand.",
+      "URL of the asset to display: GLB/glTF, SVG, PNG, JPEG, WebP, or GIF.",
     type: "string",
   },
   {
