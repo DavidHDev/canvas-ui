@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Check, Copy, Info } from "lucide-react";
 
 import { Accordion, AccordionHeader, AccordionItem, AccordionPanel, AccordionTrigger } from "@/components/ui/accordion";
@@ -81,22 +81,28 @@ export function HtmlInCanvasBanner() {
 
   if (isHtmlInCanvasBlocked()) {
     return (
-      <div className="not-typeset mt-6 mb-4 flex gap-2.5 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
-        <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-        <p className="text-[13px] leading-5 text-muted-foreground">
-          Android uses regular HTML here to avoid crashes in the experimental
-          HTML-in-Canvas renderer. Enabling the browser flag does not change this
-          fallback. Open this page in desktop Chrome or Edge to see the full effect.
-        </p>
-      </div>
+      <Notice>
+        Android shows the fallback version here: HTML-in-Canvas stays off on
+        Android as a precaution after a renderer crash report. Open this page in
+        desktop Chrome 157 or later to see the full effect.
+      </Notice>
     );
   }
 
   const browser = detectBrowser();
-  const unsupported = browser.kind === "unsupported";
-  const chromium = browser.kind === "chromium";
-  const stepsFlag = browser.flag;
-  const relaunch = chromium ? `Relaunch ${browser.name}` : "Relaunch the browser";
+
+  // HTML-in-Canvas ships in Chrome 157. Other engines don't implement it, so
+  // there is nothing to enable there: the only advice is to switch browsers.
+  if (browser.kind !== "chromium") {
+    return (
+      <Notice>
+        {browser.name ?? "Your browser"}{" "}
+        doesn&apos;t support HTML-in-Canvas yet, so you&apos;re seeing the
+        fallback version. Open this page in Chrome 157 or later to see the full
+        effect.
+      </Notice>
+    );
+  }
 
   return (
     <Accordion className="not-typeset mt-6 mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
@@ -105,52 +111,47 @@ export function HtmlInCanvasBanner() {
           <AccordionTrigger className="w-full flex-wrap items-start gap-x-2.5 gap-y-1.5 text-left [&>svg]:mt-[3px] [&>svg]:ml-auto sm:[&>svg]:ml-0">
             <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
             <span className="min-w-0 flex-1 text-[13px] leading-5 text-muted-foreground">
-              {chromium ? (
-                <>This component only works with {browser.name}&apos;s HTML-in-Canvas flag enabled.</>
-              ) : unsupported ? (
-                <>This component needs HTML-in-Canvas, which {browser.name} doesn&apos;t support.</>
-              ) : (
-                <>Your browser doesn&apos;t have HTML-in-Canvas enabled.</>
-              )}
+              This component needs HTML-in-Canvas, which isn&apos;t on in this version of {browser.name}.
             </span>
-            <span className="ml-auto hidden shrink-0 text-[13px] leading-5 font-medium text-muted-foreground transition-colors group-hover:text-foreground sm:inline">{unsupported ? "See how" : "How to enable"}</span>
+            <span className="ml-auto hidden shrink-0 text-[13px] leading-5 font-medium text-muted-foreground transition-colors group-hover:text-foreground sm:inline">How to enable</span>
           </AccordionTrigger>
         </AccordionHeader>
 
         <AccordionPanel>
-          <div className="mt-3 space-y-3">
-            {unsupported ? (
-              <p className="text-[13px] leading-5 text-muted-foreground">
-                HTML-in-Canvas is an experimental Chromium feature that {browser.name} doesn&apos;t support. To see this effect, open this page in Chrome, Brave, or Edge:
-              </p>
-            ) : null}
-
-            <ol className="space-y-2">
-              <li className="flex gap-3 text-[13px] leading-6 text-muted-foreground">
-                <StepMarker n={1} />
-                <span className="min-w-0 flex-1">
-                  <span className="sm:hidden">Copy this and paste it into your browser&apos;s address bar:</span>
-                  <span className="hidden sm:inline">
-                    Copy <CopyFlag flag={stepsFlag} /> and paste it into your browser&apos;s address bar.
-                  </span>
-                  <span className="mt-1.5 block sm:hidden">
-                    <CopyFlag flag={stepsFlag} />
-                  </span>
+          <ol className="mt-3 space-y-2">
+            <li className="flex gap-3 text-[13px] leading-6 text-muted-foreground">
+              <StepMarker n={1} />
+              <span className="min-w-0 flex-1">
+                Update {browser.name} to the latest version, then reload this page. Chrome turns HTML-in-Canvas on by default from version 157.
+              </span>
+            </li>
+            <li className="flex gap-3 text-[13px] leading-6 text-muted-foreground">
+              <StepMarker n={2} />
+              <span className="min-w-0 flex-1">
+                <span className="sm:hidden">
+                  Still seeing this? Copy this into the address bar, set the HTML-in-Canvas dropdown to Enabled, and relaunch {browser.name}:
                 </span>
-              </li>
-              <li className="flex gap-3 text-[13px] leading-6 text-muted-foreground">
-                <StepMarker n={2} />
-                <span className="min-w-0 flex-1">Set the HTML-in-Canvas dropdown to Enabled.</span>
-              </li>
-              <li className="flex gap-3 text-[13px] leading-6 text-muted-foreground">
-                <StepMarker n={3} />
-                <span className="min-w-0 flex-1">{relaunch}, then reload this page.</span>
-              </li>
-            </ol>
-          </div>
+                <span className="hidden sm:inline">
+                  Still seeing this? Copy <CopyFlag flag={browser.flag} /> into the address bar, set the HTML-in-Canvas dropdown to Enabled, and relaunch {browser.name}.
+                </span>
+                <span className="mt-1.5 block sm:hidden">
+                  <CopyFlag flag={browser.flag} />
+                </span>
+              </span>
+            </li>
+          </ol>
         </AccordionPanel>
       </AccordionItem>
     </Accordion>
+  );
+}
+
+function Notice({ children }: { children: ReactNode }) {
+  return (
+    <div className="not-typeset mt-6 mb-4 flex gap-2.5 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
+      <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <p className="text-[13px] leading-5 text-muted-foreground">{children}</p>
+    </div>
   );
 }
 

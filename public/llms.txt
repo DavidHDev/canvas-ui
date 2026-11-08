@@ -46,6 +46,6 @@
 
 ## Notes
 
-- Components that use html-in-canvas currently require Chrome with the chrome://flags/#canvas-draw-element flag enabled
+- Components that use html-in-canvas need Chrome 157 or later (older Chrome can enable chrome://flags/#canvas-draw-element); other browsers and Android get an HTML fallback
 - Docs pages have a "Copy as Markdown" button for AI-friendly content
 - License: MIT + Commons Clause (free to use in products; do not resell or redistribute the components themselves)

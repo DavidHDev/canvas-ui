@@ -181,16 +181,16 @@ Point these at a GLB/glTF model, SVG, or image to render it as a 3D scene.
 
 ## Browser support
 
-| Browser                                                                        | HTML-in-canvas components | 3D effect components |
-| ------------------------------------------------------------------------------ | :-----------------------: | :------------------: |
-| Chrome with the [flag or origin trial](https://canvasui.dev/docs/installation) |      ✅ Full effect       |    ✅ Full effect    |
-| Everything else                                                                |  ⚠️ GPU overlay fallback  |    ✅ Full effect    |
+| Browser              | HTML-in-canvas components | 3D effect components |
+| -------------------- | :-----------------------: | :------------------: |
+| Chrome 157 and later |      ✅ Full effect       |    ✅ Full effect    |
+| Everything else      |  ⚠️ GPU overlay fallback  |    ✅ Full effect    |
 
-Html-in-canvas needs Chrome with the `chrome://flags/#canvas-draw-element` flag. An [origin trial](https://canvasui.dev/docs/installation) token lifts that for your visitors. That is how canvasui.dev runs in a plain Chrome install. Details in the [docs](https://canvasui.dev/docs).
+HTML-in-Canvas ships in Chrome 157. Older Chrome versions can turn it on with the `chrome://flags/#canvas-draw-element` flag, or with an [origin trial](https://canvasui.dev/docs/installation#requirements) token on your site. Android stays on the fallback for now. Details in the [docs](https://canvasui.dev/docs).
 
-Chrome 150's changes to `texElementImage2D()` and `copyElementImageToTexture()` do not require a migration in Canvas UI. The HTML effects capture content with the 2D `drawElementImage()` API, then upload the canvas with standard `texImage2D()` (WebGL) or `copyExternalImageToTexture()` (WebGPU). Those upload methods keep their existing signatures. This also applies to the generated registry components for all six frameworks.
+Chrome 150 and 155 changed the WebGL and WebGPU entry points: `texElementImage2D()` became `texElementSubImage2D()`, and `copyElementImageToTexture()` became `drawElementImageToTexture()`. Neither change requires a migration in Canvas UI. The HTML effects capture content with the 2D `drawElementImage()` API, then upload the canvas with standard `texImage2D()` (WebGL) or `copyExternalImageToTexture()` (WebGPU). Those upload methods keep their existing signatures. This also applies to the generated registry components for all six frameworks.
 
-The [later HTML-in-Canvas changes](https://developer.chrome.com/blog/html-in-canvas-ot-changes) also affect capture markup and hit testing. Canvas UI synchronizes the captured element's geometry when the browser requires it, keeping scrolling, clicks, and cursor effects working in Chrome 154. It also selects `content="drawable"` and `drawable` when the newer API is available, while preserving support for `layoutsubtree` and automatic 2D geometry synchronization.
+The [same updates](https://developer.chrome.com/blog/html-in-canvas-ot-changes) changed capture markup and hit testing. Canvas UI uses `content="drawable"` and `drawable` when the browser supports them and falls back to `layoutsubtree` on older versions. When `drawElementImage()` returns a transform (Chrome 154 to 156), Canvas UI forwards it to `updateElementGeometry()`; newer versions sync hit testing on their own. Either way, scrolling, clicks, and cursor effects keep working.
 
 Both renderers follow pinch zoom through `visualViewport`, increasing capture and rendering resolution while preserving the HTML's position and interactions. The normal 2× device-pixel-ratio budget is multiplied by the zoom scale, subject to GPU limits, an 8192-pixel maximum dimension, and a 16-megapixel buffer budget. Particle Scroll uses plain HTML without a GPU overlay when HTML-in-Canvas is unavailable, including in Safari.
 

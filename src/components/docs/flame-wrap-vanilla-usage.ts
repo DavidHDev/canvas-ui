@@ -61,5 +61,5 @@ This example uses the default flame height, spread, and corner radius. Keep room
 ${FLAME_WRAP_VANILLA_TS}
 \`\`\`
 
-For the WebGPU build, change the import to @/components/canvasui/FlameWrapWebGPU. The markup and initialization stay the same. Enable the html-in-canvas flag or origin trial described in the installation requirements to capture and distort the content: https://canvasui.dev/docs/installation#requirements
+For the WebGPU build, change the import to @/components/canvasui/FlameWrapWebGPU. The markup and initialization stay the same. Capturing and distorting the content needs html-in-canvas, which ships in Chrome 157 and later; see the installation requirements: https://canvasui.dev/docs/installation#requirements
 `;

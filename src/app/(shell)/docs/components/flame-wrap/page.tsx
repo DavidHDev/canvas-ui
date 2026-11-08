@@ -230,15 +230,16 @@ export default async function FlameWrapPage() {
               <p className="mt-3 text-[13px] leading-6 text-muted-foreground">
                 For the WebGPU build, change the import to{" "}
                 <code>@/components/canvasui/FlameWrapWebGPU</code>. The markup and
-                initialization stay the same. Enable the html-in-canvas flag or
-                origin trial described in the{" "}
+                initialization stay the same. Capturing and distorting the
+                content needs html-in-canvas, which ships in Chrome 157 and
+                later; see the{" "}
                 <a
                   href="/docs/installation#requirements"
                   className="underline underline-offset-4"
                 >
                   installation requirements
-                </a>{" "}
-                to capture and distort the content.
+                </a>
+                .
               </p>
             </section>
           </>

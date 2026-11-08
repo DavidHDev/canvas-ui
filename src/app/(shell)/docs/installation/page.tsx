@@ -116,19 +116,21 @@ Install any component with the shadcn CLI, or copy the source straight from its 
 
 ## Requirements
 
-Some components are built on the html-in-canvas API and currently need Chrome with the canvas-draw-element flag enabled. Each component page tells you if it applies. Paste this into your address bar, enable the flag, and restart:
+Some components are built on the html-in-canvas API, which ships in Chrome 157 and later. Each component page tells you if it applies. In browsers without support, components fall back automatically: your content renders as regular HTML and no errors are thrown.
+
+Older versions of Chrome can turn the API on with the canvas-draw-element flag. Paste this into your address bar, enable the flag, and restart:
 
 \`\`\`
 chrome://flags/#canvas-draw-element
 \`\`\`
 
-For production, Chrome offers an [origin trial](https://developer.chrome.com/blog/html-in-canvas-origin-trial) that enables the API for your visitors without any flags. This site runs on an origin trial token itself, which is why the effects work here in a plain Chrome install. Tokens are bound to a specific domain, so this only benefits canvasui.dev: to get the same on your own site, register your domain for the trial and serve the token via a meta tag or HTTP header. In browsers without support, components fall back automatically: your content renders as regular HTML and no errors are thrown.
+To cover visitors who haven't updated yet, register your domain for Chrome's [origin trial](https://developer.chrome.com/blog/html-in-canvas-origin-trial), which runs through Chrome 160, and serve the token via a meta tag or HTTP header. Tokens are bound to a specific domain, so register your own. Chrome 157 and later need neither the flag nor a token.
 
 Beyond that, TypeScript is recommended, since every file ships as typed source. React components target React 19, Solid components target Solid 1.9, Preact components target Preact 10, Vue components target Vue 3.5, and Svelte components target Svelte 5. Any dependencies a component needs are installed by the CLI and listed on its docs page.
 
 Renderers: every effect has a WebGL build and a WebGPU build where available. WebGL is the default. WebGPU builds use vgpu, WGSL shaders, and the -webgpu registry suffix. Read the rendering guide: https://canvasui.dev/docs/rendering
 
-Android compatibility: native HTML capture is currently disabled on Android as a precaution after a Chrome renderer crash report. Enabling the html-in-canvas flag does not override this check. Content stays in the regular DOM; effects with an overlay fallback can still animate, while capture-only effects show plain HTML. This is a compatibility mitigation, not a confirmed fix for the underlying browser crash.
+Android compatibility: native HTML capture stays disabled on Android as a precaution after a Chrome renderer crash report, even in Chrome 157 or with the flag enabled. Content stays in the regular DOM; effects with an overlay fallback can still animate, while capture-only effects show plain HTML. This is a compatibility mitigation, not a confirmed fix for the underlying browser crash.
 
 ## Install with the CLI
 
@@ -196,31 +198,32 @@ export default async function InstallationPage() {
 
         <h2 id="requirements" className="scroll-mt-24">Requirements</h2>
         <p>
-          Some components are built on the html-in-canvas API and currently need
-          Chrome with the canvas-draw-element flag enabled. Each component page
-          tells you if it applies. Paste this into your address bar, enable the
-          flag, and restart:
+          Some components are built on the html-in-canvas API, which ships in
+          Chrome 157 and later. Each component page tells you if it applies.
+          In browsers without support, components fall back automatically:
+          your content renders as regular HTML and no errors are thrown.
+        </p>
+        <p>
+          Older versions of Chrome can turn the API on with the
+          canvas-draw-element flag. Paste this into your address bar, enable
+          the flag, and restart:
         </p>
         <div className="my-6">
           <CodeBlock source="chrome://flags/#canvas-draw-element" />
         </div>
         <p>
-          For production, Chrome offers an{" "}
+          To cover visitors who haven&apos;t updated yet, register your domain
+          for Chrome&apos;s{" "}
           <a
             href="https://developer.chrome.com/blog/html-in-canvas-origin-trial"
             target="_blank"
             rel="noreferrer"
           >
             origin trial
-          </a>{" "}
-          that enables the API for your visitors without any flags. This site
-          runs on an origin trial token itself, which is why the effects work
-          here in a plain Chrome install. Tokens are bound to a specific
-          domain, so this only benefits canvasui.dev: to get the same on your
-          own site, register your domain for the trial and serve the token via
-          a meta tag or HTTP header. In browsers without support, components
-          fall back automatically: your content renders as regular HTML and no
-          errors are thrown.
+          </a>
+          , which runs through Chrome 160, and serve the token via a meta tag
+          or HTTP header. Tokens are bound to a specific domain, so register
+          your own. Chrome 157 and later need neither the flag nor a token.
         </p>
         <p>
           Beyond that, TypeScript is recommended, since every file ships as
@@ -237,9 +240,9 @@ export default async function InstallationPage() {
           <a href="/docs/rendering">rendering guide</a>.
         </p>
         <p>
-          On Android, native HTML capture is currently disabled as a precaution
-          after a Chrome renderer crash report. Enabling the html-in-canvas flag
-          does not override this check. Content stays in the regular DOM;
+          On Android, native HTML capture stays disabled as a precaution after
+          a Chrome renderer crash report, even in Chrome 157 or with the flag
+          enabled. Content stays in the regular DOM;
           effects with an overlay fallback can still animate, while
           capture-only effects show plain HTML. This is a compatibility
           mitigation, not a confirmed fix for the underlying browser crash.

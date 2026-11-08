@@ -16,7 +16,7 @@ const ITEMS = [
   {
     question: "Which browsers are supported?",
     answer:
-      "Components that draw live HTML on canvas rely on an experimental browser capability, available today in Chrome behind a flag. Everywhere else they degrade gracefully: your content renders as regular HTML, and effects like Blaze, Liquid, Laser, Clouds, Bubble, Droplets, Glass, Magnify, Grid, and Ripple keep running as a pure GPU overlay on top of it. The WebGL builds work in every modern browser; the WebGPU builds need a browser with WebGPU (Chrome, Edge, Safari 26, Firefox 141) and show your content unchanged elsewhere.",
+      "Components that draw live HTML on canvas rely on the html-in-canvas API, which ships in Chrome 157 and later. Everywhere else they degrade gracefully: your content renders as regular HTML, and effects like Blaze, Liquid, Laser, Clouds, Bubble, Droplets, Glass, Magnify, Grid, and Ripple keep running as a pure GPU overlay on top of it. The WebGL builds work in every modern browser; the WebGPU builds need a browser with WebGPU (Chrome, Edge, Safari 26, Firefox 141) and show your content unchanged elsewhere.",
   },
   {
     question: "Will it slow my site down?",

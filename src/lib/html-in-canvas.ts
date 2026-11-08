@@ -10,10 +10,10 @@ type HtmlInCanvasElement = HTMLCanvasElement & {
 };
 
 /**
- * Android exposes the experimental API, but renderer crashes were reported on
- * effect pages (issue #50). A process crash cannot be caught in JavaScript.
- * Keep Android on the DOM/overlay fallback until native capture is validated
- * there; enabling Chrome's experimental flag must not bypass this policy.
+ * Android can expose the API, but renderer crashes were reported on effect
+ * pages (issue #50). A process crash cannot be caught in JavaScript. Keep
+ * Android on the DOM/overlay fallback until native capture is validated there.
+ * Neither Chrome's flag nor its default-on support (Chrome 157+) may bypass it.
  */
 export function isHtmlInCanvasBlocked(): boolean {
   if (typeof navigator === "undefined") return false;

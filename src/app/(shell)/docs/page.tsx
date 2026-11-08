@@ -19,7 +19,7 @@ Canvas UI is an open source library of creative components drawn on canvas. Real
 
 A collection of canvas effects for the web: fluid simulations, shaders, and other visual experiments. They render over real HTML, so the content underneath stays interactive.
 
-Most of the library is built on the html-in-canvas API, an experimental browser capability that lets a canvas element lay out and paint live DOM content. Your components become a texture that shaders can sample and distort, without screenshots, iframes, or DOM-to-image hacks. Some effects skip the API entirely and are pure 3D and shader work that runs everywhere today.
+Most of the library is built on the html-in-canvas API, new in Chrome 157, which lets a canvas element lay out and paint live DOM content. Your components become a texture that shaders can sample and distort, without screenshots, iframes, or DOM-to-image hacks. Some effects skip the API entirely and are pure 3D and shader work that runs everywhere today.
 
 ## Framework agnostic
 
@@ -35,7 +35,7 @@ Components are distributed through a shadcn registry. Installing one drops the s
 
 ## Browser support
 
-The html-in-canvas API is an experimental Chrome feature, currently in origin trial. Components detect support at runtime and degrade gracefully: without it, your content renders as normal HTML and the parts of the effect that can still run, still do. Nothing breaks for users on other browsers.
+The html-in-canvas API ships in Chrome 157 and later; other browsers don't support it yet. Components detect support at runtime and degrade gracefully: without it, your content renders as normal HTML and the parts of the effect that can still run, still do. Nothing breaks for users on other browsers.
 
 ## Next steps
 
@@ -68,9 +68,9 @@ export default function DocsPage() {
           the content underneath stays interactive.
         </p>
         <p>
-          Most of the library is built on the html-in-canvas API, an
-          experimental browser capability that lets a canvas element lay out and
-          paint live DOM content. Your components become a texture that shaders
+          Most of the library is built on the html-in-canvas API, new in
+          Chrome 157, which lets a canvas element lay out and paint live DOM
+          content. Your components become a texture that shaders
           can sample and distort, without screenshots, iframes, or DOM-to-image
           hacks. Some effects skip the API entirely and are pure 3D and shader
           work that runs everywhere today.
@@ -102,8 +102,8 @@ export default function DocsPage() {
 
         <h2>Browser support</h2>
         <p>
-          The html-in-canvas API is an experimental Chrome feature, currently in
-          origin trial. Components detect support at runtime and degrade
+          The html-in-canvas API ships in Chrome 157 and later; other browsers
+          don&apos;t support it yet. Components detect support at runtime and degrade
           gracefully: without it, your content renders as normal HTML and the
           parts of the effect that can still run, still do. Nothing breaks for
           users on other browsers.

@@ -39,6 +39,23 @@ function resolve(name: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Origin-trial tokens are base64: a version byte, a 64-byte signature, a
+ * 4-byte big-endian payload length, then a JSON payload with `expiry` (Unix s).
+ */
+function originTrialExpiry(token: string): Date | null {
+  try {
+    const bytes = Buffer.from(token, "base64");
+    const length = bytes.readUInt32BE(65);
+    const payload = JSON.parse(bytes.subarray(69, 69 + length).toString("utf8")) as {
+      expiry?: unknown;
+    };
+    return typeof payload.expiry === "number" ? new Date(payload.expiry * 1000) : null;
+  } catch {
+    return null;
+  }
+}
+
 function workerSecrets(): string[] | null {
   try {
     const raw = execFileSync("npx", ["wrangler", "secret", "list"], {
@@ -83,10 +100,34 @@ if (turnstileRequired) {
   );
 }
 
-if (!resolve("NEXT_PUBLIC_HTML_IN_CANVAS_OT_TOKEN")) {
+const OT_RENEW_URL = "https://developer.chrome.com/origintrials/#/trials/my";
+const otToken = resolve("NEXT_PUBLIC_HTML_IN_CANVAS_OT_TOKEN");
+if (!otToken) {
   warnings.push(
-    "NEXT_PUBLIC_HTML_IN_CANVAS_OT_TOKEN is not set — html-in-canvas demos will fall back on canvasui.dev.",
+    "NEXT_PUBLIC_HTML_IN_CANVAS_OT_TOKEN is not set — html-in-canvas demos will fall back on canvasui.dev for visitors on Chrome older than 157.",
   );
+} else {
+  // Tokens lapse silently: the first one expired 2026-10-20 between deploys.
+  const expiry = originTrialExpiry(otToken);
+  if (!expiry) {
+    warnings.push(
+      "NEXT_PUBLIC_HTML_IN_CANVAS_OT_TOKEN could not be decoded. Check that the whole token was copied.",
+    );
+  } else {
+    const date = expiry.toISOString().slice(0, 10);
+    const daysLeft = Math.floor((expiry.getTime() - Date.now()) / 86_400_000);
+    if (daysLeft < 0) {
+      warnings.push(
+        `NEXT_PUBLIC_HTML_IN_CANVAS_OT_TOKEN expired on ${date}, so Chrome ignores it.\n` +
+          `  Renew it at ${OT_RENEW_URL}, or remove it once the trial has ended.`,
+      );
+    } else if (daysLeft <= 30) {
+      warnings.push(
+        `NEXT_PUBLIC_HTML_IN_CANVAS_OT_TOKEN expires on ${date} (in ${daysLeft} days).\n` +
+          `  Renew it at ${OT_RENEW_URL} before then.`,
+      );
+    }
+  }
 }
 
 const secrets = workerSecrets();
