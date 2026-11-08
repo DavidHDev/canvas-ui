@@ -45,8 +45,8 @@ export function CodeTabs({
   if (!active) return null;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border/60">
-      <div className="flex items-center justify-between gap-2 border-b border-border/60 bg-muted/40 pr-1.5 pl-2">
+    <div className="rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background p-1">
+      <div className="flex h-8 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1">
           {hasWebGPU ? (
             <ChoiceSelect
@@ -65,18 +65,20 @@ export function CodeTabs({
         </div>
         <CopyButton text={active.source} />
       </div>
-      <div className="flex items-center justify-between border-b border-border/40 px-4 py-2">
-        <span className="text-[12px] text-muted-foreground">
-          {active.fileName}
-        </span>
-        <span className="text-[12px] text-muted-foreground">
-          {renderer === "webgpu" ? "WebGPU · WGSL" : "WebGL · GLSL"}
-        </span>
+      <div className="mt-1 overflow-hidden rounded-lg border border-dashed border-border/70 bg-muted/40">
+        <div className="flex items-center justify-between border-b border-dashed border-border/70 px-4 py-2">
+          <span className="text-[12px] text-muted-foreground">
+            {active.fileName}
+          </span>
+          <span className="text-[12px] text-muted-foreground">
+            {renderer === "webgpu" ? "WebGPU · WGSL" : "WebGL · GLSL"}
+          </span>
+        </div>
+        <div
+          className="docs-code max-h-[480px] overflow-y-auto text-[13px] leading-6"
+          dangerouslySetInnerHTML={{ __html: active.html }}
+        />
       </div>
-      <div
-        className="docs-code max-h-[480px] overflow-y-auto text-[13px] leading-6"
-        dangerouslySetInnerHTML={{ __html: active.html }}
-      />
     </div>
   );
 }

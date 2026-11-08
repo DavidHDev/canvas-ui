@@ -48,17 +48,16 @@ export function DependencyTabs({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border/60">
-      <div className="flex items-center border-b border-border/60 bg-muted/40 px-2">
+    <div className="rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background p-1">
+      <div className="flex h-8 items-center">
         <ChoiceSelect
           label="Package manager"
-          variant="tabs"
           options={MANAGERS}
           value={manager.id}
           onValueChange={setManagerId}
         />
       </div>
-      <div className="flex items-center justify-between gap-3 py-1.5 pr-1.5 pl-4">
+      <div className="mt-1 flex items-center justify-between gap-3 overflow-hidden rounded-lg border border-dashed border-border/70 bg-muted/40 py-1.5 pr-1.5 pl-4">
         <code className="overflow-x-auto text-[13px] whitespace-pre text-foreground/90">
           {commands.join("\n")}
         </code>
