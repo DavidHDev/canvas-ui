@@ -58,16 +58,19 @@ The public shape stays the same: \`create<Base>()\`, \`<Base>Options\`, \`setOpt
 
 The renderer uses a premultiplied surface. The page is captured with html-in-canvas, uploaded as a texture, then sampled by WGSL shaders written as inline template strings. Mipmaps are generated in WebGPU wherever the matching WebGL build used them.
 
+Both renderers capture the HTML the same way: through the 2D \`drawElementImage()\` API inside a \`<canvas content="drawable">\` (\`layoutsubtree\` before Chrome 155), then upload that canvas with \`texImage2D()\` (WebGL) or \`copyExternalImageToTexture()\` (WebGPU). They don't use html-in-canvas's direct texture methods, so Chrome renaming those to \`texElementSubImage2D()\` and \`drawElementImageToTexture()\` changed nothing here.
+
 ## Switching later
 
 The API is identical, so switching renderers is usually replacing the installed file with the other build. The docs renderer selector remembers your WebGL or WebGPU choice across pages.
 
 ## Browser support
 
-- WebGL build: WebGL2 browsers, with html-in-canvas effects using the documented html-in-canvas fallback behavior.
+- WebGL build: any browser with WebGL2.
 - WebGPU build: Chrome/Edge 113+, Safari 26+ / iOS 26, and Firefox 141+.
 - If navigator.gpu is missing, or no adapter is available, the WebGPU component renders the wrapped content unchanged.
-- On Android, both renderers skip native HTML capture after a Chrome renderer crash report. Content stays in the regular DOM, even if the html-in-canvas flag is enabled. Effects with an overlay fallback may still animate; capture-only effects show plain HTML. This is a precautionary compatibility mitigation, not a confirmed fix for the browser crash.
+- HTML capture: Chrome 157 and later on desktop. Older Chrome can turn it on with the canvas-draw-element flag or an origin-trial token (see https://canvasui.dev/docs/installation#requirements). Without it, html-in-canvas effects fall back to regular HTML, and overlay effects keep running on top.
+- On Android, both renderers skip native HTML capture after a Chrome renderer crash report. Content stays in the regular DOM, even in Chrome 157 or with the flag enabled. Effects with an overlay fallback may still animate; capture-only effects show plain HTML. This is a precautionary compatibility mitigation, not a confirmed fix for the browser crash.
 
 ## Pinch zoom
 
@@ -189,7 +192,7 @@ export default async function RenderingPage() {
           The public shape stays the same: <code>create&lt;Base&gt;()</code>,{" "}
           <code>&lt;Base&gt;Options</code>, <code>setOptions()</code>, and{" "}
           <code>destroy()</code>. The WebGPU path shares one device per page,
-          initializes lazily and asynchronously, and returns <code>null</code>
+          initializes lazily and asynchronously, and returns <code>null</code>{" "}
           synchronously when <code>navigator.gpu</code> or an adapter is missing
           so framework wrappers can fall back without throwing.
         </p>
@@ -198,6 +201,18 @@ export default async function RenderingPage() {
           html-in-canvas, uploaded as a texture, then sampled by WGSL shaders
           written as inline template strings. Mipmaps are generated in WebGPU
           wherever the matching WebGL build used them.
+        </p>
+        <p>
+          Both renderers capture the HTML the same way: through the 2D{" "}
+          <code>drawElementImage()</code> API inside a{" "}
+          <code>&lt;canvas content=&quot;drawable&quot;&gt;</code> (
+          <code>layoutsubtree</code> before Chrome 155), then upload that canvas
+          with <code>texImage2D()</code> (WebGL) or{" "}
+          <code>copyExternalImageToTexture()</code>{" "}
+          (WebGPU). They don&apos;t use
+          html-in-canvas&apos;s direct texture methods, so Chrome renaming those
+          to <code>texElementSubImage2D()</code> and{" "}
+          <code>drawElementImageToTexture()</code> changed nothing here.
         </p>
 
         <h2>Switching later</h2>
@@ -209,10 +224,7 @@ export default async function RenderingPage() {
 
         <h2>Browser support</h2>
         <ul>
-          <li>
-            WebGL build: WebGL2 browsers, with html-in-canvas effects using the
-            documented html-in-canvas fallback behavior.
-          </li>
+          <li>WebGL build: any browser with WebGL2.</li>
           <li>
             WebGPU build: Chrome/Edge 113+, Safari 26+ / iOS 26, and Firefox
             141+.
@@ -222,9 +234,17 @@ export default async function RenderingPage() {
             the WebGPU component renders the wrapped content unchanged.
           </li>
           <li>
+            HTML capture: Chrome 157 and later on desktop. Older Chrome can turn
+            it on with the canvas-draw-element flag or an origin-trial token
+            (see the{" "}
+            <a href="/docs/installation#requirements">installation requirements</a>
+            ). Without it, html-in-canvas effects fall back to regular HTML, and
+            overlay effects keep running on top.
+          </li>
+          <li>
             On Android, both renderers skip native HTML capture after a Chrome
-            renderer crash report. Content stays in the regular DOM, even if
-            the html-in-canvas flag is enabled. Effects with an overlay
+            renderer crash report. Content stays in the regular DOM, even in
+            Chrome 157 or with the flag enabled. Effects with an overlay
             fallback may still animate; capture-only effects show plain HTML.
             This is a precautionary compatibility mitigation, not a confirmed
             fix for the browser crash.

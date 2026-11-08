@@ -126,6 +126,8 @@ chrome://flags/#canvas-draw-element
 
 To cover visitors who haven't updated yet, register your domain for Chrome's [origin trial](https://developer.chrome.com/blog/html-in-canvas-origin-trial), which runs through Chrome 160, and serve the token via a meta tag or HTTP header. Tokens are bound to a specific domain, so register your own. Chrome 157 and later need neither the flag nor a token.
 
+Inside an html-in-canvas effect, the browser leaves out anything that could leak private data, such as cross-origin images and iframes that aren't CORS-enabled, visited-link styling, spelling markers, and system colors. Load images from your own origin, or from a CORS-enabled host with \`crossOrigin="anonymous"\`.
+
 Beyond that, TypeScript is recommended, since every file ships as typed source. React components target React 19, Solid components target Solid 1.9, Preact components target Preact 10, Vue components target Vue 3.5, and Svelte components target Svelte 5. Any dependencies a component needs are installed by the CLI and listed on its docs page.
 
 Renderers: every effect has a WebGL build and a WebGPU build where available. WebGL is the default. WebGPU builds use vgpu, WGSL shaders, and the -webgpu registry suffix. Read the rendering guide: https://canvasui.dev/docs/rendering
@@ -160,7 +162,7 @@ For vanilla WebGPU, import from LiquidWebGPU.ts instead of LiquidVanilla.ts. The
 
 ### Vanilla element setup
 
-For html-in-canvas effects, \`source\` is the canvas that contains your HTML, \`content\` is the element inside that canvas to capture, and \`output\` is the separate canvas that displays the effect. Put \`id="content"\` on the inner element, not the outer container. Vanilla callers must move the content into the regular DOM when html-in-canvas is unavailable or initialization returns null; framework wrappers handle this for you. See the complete HTML and TypeScript example: https://canvasui.dev/docs/components/flame-wrap#vanilla-setup
+For html-in-canvas effects, \`source\` is the canvas that contains your HTML, \`content\` is the element inside that canvas to capture, and \`output\` is the separate canvas that displays the effect. Put \`id="content"\` on the inner element, not the outer container. You don't need to opt the canvas in yourself: the engine sets \`content="drawable"\` on \`source\` and \`drawable\` on \`content\` at runtime (or the older \`layoutsubtree\` before Chrome 155). Vanilla callers must move the content into the regular DOM when html-in-canvas is unavailable or initialization returns null; framework wrappers handle this for you. See the complete HTML and TypeScript example: https://canvasui.dev/docs/components/flame-wrap#vanilla-setup
 
 ## Next steps
 
@@ -224,6 +226,13 @@ export default async function InstallationPage() {
           , which runs through Chrome 160, and serve the token via a meta tag
           or HTTP header. Tokens are bound to a specific domain, so register
           your own. Chrome 157 and later need neither the flag nor a token.
+        </p>
+        <p>
+          Inside an html-in-canvas effect, the browser leaves out anything that
+          could leak private data, such as cross-origin images and iframes that
+          aren&apos;t CORS-enabled, visited-link styling, spelling markers, and
+          system colors. Load images from your own origin, or from a
+          CORS-enabled host with <code>crossOrigin=&quot;anonymous&quot;</code>.
         </p>
         <p>
           Beyond that, TypeScript is recommended, since every file ships as
@@ -295,8 +304,13 @@ export default async function InstallationPage() {
           For html-in-canvas effects, <code>source</code> is the canvas that
           contains your HTML, <code>content</code> is the element inside that
           canvas to capture, and <code>output</code> is the separate canvas that
-          displays the effect. Put <code>id=&quot;content&quot;</code> on the inner
-          element, not the outer container.
+          displays the effect. Put <code>id=&quot;content&quot;</code>{" "}
+          on the inner element, not the outer container. You don&apos;t need to
+          opt the
+          canvas in yourself: the engine sets{" "}
+          <code>content=&quot;drawable&quot;</code> on <code>source</code> and{" "}
+          <code>drawable</code> on <code>content</code> at runtime (or the older{" "}
+          <code>layoutsubtree</code> before Chrome 155).
         </p>
         <p>
           Vanilla callers must move the content into the regular DOM when

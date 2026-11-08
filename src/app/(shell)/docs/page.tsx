@@ -35,7 +35,7 @@ Components are distributed through a shadcn registry. Installing one drops the s
 
 ## Browser support
 
-The html-in-canvas API ships in Chrome 157 and later; other browsers don't support it yet. Components detect support at runtime and degrade gracefully: without it, your content renders as normal HTML and the parts of the effect that can still run, still do. Nothing breaks for users on other browsers.
+The html-in-canvas API ships in Chrome 157 and later. Firefox and Safari don't support it yet, and Canvas UI keeps Android on the fallback for now. Components detect support at runtime and degrade gracefully: without it, your content renders as normal HTML and the parts of the effect that can still run, still do. Nothing breaks for users on other browsers.
 
 ## Next steps
 
@@ -102,8 +102,9 @@ export default function DocsPage() {
 
         <h2>Browser support</h2>
         <p>
-          The html-in-canvas API ships in Chrome 157 and later; other browsers
-          don&apos;t support it yet. Components detect support at runtime and degrade
+          The html-in-canvas API ships in Chrome 157 and later. Firefox and
+          Safari don&apos;t support it yet, and Canvas UI keeps Android on the
+          fallback for now. Components detect support at runtime and degrade
           gracefully: without it, your content renders as normal HTML and the
           parts of the effect that can still run, still do. Nothing breaks for
           users on other browsers.
