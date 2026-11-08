@@ -65,7 +65,7 @@ export function PlaygroundSidebar({
 
   const pick = (slug: string) => {
     setPickerOpen(false);
-    if (slug !== activeSlug) onSelect(slug);
+    onSelect(slug);
   };
 
   return (

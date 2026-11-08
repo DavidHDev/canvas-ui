@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:worker": "node scripts/test-subscribe-rate-limits.mjs",
     "preview": "npm run build && wrangler dev",
     "preflight": "node --experimental-strip-types scripts/preflight-deploy.mts",
     "deploy": "npm run preflight && npm run build && wrangler deploy",

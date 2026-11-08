@@ -9,6 +9,20 @@ type HtmlInCanvasElement = HTMLCanvasElement & {
   ) => void;
 };
 
+/**
+ * Android exposes the experimental API, but renderer crashes were reported on
+ * effect pages (issue #50). A process crash cannot be caught in JavaScript.
+ * Keep Android on the DOM/overlay fallback until native capture is validated
+ * there; enabling Chrome's experimental flag must not bypass this policy.
+ */
+export function isHtmlInCanvasBlocked(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const platform = (navigator as Navigator & {
+    userAgentData?: { platform?: string };
+  }).userAgentData?.platform;
+  return platform === "Android" || /Android/i.test(navigator.userAgent);
+}
+
 /** Configure the capture subtree for both generations of the experimental API. */
 export function prepareHtmlInCanvas(source: HTMLCanvasElement, content: HTMLElement) {
   if ("content" in source) {

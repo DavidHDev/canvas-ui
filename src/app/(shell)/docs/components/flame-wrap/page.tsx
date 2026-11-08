@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 
 import { ComponentDoc } from "@/components/docs/component-doc";
+import { CodeBlock } from "@/components/docs/code-block";
+import {
+  FLAME_WRAP_VANILLA_HTML,
+  FLAME_WRAP_VANILLA_MARKDOWN,
+  FLAME_WRAP_VANILLA_TS,
+} from "@/components/docs/flame-wrap-vanilla-usage";
 import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
@@ -148,6 +154,10 @@ const API_REFERENCE: ApiProp[] = [
 ];
 
 export default async function FlameWrapPage() {
+  const [vanillaHtml, vanillaTs] = await Promise.all([
+    highlight(FLAME_WRAP_VANILLA_HTML, "html"),
+    highlight(FLAME_WRAP_VANILLA_TS, "typescript"),
+  ]);
   const variants = await Promise.all(
     getComponentSources("flame-wrap").map(async (file) => ({
       id: file.id,
@@ -167,18 +177,71 @@ export default async function FlameWrapPage() {
         installItem="flame-wrap"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
+        usageMarkdown={FLAME_WRAP_VANILLA_MARKDOWN}
         beforeInstall={
-          <section className="mt-8" aria-label="Demo">
-            <h2 className="text-lg font-semibold tracking-[-0.01em]">Demo</h2>
-            <p className="mt-2 text-[13px] text-muted-foreground">
-              Recolor the
-              flames, raise them higher, or melt the edges further. Use the
-              toggle below the demo to try other UI.
-            </p>
-            <div className="mt-3">
-              <FlameWrapDemo />
-            </div>
-          </section>
+          <>
+            <section className="mt-8" aria-label="Demo">
+              <h2 className="text-lg font-semibold tracking-[-0.01em]">Demo</h2>
+              <p className="mt-2 text-[13px] text-muted-foreground">
+                Recolor the
+                flames, raise them higher, or melt the edges further. Use the
+                toggle below the demo to try other UI.
+              </p>
+              <div className="mt-3">
+                <FlameWrapDemo />
+              </div>
+            </section>
+            <section className="mt-8" aria-label="Vanilla setup">
+              <h2
+                id="vanilla-setup"
+                className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
+              >
+                Vanilla setup
+              </h2>
+              <p className="mt-2 text-[13px] leading-6 text-muted-foreground">
+                Pass three elements to <code>createFlameWrap</code>: the source
+                canvas, the content element inside it, and the output canvas.
+                Put <code>id=&quot;content&quot;</code> on the first div inside{" "}
+                <code>canvas#source</code>. Pointing it at the outer container
+                leaves the flames visible but prevents the HTML from being captured.
+                Framework wrappers create this structure for you.
+              </p>
+              <div className="mt-3">
+                <CodeBlock
+                  html={vanillaHtml}
+                  source={FLAME_WRAP_VANILLA_HTML}
+                  fileName="index.html (inside body)"
+                />
+              </div>
+              <p className="mt-3 text-[13px] leading-6 text-muted-foreground">
+                The example uses the default flame height, spread, and corner
+                radius. Keep room around the container for the flames; update the
+                output canvas offsets if you increase their reach. Load this
+                script after the markup. It keeps the HTML visible when
+                html-in-canvas or the GPU context is unavailable.
+              </p>
+              <div className="mt-3">
+                <CodeBlock
+                  html={vanillaTs}
+                  source={FLAME_WRAP_VANILLA_TS}
+                  fileName="src/main.ts"
+                />
+              </div>
+              <p className="mt-3 text-[13px] leading-6 text-muted-foreground">
+                For the WebGPU build, change the import to{" "}
+                <code>@/components/canvasui/FlameWrapWebGPU</code>. The markup and
+                initialization stay the same. Enable the html-in-canvas flag or
+                origin trial described in the{" "}
+                <a
+                  href="/docs/installation#requirements"
+                  className="underline underline-offset-4"
+                >
+                  installation requirements
+                </a>{" "}
+                to capture and distort the content.
+              </p>
+            </section>
+          </>
         }
       />
       <div className="mx-auto mt-24 w-full max-w-3xl">

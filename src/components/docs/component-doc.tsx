@@ -24,6 +24,8 @@ export interface ComponentDocProps {
   preview?: ReactNode;
   /** Optional extra content rendered before the Install section. */
   beforeInstall?: ReactNode;
+  /** Usage guidance included in Copy for AI and Copy as Markdown. */
+  usageMarkdown?: string;
   /** One entry per framework, pre-highlighted on the server. */
   variants: CodeVariant[];
   /** Registry item base name, e.g. "liquid" for /r/liquid-react.json. */
@@ -58,6 +60,7 @@ export async function ComponentDoc({
   description,
   preview,
   beforeInstall,
+  usageMarkdown,
   variants,
   installItem,
   tags,
@@ -89,6 +92,7 @@ export async function ComponentDoc({
           webgpuDependencies={webgpuDeps.dependencies}
           webgpuDevDependencies={webgpuDeps.devDependencies}
           demoSource={demoSource}
+          usageMarkdown={usageMarkdown}
         />
       </div>
       <p className="mt-3 max-w-xl text-base leading-7 text-muted-foreground">

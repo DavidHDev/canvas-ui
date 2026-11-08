@@ -1,5 +1,5 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
-import { prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
+import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 export type AsciiSweepCharset = "ascii" | "blocks" | "binary";
 
 export type AsciiSweepBlend = "auto" | "add" | "over";
@@ -405,7 +405,7 @@ void main () {
 }`;
 
 export function supportsHtmlInCanvas(): boolean {
-  if (typeof document === "undefined") return false;
+  if (typeof document === "undefined" || isHtmlInCanvasBlocked()) return false;
   const probe = document.createElement("canvas") as PaintableCanvas;
   const ctx = probe.getContext("2d") as ElementImageContext | null;
   return Boolean(
@@ -961,6 +961,8 @@ function initializeAsciiSweep(
     "2d",
   ) as ElementImageContext | null;
   const htmlInCanvas = Boolean(
+    !isHtmlInCanvasBlocked() &&
+    slots.every((slot) => slot.source.contains(slot.content)) &&
     firstCtx &&
     typeof firstCtx.drawElementImage === "function" &&
     typeof (slots[0].source as PaintableCanvas).requestPaint === "function",

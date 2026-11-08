@@ -1,5 +1,5 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
-import { prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
+import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import { createRectCache } from "../rect-cache";
 
 export interface RetroDitherOptions {
@@ -241,7 +241,7 @@ void main () {
 }`;
 
 export function supportsHtmlInCanvas(): boolean {
-  if (typeof document === "undefined") return false;
+  if (typeof document === "undefined" || isHtmlInCanvasBlocked()) return false;
   const probe = document.createElement("canvas") as PaintableCanvas;
   const ctx = probe.getContext("2d") as ElementImageContext | null;
   return Boolean(
@@ -270,6 +270,8 @@ export function createRetroDither(
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
   const paintable = source as PaintableCanvas;
   const htmlInCanvas = Boolean(
+    !isHtmlInCanvasBlocked() &&
+    source.contains(content) &&
     sourceCtx &&
     typeof sourceCtx.drawElementImage === "function" &&
     typeof paintable.requestPaint === "function",

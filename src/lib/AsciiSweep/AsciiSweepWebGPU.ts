@@ -1,5 +1,5 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
-import { prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
+import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import { effect, frame as gpuFrame, init, sampler, surface, type Effect, type Gpu, type Surface } from "vgpu";
 import type { Texture } from "vgpu";
 
@@ -404,7 +404,7 @@ fn panelTo(uv: vec2f, lod: f32, fringe: vec2f) -> vec4f {
   return vec4f(base * alpha, alpha);
 }`;
 export function supportsHtmlInCanvas(): boolean {
-  if (typeof document === "undefined") return false;
+  if (typeof document === "undefined" || isHtmlInCanvasBlocked()) return false;
   const probe = document.createElement("canvas") as PaintableCanvas;
   const ctx = probe.getContext("2d") as ElementImageContext | null;
   return Boolean(
@@ -908,6 +908,8 @@ function initializeAsciiSweep(
     "2d",
   ) as ElementImageContext | null;
   const htmlInCanvas = Boolean(
+    !isHtmlInCanvasBlocked() &&
+    slots.every((slot) => slot.source.contains(slot.content)) &&
     firstCtx &&
     typeof firstCtx.drawElementImage === "function" &&
     typeof (slots[0].source as PaintableCanvas).requestPaint === "function",

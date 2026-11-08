@@ -17,4 +17,5 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm run lint
+      - run: npm run test:worker
       - run: npm run build
