@@ -62,12 +62,9 @@ export function FeaturedVideos() {
         <Stitches />
         <div className="w-full px-5 py-24 sm:px-8 sm:py-32">
           <Reveal>
-            <p className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
-              Community
-            </p>
             <h2
               id="featured-videos-heading"
-              className="mt-3 text-3xl font-medium tracking-tighter text-balance sm:text-4xl"
+              className="text-3xl font-medium tracking-tighter text-balance sm:text-4xl"
             >
               Featured on YouTube
             </h2>

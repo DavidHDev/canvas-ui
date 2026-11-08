@@ -162,12 +162,9 @@ export function Agents() {
           </Reveal>
 
           <Reveal delay={100} className="order-1 lg:order-2">
-            <p className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
-              AI-ready
-            </p>
             <h2
               id="agents-heading"
-              className="mt-3 text-3xl font-medium tracking-tighter text-balance sm:text-4xl"
+              className="text-3xl font-medium tracking-tighter text-balance sm:text-4xl"
             >
               Built for agents.
             </h2>

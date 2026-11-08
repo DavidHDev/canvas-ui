@@ -158,12 +158,9 @@ export function HowItWorks() {
       <Stitches />
       <div className="w-full px-5 py-24 sm:px-8 sm:py-32">
         <Reveal>
-          <p className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
-            How it works
-          </p>
           <h2
             id="how-it-works-heading"
-            className="mt-3 text-3xl font-medium tracking-tighter text-balance sm:text-4xl"
+            className="text-3xl font-medium tracking-tighter text-balance sm:text-4xl"
           >
             Copy, paste, ship.
           </h2>

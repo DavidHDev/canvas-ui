@@ -20,12 +20,9 @@ export function Newsletter() {
         <div className="w-full px-5 py-24 sm:px-8 sm:py-32">
           <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[1fr_1.2fr] lg:gap-16">
             <Reveal>
-              <p className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
-                Newsletter
-              </p>
               <h2
                 id="newsletter-heading"
-                className="mt-3 text-3xl font-medium tracking-tighter text-balance sm:text-4xl"
+                className="text-3xl font-medium tracking-tighter text-balance sm:text-4xl"
               >
                 See how Canvas UI evolves.
               </h2>

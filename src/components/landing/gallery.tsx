@@ -13,17 +13,12 @@ export function Gallery() {
     >
       <Stitches />
       <Reveal className="flex w-full flex-wrap items-end justify-between gap-x-8 gap-y-4 px-5 sm:px-8">
-        <div>
-          <p className="font-mono text-xs tracking-widest text-muted-foreground uppercase">
-            The library
-          </p>
-          <h2
-            id="gallery-heading"
-            className="mt-3 text-3xl font-medium tracking-tighter text-balance sm:text-4xl"
-          >
-            Every component, alive on canvas.
-          </h2>
-        </div>
+        <h2
+          id="gallery-heading"
+          className="text-3xl font-medium tracking-tighter text-balance sm:text-4xl"
+        >
+          Every component, alive on canvas.
+        </h2>
         <Link
           href="/components"
           className="group inline-flex items-center gap-1.5 text-[15px] font-medium text-foreground transition-colors duration-150 hover:text-muted-foreground"
