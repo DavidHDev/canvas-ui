@@ -1,5 +1,5 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
-import { prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
+import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import {
   effect,
   frame as gpuFrame,
@@ -282,7 +282,7 @@ fn tipPlane(sy: f32, phi: f32) -> vec2f {
 }`;
 
 export function supportsHtmlInCanvas(): boolean {
-  if (typeof document === "undefined") return false;
+  if (typeof document === "undefined" || isHtmlInCanvasBlocked()) return false;
   const probe = document.createElement("canvas") as PaintableCanvas;
   const ctx = probe.getContext("2d") as ElementImageContext | null;
   return Boolean(
@@ -353,9 +353,15 @@ export function createBend(
   const config = { ...DEFAULTS, ...options };
   const { source, content, output } = elements;
 
+  // Bending needs captured pixels. Its fallback is ordinary scrollable HTML;
+  // do not allocate a GPU context or run a transparent shader over that HTML.
+  if (!source.contains(content) || !supportsHtmlInCanvas()) return null;
+
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
   const paintable = source as PaintableCanvas;
   const htmlInCanvas = Boolean(
+    !isHtmlInCanvasBlocked() &&
+    source.contains(content) &&
     sourceCtx &&
       typeof sourceCtx.drawElementImage === "function" &&
       typeof paintable.requestPaint === "function",

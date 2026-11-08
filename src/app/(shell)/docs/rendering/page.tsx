@@ -67,6 +67,7 @@ The API is identical, so switching renderers is usually replacing the installed 
 - WebGL build: WebGL2 browsers, with html-in-canvas effects using the documented html-in-canvas fallback behavior.
 - WebGPU build: Chrome/Edge 113+, Safari 26+ / iOS 26, and Firefox 141+.
 - If navigator.gpu is missing, or no adapter is available, the WebGPU component renders the wrapped content unchanged.
+- On Android, both renderers skip native HTML capture after a Chrome renderer crash report. Content stays in the regular DOM, even if the html-in-canvas flag is enabled. Effects with an overlay fallback may still animate; capture-only effects show plain HTML. This is a precautionary compatibility mitigation, not a confirmed fix for the browser crash.
 
 ## Pinch zoom
 
@@ -219,6 +220,14 @@ export default async function RenderingPage() {
           <li>
             If <code>navigator.gpu</code> is missing, or no adapter is available,
             the WebGPU component renders the wrapped content unchanged.
+          </li>
+          <li>
+            On Android, both renderers skip native HTML capture after a Chrome
+            renderer crash report. Content stays in the regular DOM, even if
+            the html-in-canvas flag is enabled. Effects with an overlay
+            fallback may still animate; capture-only effects show plain HTML.
+            This is a precautionary compatibility mitigation, not a confirmed
+            fix for the browser crash.
           </li>
         </ul>
 

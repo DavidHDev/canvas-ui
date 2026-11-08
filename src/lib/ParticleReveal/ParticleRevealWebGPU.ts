@@ -1,5 +1,5 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
-import { prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
+import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import {
   effect,
   frame as gpuFrame,
@@ -243,7 +243,7 @@ function parseColor(input: string): [number, number, number] {
 }
 
 export function supportsHtmlInCanvas(): boolean {
-  if (typeof document === "undefined") return false;
+  if (typeof document === "undefined" || isHtmlInCanvasBlocked()) return false;
   const probe = document.createElement("canvas") as PaintableCanvas;
   const ctx = probe.getContext("2d") as ElementImageContext | null;
   return Boolean(
@@ -282,6 +282,8 @@ export function createParticleReveal(
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
   const paintable = source as PaintableCanvas;
   const htmlInCanvas = Boolean(
+    !isHtmlInCanvasBlocked() &&
+    source.contains(content) &&
     sourceCtx &&
     typeof sourceCtx.drawElementImage === "function" &&
     typeof paintable.requestPaint === "function",

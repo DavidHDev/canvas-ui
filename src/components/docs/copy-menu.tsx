@@ -48,6 +48,7 @@ interface CopyMenuProps {
   webgpuDependencies?: string[];
   webgpuDevDependencies?: string[];
   demoSource?: string | null;
+  usageMarkdown?: string;
 }
 
 const LANG_BY_ID: Record<string, string> = {
@@ -135,6 +136,7 @@ export function CopyMenu({
   webgpuDependencies = [],
   webgpuDevDependencies = [],
   demoSource,
+  usageMarkdown,
 }: CopyMenuProps) {
   const shouldReduceMotion = useReducedMotion();
   const [managerId] = usePreference("pm", "npm", MANAGER_IDS);
@@ -241,6 +243,7 @@ export function CopyMenu({
           ]
         : []),
       ...buildConfiguredSection(),
+      ...(usageMarkdown ? [usageMarkdown, ""] : []),
       ...buildPropsTable(apiReference),
       `## ${variant.fileName}`,
       "",
@@ -269,6 +272,7 @@ export function CopyMenu({
       ...(depLines.length > 0
         ? ["## Dependencies", "", "```sh", ...depLines, "```", ""]
         : []),
+      ...(usageMarkdown ? [usageMarkdown, ""] : []),
       "## Code",
       "",
       ...variants.flatMap((entry) => [

@@ -14,7 +14,6 @@ import {
   useLayoutEffect,
   useMemo,
   useState,
-  type RefObject,
 } from "react";
 
 import type {
@@ -108,9 +107,9 @@ export interface DemoControlsHandle<S extends ControlSchema = ControlSchema> {
   isDefault: boolean;
 }
 
-export const DemoControlsResetContext = createContext<RefObject<
-  (() => void) | null
-> | null>(null);
+type RegisterControlsReset = (reset: (() => void) | null) => void;
+
+export const DemoControlsResetContext = createContext<RegisterControlsReset | null>(null);
 
 export function useDemoControls<S extends ControlSchema>(
   schema: S,
@@ -150,14 +149,14 @@ export function useDemoControls<S extends ControlSchema>(
     void setState(null);
   }, [setState]);
 
-  const resetRef = useContext(DemoControlsResetContext);
+  const registerReset = useContext(DemoControlsResetContext);
   useLayoutEffect(() => {
-    if (!resetRef) return;
-    resetRef.current = reset;
+    if (!registerReset) return;
+    registerReset(reset);
     return () => {
-      resetRef.current = null;
+      registerReset(null);
     };
-  }, [resetRef, reset]);
+  }, [registerReset, reset]);
 
   const isDefault = useMemo(
     () =>

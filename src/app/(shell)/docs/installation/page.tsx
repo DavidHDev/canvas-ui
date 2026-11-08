@@ -105,8 +105,8 @@ const liquid = createLiquid(
   { rainbow: true },
 );
 
-liquid.setOptions({ radius: 0.4 });
-liquid.destroy();`,
+liquid?.setOptions({ radius: 0.4 });
+// Call liquid?.destroy() when removing the component from the page.`,
   },
 ] as const;
 
@@ -127,6 +127,8 @@ For production, Chrome offers an [origin trial](https://developer.chrome.com/blo
 Beyond that, TypeScript is recommended, since every file ships as typed source. React components target React 19, Solid components target Solid 1.9, Preact components target Preact 10, Vue components target Vue 3.5, and Svelte components target Svelte 5. Any dependencies a component needs are installed by the CLI and listed on its docs page.
 
 Renderers: every effect has a WebGL build and a WebGPU build where available. WebGL is the default. WebGPU builds use vgpu, WGSL shaders, and the -webgpu registry suffix. Read the rendering guide: https://canvasui.dev/docs/rendering
+
+Android compatibility: native HTML capture is currently disabled on Android as a precaution after a Chrome renderer crash report. Enabling the html-in-canvas flag does not override this check. Content stays in the regular DOM; effects with an overlay fallback can still animate, while capture-only effects show plain HTML. This is a compatibility mitigation, not a confirmed fix for the underlying browser crash.
 
 ## Install with the CLI
 
@@ -153,6 +155,10 @@ ${USAGE[0].source}
 \`\`\`
 
 For vanilla WebGPU, import from LiquidWebGPU.ts instead of LiquidVanilla.ts. The createLiquid call is the same.
+
+### Vanilla element setup
+
+For html-in-canvas effects, \`source\` is the canvas that contains your HTML, \`content\` is the element inside that canvas to capture, and \`output\` is the separate canvas that displays the effect. Put \`id="content"\` on the inner element, not the outer container. Vanilla callers must move the content into the regular DOM when html-in-canvas is unavailable or initialization returns null; framework wrappers handle this for you. See the complete HTML and TypeScript example: https://canvasui.dev/docs/components/flame-wrap#vanilla-setup
 
 ## Next steps
 
@@ -188,7 +194,7 @@ export default async function InstallationPage() {
           from its docs page. Either way, the code ends up in your project.
         </p>
 
-        <h2>Requirements</h2>
+        <h2 id="requirements" className="scroll-mt-24">Requirements</h2>
         <p>
           Some components are built on the html-in-canvas API and currently need
           Chrome with the canvas-draw-element flag enabled. Each component page
@@ -229,6 +235,14 @@ export default async function InstallationPage() {
           available. WebGL is the default. WebGPU builds use <code>vgpu</code>,
           WGSL shaders, and the <code>-webgpu</code> registry suffix. Read the{" "}
           <a href="/docs/rendering">rendering guide</a>.
+        </p>
+        <p>
+          On Android, native HTML capture is currently disabled as a precaution
+          after a Chrome renderer crash report. Enabling the html-in-canvas flag
+          does not override this check. Content stays in the regular DOM;
+          effects with an overlay fallback can still animate, while
+          capture-only effects show plain HTML. This is a compatibility
+          mitigation, not a confirmed fix for the underlying browser crash.
         </p>
 
         <h2>Install with the CLI</h2>
@@ -272,6 +286,22 @@ export default async function InstallationPage() {
           For vanilla WebGPU, import from <code>LiquidWebGPU.ts</code> instead
           of <code>LiquidVanilla.ts</code>. The <code>createLiquid</code> call is
           the same.
+        </p>
+        <h3>Vanilla element setup</h3>
+        <p>
+          For html-in-canvas effects, <code>source</code> is the canvas that
+          contains your HTML, <code>content</code> is the element inside that
+          canvas to capture, and <code>output</code> is the separate canvas that
+          displays the effect. Put <code>id=&quot;content&quot;</code> on the inner
+          element, not the outer container.
+        </p>
+        <p>
+          Vanilla callers must move the content into the regular DOM when
+          html-in-canvas is unavailable or initialization returns <code>null</code>;
+          framework wrappers handle this for you. See the{" "}
+          <a href="/docs/components/flame-wrap#vanilla-setup">
+            complete HTML and TypeScript example
+          </a>.
         </p>
 
         <h2>Next steps</h2>

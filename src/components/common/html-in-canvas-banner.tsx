@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Check, Copy, Info } from "lucide-react";
 
 import { Accordion, AccordionHeader, AccordionItem, AccordionPanel, AccordionTrigger } from "@/components/ui/accordion";
+import { isHtmlInCanvasBlocked } from "@/lib/html-in-canvas";
 
 const FLAG_PATH = "flags/#canvas-draw-element";
 const CHROME_FLAG = `chrome://${FLAG_PATH}`;
@@ -17,7 +18,7 @@ type PaintableCanvas = HTMLCanvasElement & { requestPaint?: () => void };
 let cachedSupport: boolean | null = null;
 
 function supportsHtmlInCanvas(): boolean {
-  if (typeof document === "undefined") return false;
+  if (typeof document === "undefined" || isHtmlInCanvasBlocked()) return false;
   if (cachedSupport !== null) return cachedSupport;
   const probe = document.createElement("canvas") as PaintableCanvas;
   const ctx = probe.getContext("2d") as ElementImageContext | null;
@@ -77,6 +78,19 @@ export function HtmlInCanvasBanner() {
   const supported = useSyncExternalStore(subscribe, supportsHtmlInCanvas, getServerSnapshot);
 
   if (supported) return null;
+
+  if (isHtmlInCanvasBlocked()) {
+    return (
+      <div className="not-typeset mt-6 mb-4 flex gap-2.5 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
+        <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <p className="text-[13px] leading-5 text-muted-foreground">
+          Android uses regular HTML here to avoid crashes in the experimental
+          HTML-in-Canvas renderer. Enabling the browser flag does not change this
+          fallback. Open this page in desktop Chrome or Edge to see the full effect.
+        </p>
+      </div>
+    );
+  }
 
   const browser = detectBrowser();
   const unsupported = browser.kind === "unsupported";
