@@ -230,9 +230,9 @@ export function HowItWorks() {
 
           <div
             ref={stageRef}
-            className="order-1 min-w-0 rounded-xl border border-border/60 bg-muted/30 px-2 pb-2 lg:order-2"
+            className="order-1 min-w-0 rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background px-1 pb-1 lg:order-2"
           >
-            <div className="flex items-center gap-2 px-2 py-2">
+            <div className="flex items-center gap-2 px-3 py-2">
               <span className="flex gap-1.5" aria-hidden>
                 <span className="size-2.5 rounded-full bg-foreground/10" />
                 <span className="size-2.5 rounded-full bg-foreground/10" />

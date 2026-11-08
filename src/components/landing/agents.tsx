@@ -75,9 +75,9 @@ export function Agents() {
           <Reveal className="order-2 lg:order-1">
             <div
               ref={cardRef}
-              className="rounded-xl border border-border/60 bg-muted/30 px-2 pb-2"
+              className="rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background px-1 pb-1"
             >
-              <div className="flex items-center justify-between px-2 py-2">
+              <div className="flex items-center justify-between px-3 py-2">
                 <p className="text-sm font-medium">Agent</p>
                 <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                   <span
@@ -105,8 +105,8 @@ export function Agents() {
                   </Msg>
 
                   <Msg shown={stage >= 2}>
-                    <div className="w-full rounded-lg border border-border/60 bg-muted/30 p-1.5">
-                      <div className="flex items-center justify-between gap-3 px-1.5 py-1">
+                    <div className="w-full rounded-[calc(var(--radius)*0.8+0.25rem+1px)] border border-border/60 bg-background p-1">
+                      <div className="flex items-center justify-between gap-3 px-2 pt-1.5 pb-1">
                         <span className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
                           <Terminal aria-hidden className="size-3" />
                           shadcn CLI

@@ -79,7 +79,7 @@ export function FeaturedVideos() {
                 <Dialog.Trigger
                   type="button"
                   onClick={() => setActiveVideo(video)}
-                  className="featured-video-card group grid w-full cursor-pointer rounded-2xl border border-border/60 p-2 text-left md:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] md:items-center"
+                  className="featured-video-card group grid w-full cursor-pointer rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 p-1 text-left md:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] md:items-center"
                   aria-label={`Play ${video.title} by ${video.creator}`}
                 >
                   <span className="relative aspect-2/1 overflow-hidden rounded-lg border border-border/60 bg-muted/30">

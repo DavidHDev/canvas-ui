@@ -68,7 +68,7 @@ export default function PrivacyPage() {
             updated {LAST_UPDATED}.
           </p>
 
-          <div className="mt-10 rounded-[calc(var(--radius)+0.75rem)] border border-border/60 bg-muted/30 p-2">
+          <div className="mt-10 rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background p-1">
             <div className="rounded-[var(--radius)] border border-dashed border-border/70 bg-background p-4 sm:p-5">
               <h2 className="text-sm font-medium text-foreground">
                 The short version

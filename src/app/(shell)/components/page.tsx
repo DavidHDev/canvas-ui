@@ -26,7 +26,7 @@ export default function ComponentsPage() {
           <li key={component.href}>
             <Link
               href={component.href}
-              className="group flex h-full flex-col rounded-2xl border border-border/60 bg-muted/30 p-2 transition-colors duration-150 hover:bg-muted/50"
+              className="group flex h-full flex-col rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background p-1 transition-colors duration-150 hover:bg-muted/50"
             >
               <div className="relative flex aspect-4/3 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-border/70 bg-background/60">
                 <PreviewVideo
@@ -34,7 +34,7 @@ export default function ComponentsPage() {
                   className="absolute inset-0 size-full object-cover"
                 />
               </div>
-              <div className="px-2.5 pt-3.5 pb-2.5">
+              <div className="p-3.5">
                 <h2 className="text-[15px] font-medium tracking-tight">
                   {component.name}
                 </h2>

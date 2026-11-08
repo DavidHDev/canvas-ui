@@ -27,7 +27,7 @@ function GalleryCard({
     <Link
       href={component.href}
       tabIndex={focusable ? undefined : -1}
-      className="group block w-64 shrink-0 rounded-2xl border border-border/60 bg-muted/30 p-2 transition-colors duration-150 hover:bg-muted/50 sm:w-72"
+      className="group block w-64 shrink-0 rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background p-1 transition-colors duration-150 hover:bg-muted/50 sm:w-72"
     >
       <div className="relative flex aspect-4/3 items-center justify-center overflow-hidden rounded-lg border border-dashed border-border/70 bg-background/60">
         <PreviewVideo

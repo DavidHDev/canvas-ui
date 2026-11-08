@@ -19,8 +19,8 @@ export function FrameworkTabs({ variants }: { variants: FrameworkVariant[] }) {
   const active = variants.find((v) => v.id === activeId) ?? variants[0];
 
   return (
-    <div className="rounded-xl border border-border/60 bg-muted/30 px-2 pb-2">
-      <div className="flex items-center justify-between gap-2 py-2">
+    <div className="rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background px-1 pb-1">
+      <div className="flex items-center justify-between gap-2 px-1 py-2">
         <ChoiceSelect
           label="Framework"
           options={variants}

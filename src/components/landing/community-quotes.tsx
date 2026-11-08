@@ -196,7 +196,7 @@ function QuoteCard({
       target="_blank"
       rel="noreferrer"
       tabIndex={focusable ? undefined : -1}
-      className="community-quote-card group block h-44 w-72 shrink-0 rounded-2xl border border-border/60 bg-muted/30 p-2 text-left sm:w-80"
+      className="community-quote-card group block h-44 w-72 shrink-0 rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background p-1 text-left sm:w-80"
       aria-label={`${quote.author} on X: ${quote.text}`}
     >
       <div className="flex h-full flex-col rounded-lg border border-dashed border-border/70 bg-background p-4">

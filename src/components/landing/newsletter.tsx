@@ -31,7 +31,7 @@ export function Newsletter() {
               </p>
             </Reveal>
             <Reveal delay={100}>
-              <div className="rounded-[calc(var(--radius)+1.25rem)] border border-border/60 bg-muted/30 p-2">
+              <div className="rounded-[calc(var(--radius)+0.75rem+0.25rem+1px)] border border-border/60 bg-background p-1">
                 <div className="rounded-[calc(var(--radius)+0.75rem)] border border-dashed border-border/70 bg-background p-4 sm:p-5">
                   <NewsletterSignup showHeader={false} layout="stack" />
                 </div>
