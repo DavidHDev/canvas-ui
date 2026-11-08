@@ -205,7 +205,7 @@ function ComponentPager({ slug }: { slug: string }) {
   return (
     <nav
       aria-label="Component pagination"
-      className="not-typeset mt-12 grid grid-cols-1 gap-3 border-t border-border/60 pt-6 sm:grid-cols-2"
+      className="not-typeset mt-16 grid grid-cols-1 gap-3 sm:grid-cols-2"
     >
       {prev ? <PagerLink entry={prev} direction="prev" /> : null}
       {next ? <PagerLink entry={next} direction="next" /> : null}
@@ -223,37 +223,37 @@ function PagerLink({
   const isPrev = direction === "prev";
   const Arrow = isPrev ? ArrowLeft : ArrowRight;
 
-  const arrow = (
-    <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors duration-150 group-hover:border-foreground/20 group-hover:text-foreground">
-      <Arrow
-        aria-hidden
-        className={cn(
-          "size-4 transition-transform duration-200 ease-out",
-          isPrev ? "group-hover:-translate-x-0.5" : "group-hover:translate-x-0.5",
-        )}
-      />
-    </span>
-  );
-
   return (
     <Link
       href={entry.href}
       rel={direction}
       className={cn(
-        "group flex min-w-0 items-center gap-3 rounded-xl border border-border/60 px-4 py-3.5 transition-colors duration-150 hover:border-border hover:bg-muted/30",
+        // Same double-border frame as the code panels: the dashed box sits 4px
+        // inside a 1px border, so its 10px corners are concentric with the frame.
+        "group block min-w-0 rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background p-1 outline-none transition-colors duration-150 hover:border-border focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
         !isPrev && "text-right sm:col-start-2",
       )}
     >
-      {isPrev ? arrow : null}
-      <span className="min-w-0 flex-1">
-        <span className="block text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+      <span className="flex min-w-0 flex-col rounded-lg border border-dashed border-border/70 bg-muted/40 px-4 py-3.5 transition-colors duration-150 group-hover:bg-muted/60">
+        <span
+          className={cn(
+            "flex items-center gap-1.5 text-[13px] text-muted-foreground transition-colors duration-150 group-hover:text-foreground",
+            !isPrev && "flex-row-reverse",
+          )}
+        >
+          <Arrow
+            aria-hidden
+            className={cn(
+              "size-3.5 shrink-0 transition-transform duration-200 ease-out motion-reduce:transition-none",
+              isPrev ? "group-hover:-translate-x-0.5" : "group-hover:translate-x-0.5",
+            )}
+          />
           {isPrev ? "Previous" : "Next"}
         </span>
-        <span className="mt-0.5 block truncate text-sm font-medium text-foreground">
+        <span className="mt-1 truncate text-[15px] font-medium tracking-tight text-foreground">
           {entry.name}
         </span>
       </span>
-      {isPrev ? null : arrow}
     </Link>
   );
 }
