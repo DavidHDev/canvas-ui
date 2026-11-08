@@ -7,7 +7,15 @@ import {
   useQueryStates,
   type SingleParserBuilder,
 } from "nuqs";
-import { useCallback, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type RefObject,
+} from "react";
 
 import type {
   Control,
@@ -32,15 +40,17 @@ const parseAsSharableString = createParser<string>({
   },
 });
 
-const parseAsControlNumber = createParser<number>({
-  parse(query) {
-    const value = Number.parseFloat(query);
-    return Number.isFinite(value) ? value : null;
-  },
-  serialize(value) {
-    return String(Number(value.toFixed(4)));
-  },
-});
+function controlNumberParser(min = -Infinity, max = Infinity) {
+  return createParser<number>({
+    parse(query) {
+      const value = query.trim() === "" ? NaN : Number(query);
+      return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : null;
+    },
+    serialize(value) {
+      return String(Number(value.toFixed(4)));
+    },
+  });
+}
 
 function colorParser(sentinel: string | undefined) {
   return createParser<string>({
@@ -62,7 +72,9 @@ type ControlParser = SingleParserBuilder<ControlValue> & {
 function parserFor(control: Control) {
   switch (control.kind) {
     case "scrub":
-      return parseAsControlNumber.withDefault(control.defaultValue);
+      return controlNumberParser(control.min, control.max).withDefault(
+        control.defaultValue,
+      );
     case "toggle":
       return parseAsBoolean.withDefault(control.defaultValue);
     case "radio":
@@ -75,7 +87,7 @@ function parserFor(control: Control) {
       ).withDefault(control.defaultValue.toLowerCase());
     case "custom":
       return typeof control.defaultValue === "number"
-        ? parseAsControlNumber.withDefault(control.defaultValue)
+        ? controlNumberParser().withDefault(control.defaultValue)
         : typeof control.defaultValue === "boolean"
           ? parseAsBoolean.withDefault(control.defaultValue)
           : parseAsSharableString.withDefault(control.defaultValue);
@@ -95,6 +107,10 @@ export interface DemoControlsHandle<S extends ControlSchema = ControlSchema> {
   reset(): void;
   isDefault: boolean;
 }
+
+export const DemoControlsResetContext = createContext<RefObject<
+  (() => void) | null
+> | null>(null);
 
 export function useDemoControls<S extends ControlSchema>(
   schema: S,
@@ -133,6 +149,15 @@ export function useDemoControls<S extends ControlSchema>(
     setTransient({});
     void setState(null);
   }, [setState]);
+
+  const resetRef = useContext(DemoControlsResetContext);
+  useLayoutEffect(() => {
+    if (!resetRef) return;
+    resetRef.current = reset;
+    return () => {
+      resetRef.current = null;
+    };
+  }, [resetRef, reset]);
 
   const isDefault = useMemo(
     () =>
