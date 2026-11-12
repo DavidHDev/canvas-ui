@@ -7,7 +7,21 @@ import {
   type InkObjectOptions,
 } from "./InkObjectVanilla";
 
-const props = defineProps<InkObjectOptions>();
+const props = withDefaults(defineProps<InkObjectOptions>(), {
+  ink: undefined,
+  invert: undefined,
+  orbit: undefined,
+  zoom: undefined,
+  autoRotate: undefined,
+});
+
+// Vue hands the engine every declared prop, unset ones included, and casts
+// unset booleans to false. The engine spreads options over its DEFAULTS, so
+// pass only what was actually set and let it keep its own defaults.
+const options = () =>
+  Object.fromEntries(
+    Object.entries(props).filter(([, value]) => value !== undefined),
+  ) as InkObjectOptions;
 
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 
@@ -15,7 +29,7 @@ let instance: InkObjectInstance | null = null;
 
 onMounted(() => {
   if (canvasEl.value) {
-    instance = createInkObject({ canvas: canvasEl.value }, props);
+    instance = createInkObject({ canvas: canvasEl.value }, options());
   }
 });
 
@@ -25,7 +39,7 @@ onBeforeUnmount(() => {
 });
 
 watch(
-  () => ({ ...props }),
+  () => options(),
   (next) => instance?.setOptions(next),
   { deep: true },
 );
