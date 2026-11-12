@@ -8,7 +8,17 @@ import {
   type FrostOptions,
 } from "./FrostVanilla";
 
-const props = defineProps<FrostOptions>();
+const props = withDefaults(defineProps<FrostOptions>(), {
+  meltEdges: undefined,
+});
+
+// Vue hands the engine every declared prop, unset ones included, and casts
+// unset booleans to false. The engine spreads options over its DEFAULTS, so
+// pass only what was actually set and let it keep its own defaults.
+const options = () =>
+  Object.fromEntries(
+    Object.entries(props).filter(([, value]) => value !== undefined),
+  ) as FrostOptions;
 
 const sourceEl = ref<HTMLCanvasElement | null>(null);
 const contentEl = ref<HTMLDivElement | null>(null);
@@ -29,7 +39,7 @@ onMounted(async () => {
         content: contentEl.value,
         output: outputEl.value,
       },
-      props,
+      options(),
     );
     if (native.value && !instance) {
       native.value = false;
@@ -42,7 +52,7 @@ onMounted(async () => {
             content: contentEl.value,
             output: outputEl.value,
           },
-          props,
+          options(),
         );
       }
     }
@@ -56,7 +66,7 @@ onBeforeUnmount(() => {
 });
 
 watch(
-  () => ({ ...props }),
+  () => options(),
   (next) => instance?.setOptions(next),
   { deep: true },
 );

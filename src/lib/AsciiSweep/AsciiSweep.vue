@@ -20,6 +20,14 @@ const props = withDefaults(defineProps<Props>(), {
   directional: true,
 });
 
+// Vue hands the engine every declared prop, unset ones included, and casts
+// unset booleans to false. The engine spreads options over its DEFAULTS, so
+// pass only what was actually set and let it keep its own defaults.
+const options = () =>
+  Object.fromEntries(
+    Object.entries(props).filter(([, value]) => value !== undefined),
+  ) as Props;
+
 const PANEL_STYLE =
   "position: absolute; inset: 0; width: 100%; height: 100%; overflow: auto";
 
@@ -60,7 +68,7 @@ function create() {
       ],
       output: outputEl.value,
     },
-    props,
+    options(),
   );
 }
 
@@ -93,7 +101,7 @@ onBeforeUnmount(() => {
 });
 
 watch(
-  () => ({ ...props }),
+  () => options(),
   (next) => instance?.setOptions(next),
   { deep: true },
 );

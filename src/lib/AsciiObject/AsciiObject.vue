@@ -7,7 +7,22 @@ import {
   type AsciiObjectOptions,
 } from "./AsciiObjectVanilla";
 
-const props = defineProps<AsciiObjectOptions>();
+const props = withDefaults(defineProps<AsciiObjectOptions>(), {
+  ascii: undefined,
+  colored: undefined,
+  invert: undefined,
+  orbit: undefined,
+  zoom: undefined,
+  autoRotate: undefined,
+});
+
+// Vue hands the engine every declared prop, unset ones included, and casts
+// unset booleans to false. The engine spreads options over its DEFAULTS, so
+// pass only what was actually set and let it keep its own defaults.
+const options = () =>
+  Object.fromEntries(
+    Object.entries(props).filter(([, value]) => value !== undefined),
+  ) as AsciiObjectOptions;
 
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 
@@ -15,7 +30,7 @@ let instance: AsciiObjectInstance | null = null;
 
 onMounted(() => {
   if (canvasEl.value) {
-    instance = createAsciiObject({ canvas: canvasEl.value }, props);
+    instance = createAsciiObject({ canvas: canvasEl.value }, options());
   }
 });
 
@@ -25,7 +40,7 @@ onBeforeUnmount(() => {
 });
 
 watch(
-  () => ({ ...props }),
+  () => options(),
   (next) => instance?.setOptions(next),
   { deep: true },
 );
