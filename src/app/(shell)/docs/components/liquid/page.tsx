@@ -32,8 +32,10 @@ export default function Page() {
 const PRISM_USAGE =
   "Set prism to true for iridescent oil-film colors inspired by Fluid Prism. " +
   "Prism takes priority over rainbow and color. Turn it off to restore those settings. " +
-  "Use intensity and blend to adjust the film over captured content. " +
-  "Without HTML-in-Canvas, the effect falls back to a colored trail over the live HTML.";
+  "Captured content also softens along the flow with a nine-sample directional blur. " +
+  "Use distortion to adjust the warp and blur, and intensity and blend to adjust the film. " +
+  "Set intensity to 0 to keep just the warp and blur. " +
+  "Without HTML-in-Canvas, the effect falls back to a colored trail over the live HTML; content distortion and blur require capture.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -62,7 +64,7 @@ const API_REFERENCE: ApiProp[] = [
   },
   {
     name: "distortion",
-    description: "How strongly the flow warps the content.",
+    description: "How strongly the flow warps the content and, with prism, blurs it.",
     type: "number",
     defaultValue: "0.4",
   },
@@ -116,7 +118,7 @@ const API_REFERENCE: ApiProp[] = [
   {
     name: "prism",
     description:
-      "Add iridescent oil-film colors to the flow, overriding rainbow and color.",
+      "Add iridescent colors and directional blur, overriding rainbow and color.",
     type: "boolean",
     defaultValue: "false",
   },

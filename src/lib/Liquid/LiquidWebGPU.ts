@@ -35,7 +35,7 @@ export interface LiquidOptions {
   force?: number;
   /** Strength of the color tint left by the flow. */
   intensity?: number;
-  /** How strongly the flow warps the content. */
+  /** How strongly the flow warps the content and, with prism, blurs it. */
   distortion?: number;
   /** How much of the fluid color blends over the content. */
   blend?: number;
@@ -43,7 +43,7 @@ export interface LiquidOptions {
   color?: [number, number, number];
   /** Color the trail from the flow direction. Ignored when prism is on. */
   rainbow?: boolean;
-  /** Add iridescent oil-film colors to the flow, overriding rainbow and color. */
+  /** Add iridescent colors and directional blur, overriding rainbow and color. */
   prism?: boolean;
 }
 
@@ -133,7 +133,7 @@ fn sampleFluid(glUv: vec2f) -> vec4f {
 }
 
 /*
-Oil-film shading adapted from Fluid Prism (https://github.com/rain0002009/fluid-prism).
+Film shading and directional blur adapted from Fluid Prism (https://github.com/rain0002009/fluid-prism).
 MIT License
 Copyright (c) 2026
 
@@ -165,14 +165,37 @@ fn prismColor(base: vec3f, velocity: vec2f, interference: vec3f, mask: f32, film
   pastel = mix(vec3f(0.98), pastel, vec3f(0.20));
   return mix(color, color * pastel + vec3f(0.018, 0.025, 0.030) * film, vec3f(film * 0.28));
 }
+fn prismNoise(p: vec2f) -> f32 {
+  return fract(sin(dot(p, vec2f(41.7, 289.3))) * 45758.5453);
+}
+fn prismContent(glUv: vec2f, velocity: vec2f) -> vec4f {
+  let size = vec2f(textureDimensions(uContent));
+  // Match Fluid Prism's nine taps at its default quarter-resolution paint grid.
+  // Liquid's default distortion (0.4) corresponds to 15 pixels per tap at full flow.
+  let stepUv = velocity * params.distortion * 37.5 / size;
+  let pixel = glUv * size;
+  let jitter = vec2f(prismNoise(pixel + vec2f(17.0, 29.0)), prismNoise(pixel.yx + vec2f(29.0, 17.0)));
+  var uv = glUv + jitter * stepUv;
+  let edge = vec2f(0.5) / size;
+  var content = vec4f(0.0);
+  for (var i = 0; i < 9; i++) {
+    let coord = clamp(vec2f(uv.x, 1.0 - uv.y), edge, vec2f(1.0) - edge);
+    let sampleColor = textureSampleLevel(uContent, uSampler, coord, 0.0);
+    content += vec4f(sampleColor.rgb * sampleColor.a, sampleColor.a);
+    uv += stepUv;
+  }
+  content /= 9.0;
+  return vec4f(content.rgb / max(content.a, 1e-5), content.a);
+}
 
 @fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let glUv = vec2f(uv.x, 1.0 - uv.y);
   let fluid = sampleFluid(glUv).rgb;
   if (params.prism == 1.0) {
-    // Map Liquid's signed dye velocity and density to Fluid Prism's film range.
+    // Fluid Prism encodes pixel impulses at 0.0032 around a neutral value of 0.5.
+    // Bound Liquid's accumulated impulses before computing the color phases.
     let weight = 1.0 - exp(-abs(fluid.b) * 0.1);
-    let velocity = fluid.rg * 0.1 * weight;
+    let velocity = -clamp(fluid.rg * 0.0064, vec2f(-1.0), vec2f(1.0)) * weight;
     let interference = sin(vec3f(velocity.x + velocity.y) * 40.0 + vec3f(0.0, 1.0, 2.0));
     let mask = (1.0 - smoothstep(-0.9, 0.4, weight)) * max(abs(velocity.x), abs(velocity.y));
     let film = smoothstep(0.015, 0.42, weight) * (1.0 - smoothstep(0.78, 1.0, weight));
@@ -181,8 +204,7 @@ fn prismColor(base: vec3f, velocity: vec2f, interference: vec3f, mask: f32, film
       let overlay = (1.0 - exp(-(mask * 12.5 + film * 0.08) * params.intensity)) * 0.82;
       return vec4f(tint * overlay, overlay);
     }
-    let fluidUv = glUv - fluid.rg * params.distortion * 0.001;
-    let content = textureSampleLevel(uContent, uSampler, vec2f(fluidUv.x, 1.0 - fluidUv.y), 0.0);
+    let content = prismContent(glUv, velocity);
     let color = mix(content.rgb, prismColor(content.rgb, velocity, interference, mask, film), vec3f(params.blend * params.intensity * 0.1));
     return vec4f(clamp(color, vec3f(0.0), vec3f(1.0)) * content.a, content.a);
   }
