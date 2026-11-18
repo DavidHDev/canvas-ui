@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
 import { ComponentDoc } from "@/components/docs/component-doc";
-import { CodeBlock } from "@/components/docs/code-block";
 import { DemoImageSection } from "@/demos/demo-image-cycler";
 import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
@@ -18,38 +17,6 @@ export const metadata: Metadata = {
 
 const DESCRIPTION =
   "A pointer-driven fluid simulation over your live page. Move the cursor and stir it up.";
-
-const PRISM_EXAMPLE = `import { Liquid } from "@/components/canvasui/Liquid";
-
-export default function Page() {
-  return (
-    <Liquid prism continuous blur={1}>
-      <main>Your content here</main>
-    </Liquid>
-  );
-}`;
-
-const PRISM_USAGE =
-  "Set prism to true for iridescent oil-film colors inspired by Fluid Prism. " +
-  "Prism takes priority over rainbow and color. Turn it off to restore those settings. " +
-  "Use intensity and blend to adjust the film, distortion to adjust the warp, and blur to soften captured content along the flow. " +
-  "Without HTML-in-Canvas, the effect falls back to a colored trail over the live HTML; content distortion and blur require capture.";
-
-const BLUR_EXAMPLE = `<Liquid rainbow blur={1} distortion={0}>
-  <main>Your content here</main>
-</Liquid>`;
-
-const BLUR_USAGE =
-  "Blur works independently with Prism, Rainbow, or a fixed color. " +
-  "It defaults to 0 (off); 1 is the base strength, and larger values spread the nine samples farther along the flow. " +
-  "Set distortion to 0 to keep the blur without warping the content. " +
-  "Set blend to 0 to remove the color tint and keep only the content effects. " +
-  "Blur requires HTML-in-Canvas and has no effect on the DOM overlay fallback.";
-
-const CONTINUOUS_USAGE =
-  "Set continuous to true to connect pointer positions with a full stroke, filling the gaps during fast movement. " +
-  "It defaults to false and works with Prism, Rainbow, or a fixed color, with or without blur. " +
-  "Continuous strokes also work in the DOM overlay fallback. API splat calls remain individual point injections.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -170,8 +137,6 @@ const API_REFERENCE: ApiProp[] = [
 ];
 
 export default async function LiquidPage() {
-  const prismExampleHtml = await highlight(PRISM_EXAMPLE, "tsx");
-  const blurExampleHtml = await highlight(BLUR_EXAMPLE, "tsx");
   const variants = await Promise.all(
     getComponentSources("liquid").map(async (file) => ({
       id: file.id,
@@ -191,52 +156,11 @@ export default async function LiquidPage() {
         installItem="liquid"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
-        usageMarkdown={`## Prism\n\n${PRISM_USAGE}\n\n\`\`\`tsx\n${PRISM_EXAMPLE}\n\`\`\`\n\n## Blur\n\n${BLUR_USAGE}\n\n\`\`\`tsx\n${BLUR_EXAMPLE}\n\`\`\`\n\n## Continuous strokes\n\n${CONTINUOUS_USAGE}`}
         beforeInstall={
-          <>
-            <DemoImageSection
-              hint="Drag across the photo to stir it like liquid. Try Prism for iridescent colors and Blur to soften the flow."
-              alt="Demo photo for the Liquid effect"
-            />
-            <section className="mt-8" aria-label="Prism">
-              <h2 className="text-lg font-semibold tracking-[-0.01em]">
-                Prism
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                {PRISM_USAGE}
-              </p>
-              <div className="mt-4">
-                <CodeBlock
-                  html={prismExampleHtml}
-                  source={PRISM_EXAMPLE}
-                  fileName="page.tsx"
-                />
-              </div>
-            </section>
-            <section className="mt-8" aria-label="Blur">
-              <h2 className="text-lg font-semibold tracking-[-0.01em]">
-                Blur
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                {BLUR_USAGE}
-              </p>
-              <div className="mt-4">
-                <CodeBlock
-                  html={blurExampleHtml}
-                  source={BLUR_EXAMPLE}
-                  fileName="page.tsx"
-                />
-              </div>
-            </section>
-            <section className="mt-8" aria-label="Continuous strokes">
-              <h2 className="text-lg font-semibold tracking-[-0.01em]">
-                Continuous strokes
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                {CONTINUOUS_USAGE}
-              </p>
-            </section>
-          </>
+          <DemoImageSection
+            hint="Drag across the photo to stir it like liquid."
+            alt="Demo photo for the Liquid effect"
+          />
         }
       />
       <div className="mx-auto mt-24 w-full max-w-3xl">
