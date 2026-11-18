@@ -27,10 +27,12 @@ export interface LiquidOptions {
   distortion?: number;
   /** How much of the fluid color blends over the content. */
   blend?: number;
-  /** Trail color as [r, g, b] in 0-1 range. Ignored when rainbow is on. */
+  /** Trail color as [r, g, b] in 0-1 range. Ignored when rainbow or prism is on. */
   color?: [number, number, number];
-  /** Color the trail from the flow direction instead of a fixed color. */
+  /** Color the trail from the flow direction. Ignored when prism is on. */
   rainbow?: boolean;
+  /** Add iridescent oil-film colors to the flow, overriding rainbow and color. */
+  prism?: boolean;
 }
 
 export interface LiquidElements {
@@ -70,6 +72,7 @@ const DEFAULTS: Required<LiquidOptions> = {
   blend: 5,
   color: [0.145, 0.239, 0.867],
   rainbow: false,
+  prism: false,
 };
 
 const DT = 1 / 60;
@@ -118,6 +121,7 @@ uniform float uDistortion;
 uniform float uIntensity;
 uniform float uBlend;
 uniform float uRainbow;
+uniform float uPrism;
 uniform float uHasContent;
 vec3 toLinear (vec3 c) {
   return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
@@ -125,8 +129,60 @@ vec3 toLinear (vec3 c) {
 vec3 toSrgb (vec3 c) {
   return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
 }
+/*
+Oil-film shading adapted from Fluid Prism (https://github.com/rain0002009/fluid-prism).
+MIT License
+Copyright (c) 2026
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+vec3 prismColor (vec3 base, vec2 velocity, vec3 interference, float mask, float film) {
+  vec3 color = base + interference * mask * 12.5;
+  vec3 pastel = sin(vec3(
+    (velocity.x - velocity.y) * 26.0 + 0.2,
+    (velocity.x + velocity.y) * 31.0 + 2.3,
+    (velocity.y - velocity.x) * 29.0 + 4.1
+  )) * 0.5 + 0.5;
+  pastel = mix(vec3(0.98), pastel, 0.20);
+  return mix(color, color * pastel + vec3(0.018, 0.025, 0.030) * film, film * 0.28);
+}
 void main () {
   vec3 fluid = texture(uFluid, vUv).rgb;
+  if (uPrism == 1.0) {
+    // Map Liquid's signed dye velocity and density to Fluid Prism's film range.
+    float weight = 1.0 - exp(-abs(fluid.b) * 0.1);
+    vec2 velocity = fluid.rg * 0.1 * weight;
+    vec3 interference = sin(vec3(velocity.x + velocity.y) * 40.0 + vec3(0.0, 1.0, 2.0));
+    float mask = (1.0 - smoothstep(-0.9, 0.4, weight)) * max(abs(velocity.x), abs(velocity.y));
+    float film = smoothstep(0.015, 0.42, weight) * (1.0 - smoothstep(0.78, 1.0, weight));
+    if (uHasContent < 0.5) {
+      vec3 tint = interference * 0.5 + 0.5;
+      float overlay = (1.0 - exp(-(mask * 12.5 + film * 0.08) * uIntensity)) * 0.82;
+      outColor = vec4(tint * overlay, overlay);
+      return;
+    }
+    vec2 uv = vUv - fluid.rg * uDistortion * 0.001;
+    vec4 content = texture(uContent, vec2(uv.x, 1.0 - uv.y));
+    vec3 color = mix(content.rgb, prismColor(content.rgb, velocity, interference, mask, film), uBlend * uIntensity * 0.1);
+    outColor = vec4(clamp(color, 0.0, 1.0) * content.a, content.a);
+    return;
+  }
   if (uHasContent < 0.5) {
     float mag = length(fluid);
     vec3 tint = uRainbow == 1.0
@@ -796,6 +852,7 @@ export function createLiquid(
     gl!.uniform1f(displayProgram.uniforms.uIntensity, config.intensity);
     gl!.uniform1f(displayProgram.uniforms.uBlend, config.blend);
     gl!.uniform1f(displayProgram.uniforms.uRainbow, config.rainbow ? 1 : 0);
+    gl!.uniform1f(displayProgram.uniforms.uPrism, config.prism ? 1 : 0);
     gl!.uniform1f(displayProgram.uniforms.uHasContent, htmlInCanvas ? 1 : 0);
     blit(null);
   }

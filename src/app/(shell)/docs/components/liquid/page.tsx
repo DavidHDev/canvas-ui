@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { ComponentDoc } from "@/components/docs/component-doc";
+import { CodeBlock } from "@/components/docs/code-block";
 import { DemoImageSection } from "@/demos/demo-image-cycler";
 import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
@@ -17,6 +18,22 @@ export const metadata: Metadata = {
 
 const DESCRIPTION =
   "A pointer-driven fluid simulation over your live page. Move the cursor and stir it up.";
+
+const PRISM_EXAMPLE = `import { Liquid } from "@/components/canvasui/Liquid";
+
+export default function Page() {
+  return (
+    <Liquid prism>
+      <main>Your content here</main>
+    </Liquid>
+  );
+}`;
+
+const PRISM_USAGE =
+  "Set prism to true for iridescent oil-film colors inspired by Fluid Prism. " +
+  "Prism takes priority over rainbow and color. Turn it off to restore those settings. " +
+  "Use intensity and blend to adjust the film over captured content. " +
+  "Without HTML-in-Canvas, the effect falls back to a colored trail over the live HTML.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -85,14 +102,21 @@ const API_REFERENCE: ApiProp[] = [
   {
     name: "color",
     description:
-      "Trail color as [r, g, b] in 0-1 range. Ignored when rainbow is on.",
+      "Trail color as [r, g, b] in 0-1 range. Ignored when rainbow or prism is on.",
     type: "[number, number, number]",
     defaultValue: "[0.145, 0.239, 0.867]",
   },
   {
     name: "rainbow",
     description:
-      "Color the trail from the flow direction instead of a fixed color.",
+      "Color the trail from the flow direction. Ignored when prism is on.",
+    type: "boolean",
+    defaultValue: "false",
+  },
+  {
+    name: "prism",
+    description:
+      "Add iridescent oil-film colors to the flow, overriding rainbow and color.",
     type: "boolean",
     defaultValue: "false",
   },
@@ -116,6 +140,7 @@ const API_REFERENCE: ApiProp[] = [
 ];
 
 export default async function LiquidPage() {
+  const prismExampleHtml = await highlight(PRISM_EXAMPLE, "tsx");
   const variants = await Promise.all(
     getComponentSources("liquid").map(async (file) => ({
       id: file.id,
@@ -135,11 +160,29 @@ export default async function LiquidPage() {
         installItem="liquid"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
+        usageMarkdown={`## Prism\n\n${PRISM_USAGE}\n\n\`\`\`tsx\n${PRISM_EXAMPLE}\n\`\`\``}
         beforeInstall={
-          <DemoImageSection
-            hint="Drag across the photo to stir it like liquid."
-            alt="Demo photo for the Liquid effect"
-          />
+          <>
+            <DemoImageSection
+              hint="Drag across the photo to stir it like liquid. Try Prism in the controls for iridescent colors."
+              alt="Demo photo for the Liquid effect"
+            />
+            <section className="mt-8" aria-label="Prism">
+              <h2 className="text-lg font-semibold tracking-[-0.01em]">
+                Prism
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                {PRISM_USAGE}
+              </p>
+              <div className="mt-4">
+                <CodeBlock
+                  html={prismExampleHtml}
+                  source={PRISM_EXAMPLE}
+                  fileName="page.tsx"
+                />
+              </div>
+            </section>
+          </>
         }
       />
       <div className="mx-auto mt-24 w-full max-w-3xl">

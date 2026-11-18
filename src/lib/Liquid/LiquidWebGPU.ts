@@ -39,10 +39,12 @@ export interface LiquidOptions {
   distortion?: number;
   /** How much of the fluid color blends over the content. */
   blend?: number;
-  /** Trail color as [r, g, b] in 0-1 range. Ignored when rainbow is on. */
+  /** Trail color as [r, g, b] in 0-1 range. Ignored when rainbow or prism is on. */
   color?: [number, number, number];
-  /** Color the trail from the flow direction instead of a fixed color. */
+  /** Color the trail from the flow direction. Ignored when prism is on. */
   rainbow?: boolean;
+  /** Add iridescent oil-film colors to the flow, overriding rainbow and color. */
+  prism?: boolean;
 }
 
 export interface LiquidElements {
@@ -82,6 +84,7 @@ const DEFAULTS: Required<LiquidOptions> = {
   blend: 5,
   color: [0.145, 0.239, 0.867],
   rainbow: false,
+  prism: false,
 };
 
 const DT = 1 / 60;
@@ -109,6 +112,7 @@ struct Params {
   blend: f32,
   rainbow: f32,
   hasContent: f32,
+  prism: f32,
 }
 
 @group(0) @binding(0) var<uniform> params: Params;
@@ -128,9 +132,60 @@ fn sampleFluid(glUv: vec2f) -> vec4f {
   return textureSampleLevel(uFluid, uSampler, vec2f(glUv.x, 1.0 - glUv.y), 0.0);
 }
 
+/*
+Oil-film shading adapted from Fluid Prism (https://github.com/rain0002009/fluid-prism).
+MIT License
+Copyright (c) 2026
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+fn prismColor(base: vec3f, velocity: vec2f, interference: vec3f, mask: f32, film: f32) -> vec3f {
+  let color = base + interference * mask * 12.5;
+  var pastel = sin(vec3f(
+    (velocity.x - velocity.y) * 26.0 + 0.2,
+    (velocity.x + velocity.y) * 31.0 + 2.3,
+    (velocity.y - velocity.x) * 29.0 + 4.1
+  )) * 0.5 + vec3f(0.5);
+  pastel = mix(vec3f(0.98), pastel, vec3f(0.20));
+  return mix(color, color * pastel + vec3f(0.018, 0.025, 0.030) * film, vec3f(film * 0.28));
+}
+
 @fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let glUv = vec2f(uv.x, 1.0 - uv.y);
   let fluid = sampleFluid(glUv).rgb;
+  if (params.prism == 1.0) {
+    // Map Liquid's signed dye velocity and density to Fluid Prism's film range.
+    let weight = 1.0 - exp(-abs(fluid.b) * 0.1);
+    let velocity = fluid.rg * 0.1 * weight;
+    let interference = sin(vec3f(velocity.x + velocity.y) * 40.0 + vec3f(0.0, 1.0, 2.0));
+    let mask = (1.0 - smoothstep(-0.9, 0.4, weight)) * max(abs(velocity.x), abs(velocity.y));
+    let film = smoothstep(0.015, 0.42, weight) * (1.0 - smoothstep(0.78, 1.0, weight));
+    if (params.hasContent < 0.5) {
+      let tint = interference * 0.5 + vec3f(0.5);
+      let overlay = (1.0 - exp(-(mask * 12.5 + film * 0.08) * params.intensity)) * 0.82;
+      return vec4f(tint * overlay, overlay);
+    }
+    let fluidUv = glUv - fluid.rg * params.distortion * 0.001;
+    let content = textureSampleLevel(uContent, uSampler, vec2f(fluidUv.x, 1.0 - fluidUv.y), 0.0);
+    let color = mix(content.rgb, prismColor(content.rgb, velocity, interference, mask, film), vec3f(params.blend * params.intensity * 0.1));
+    return vec4f(clamp(color, vec3f(0.0), vec3f(1.0)) * content.a, content.a);
+  }
   if (params.hasContent < 0.5) {
     let mag = length(fluid);
     let tint = select(params.color, clamp(fluid / max(mag, 1e-3), vec3f(0.0), vec3f(1.0)), params.rainbow == 1.0);
@@ -786,6 +841,7 @@ export function createLiquid(
         blend: config.blend,
         rainbow: config.rainbow ? 1 : 0,
         hasContent: htmlInCanvas ? 1 : 0,
+        prism: config.prism ? 1 : 0,
       },
     });
     gpuFrame(gpu, (f) => f.pass(screen!, effects!.display));

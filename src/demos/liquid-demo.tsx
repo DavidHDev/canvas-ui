@@ -6,6 +6,7 @@ import { color, radio, scrub, toggle } from "@/components/demos/control-schema";
 import {
   ColorRow,
   DemoControls,
+  SwitchRow,
   useDemoScrollbarGutter,
 } from "@/components/demos/demo-controls";
 import { useDemoControls } from "@/hooks/use-demo-controls";
@@ -44,6 +45,7 @@ const CONTROLS = {
   }),
   color: color("Color", "#425bff"),
   rainbow: toggle("Rainbow", false),
+  prism: toggle("Prism", false),
 };
 
 const RESOLUTION_PRESETS = {
@@ -66,7 +68,7 @@ export function LiquidDemo({ children }: { children: ReactNode }) {
   const { setValue } = controls;
   const setContentEl = useDemoScrollbarGutter();
 
-  const { color, rainbow, quality, ...values } = controls.values;
+  const { color, rainbow, prism, quality, ...values } = controls.values;
   const resolution = RESOLUTION_PRESETS[quality];
 
   return (
@@ -76,6 +78,7 @@ export function LiquidDemo({ children }: { children: ReactNode }) {
         {...resolution}
         color={hexToRgb(color)}
         rainbow={rainbow}
+        prism={prism}
         className="page-enter inset-0 z-30"
         style={{ position: "fixed" }}
       >
@@ -96,12 +99,16 @@ export function LiquidDemo({ children }: { children: ReactNode }) {
             ...resolution,
             color: hexToRgb(color),
             rainbow,
+            prism,
           },
         }}
         controls={controls}
         rows={{
           color: (
-            <div className={rainbow ? "pointer-events-none opacity-40" : ""}>
+            <div
+              inert={rainbow || prism}
+              className={rainbow || prism ? "pointer-events-none opacity-40" : ""}
+            >
               <ColorRow
                 label="Color"
                 value={color}
@@ -111,6 +118,18 @@ export function LiquidDemo({ children }: { children: ReactNode }) {
                     ? () => setValue("color", CONTROLS.color.defaultValue)
                     : undefined
                 }
+              />
+            </div>
+          ),
+          rainbow: (
+            <div
+              inert={prism}
+              className={prism ? "pointer-events-none opacity-40" : ""}
+            >
+              <SwitchRow
+                label="Rainbow"
+                checked={rainbow}
+                onCheckedChange={(next) => setValue("rainbow", next)}
               />
             </div>
           ),

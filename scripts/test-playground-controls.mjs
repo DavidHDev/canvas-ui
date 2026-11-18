@@ -14,6 +14,7 @@ const stubs = {
     import { createContext, useLayoutEffect } from "react";
     export const DemoControlsTargetContext = createContext(null);
     export const ColorRow = () => null;
+    export const SwitchRow = () => null;
     const setContent = () => {};
     export const useDemoScrollbarGutter = () => setContent;
     export function DemoControls({ controls, title }) {
@@ -184,17 +185,18 @@ try {
 
   // Existing share links hydrate normally, and clicking the active component
   // retains even a control change still queued in the same event.
-  await load("?radius=0.75&color=abcdef&rainbow=true&tracking=keep");
+  await load("?radius=0.75&color=abcdef&rainbow=true&prism=true&tracking=keep");
   assert.equal((await values()).radius, 0.75);
+  assert.equal((await values()).prism, true);
   await page.locator("#same-component").click();
-  await waitForQuery({ radius: "1.5", color: "abcdef", rainbow: "true", tracking: "keep" });
+  await waitForQuery({ radius: "1.5", color: "abcdef", rainbow: "true", prism: "true", tracking: "keep" });
   assert.equal((await values()).radius, 1.5);
   assert.equal(await page.locator("#active").textContent(), "liquid");
 
   // Switching clears every outgoing control, including those absent from the
   // new schema, while preserving unrelated query parameters.
   await page.locator("#particle").click();
-  await waitForQuery({ c: "particle-reveal", radius: null, color: null, rainbow: null, tracking: "keep" });
+  await waitForQuery({ c: "particle-reveal", radius: null, color: null, rainbow: null, prism: null, tracking: "keep" });
   assert.equal((await values()).radius, 500);
   const particleRenders = await page.evaluate(() => window.controlRenders.filter(render => render.title === "Particle Reveal controls"));
   assert.ok(particleRenders.length > 0);
