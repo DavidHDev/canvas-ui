@@ -139,29 +139,6 @@ fn sampleFluid(glUv: vec2f) -> vec4f {
   return textureSampleLevel(uFluid, uSampler, vec2f(glUv.x, 1.0 - glUv.y), 0.0);
 }
 
-/*
-Film shading and directional blur adapted from Fluid Prism (https://github.com/rain0002009/fluid-prism).
-MIT License
-Copyright (c) 2026
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
 fn prismColor(base: vec3f, velocity: vec2f, interference: vec3f, mask: f32, film: f32) -> vec3f {
   let color = base + interference * mask * 12.5;
   var pastel = sin(vec3f(
@@ -180,7 +157,7 @@ fn sampleContent(glUv: vec2f, warpedUv: vec2f, velocity: vec2f) -> vec4f {
     return textureSampleLevel(uContent, uSampler, vec2f(warpedUv.x, 1.0 - warpedUv.y), 0.0);
   }
   let size = vec2f(textureDimensions(uContent));
-  // Match Fluid Prism's nine taps at its default quarter-resolution paint grid.
+  // Sample nine taps along the flow.
   // A blur strength of 1 corresponds to 15 pixels per tap at full flow.
   let stepUv = velocity * params.blur * 15.0 / size;
   let pixel = glUv * size;
@@ -202,7 +179,7 @@ fn sampleContent(glUv: vec2f, warpedUv: vec2f, velocity: vec2f) -> vec4f {
 @fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let glUv = vec2f(uv.x, 1.0 - uv.y);
   let fluid = sampleFluid(glUv).rgb;
-  // Bound Liquid's accumulated impulses to Fluid Prism's velocity range.
+  // Bound accumulated impulses before computing color phases and blur.
   let weight = 1.0 - exp(-abs(fluid.b) * 0.1);
   let velocity = -clamp(fluid.rg * 0.0064, vec2f(-1.0), vec2f(1.0)) * weight;
   let fluidUv = glUv - fluid.rg * params.distortion * 0.001;

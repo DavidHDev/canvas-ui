@@ -136,29 +136,6 @@ vec3 toLinear (vec3 c) {
 vec3 toSrgb (vec3 c) {
   return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
 }
-/*
-Film shading and directional blur adapted from Fluid Prism (https://github.com/rain0002009/fluid-prism).
-MIT License
-Copyright (c) 2026
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
 vec3 prismColor (vec3 base, vec2 velocity, vec3 interference, float mask, float film) {
   vec3 color = base + interference * mask * 12.5;
   vec3 pastel = sin(vec3(
@@ -175,7 +152,7 @@ float prismNoise (vec2 p) {
 vec4 sampleContent (vec2 uv, vec2 velocity) {
   if (uBlur <= 0.0) return texture(uContent, vec2(uv.x, 1.0 - uv.y));
   vec2 size = vec2(textureSize(uContent, 0));
-  // Match Fluid Prism's nine taps at its default quarter-resolution paint grid.
+  // Sample nine taps along the flow.
   // A blur strength of 1 corresponds to 15 pixels per tap at full flow.
   vec2 stepUv = velocity * uBlur * 15.0 / size;
   vec2 pixel = vUv * size;
@@ -195,7 +172,7 @@ vec4 sampleContent (vec2 uv, vec2 velocity) {
 }
 void main () {
   vec3 fluid = texture(uFluid, vUv).rgb;
-  // Bound Liquid's accumulated impulses to Fluid Prism's velocity range.
+  // Bound accumulated impulses before computing color phases and blur.
   float weight = 1.0 - exp(-abs(fluid.b) * 0.1);
   vec2 velocity = -clamp(fluid.rg * 0.0064, -1.0, 1.0) * weight;
   vec2 uv = vUv - fluid.rg * uDistortion * 0.001;
