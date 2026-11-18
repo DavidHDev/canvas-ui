@@ -20,6 +20,7 @@ const CONTROLS = {
   ]),
   force: scrub("Force", 1.1, { min: 0, max: 5, step: 0.1, decimals: 1 }),
   radius: scrub("Radius", 0.3, { min: 0.05, max: 1.5, step: 0.05 }),
+  continuous: toggle("Continuous", false),
   curl: scrub("Curl", 1.9, { min: 0, max: 10, step: 0.1, decimals: 1 }),
   pressureIterations: scrub("Swirl", 4, {
     min: 1,

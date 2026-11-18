@@ -23,7 +23,7 @@ const PRISM_EXAMPLE = `import { Liquid } from "@/components/canvasui/Liquid";
 
 export default function Page() {
   return (
-    <Liquid prism blur={1}>
+    <Liquid prism continuous blur={1}>
       <main>Your content here</main>
     </Liquid>
   );
@@ -46,6 +46,11 @@ const BLUR_USAGE =
   "Set blend to 0 to remove the color tint and keep only the content effects. " +
   "Blur requires HTML-in-Canvas and has no effect on the DOM overlay fallback.";
 
+const CONTINUOUS_USAGE =
+  "Set continuous to true to connect pointer positions with a full stroke, filling the gaps during fast movement. " +
+  "It defaults to false and works with Prism, Rainbow, or a fixed color, with or without blur. " +
+  "Continuous strokes also work in the DOM overlay fallback. API splat calls remain individual point injections.";
+
 const API_REFERENCE: ApiProp[] = [
   {
     name: "force",
@@ -58,6 +63,13 @@ const API_REFERENCE: ApiProp[] = [
     description: "Radius of the pointer splat.",
     type: "number",
     defaultValue: "0.3",
+  },
+  {
+    name: "continuous",
+    description:
+      "Connect pointer positions with continuous strokes in every color mode, including the DOM overlay fallback.",
+    type: "boolean",
+    defaultValue: "false",
   },
   {
     name: "curl",
@@ -179,7 +191,7 @@ export default async function LiquidPage() {
         installItem="liquid"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
-        usageMarkdown={`## Prism\n\n${PRISM_USAGE}\n\n\`\`\`tsx\n${PRISM_EXAMPLE}\n\`\`\`\n\n## Blur\n\n${BLUR_USAGE}\n\n\`\`\`tsx\n${BLUR_EXAMPLE}\n\`\`\``}
+        usageMarkdown={`## Prism\n\n${PRISM_USAGE}\n\n\`\`\`tsx\n${PRISM_EXAMPLE}\n\`\`\`\n\n## Blur\n\n${BLUR_USAGE}\n\n\`\`\`tsx\n${BLUR_EXAMPLE}\n\`\`\`\n\n## Continuous strokes\n\n${CONTINUOUS_USAGE}`}
         beforeInstall={
           <>
             <DemoImageSection
@@ -215,6 +227,14 @@ export default async function LiquidPage() {
                   fileName="page.tsx"
                 />
               </div>
+            </section>
+            <section className="mt-8" aria-label="Continuous strokes">
+              <h2 className="text-lg font-semibold tracking-[-0.01em]">
+                Continuous strokes
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                {CONTINUOUS_USAGE}
+              </p>
             </section>
           </>
         }

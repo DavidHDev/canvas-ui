@@ -21,6 +21,8 @@ export interface LiquidOptions {
   radius?: number;
   /** Force multiplier applied on pointer movement. */
   force?: number;
+  /** Connect pointer positions with continuous strokes in every color mode. */
+  continuous?: boolean;
   /** Strength of the color tint left by the flow. */
   intensity?: number;
   /** How strongly the flow warps the content. */
@@ -69,6 +71,7 @@ const DEFAULTS: Required<LiquidOptions> = {
   curl: 1.9,
   radius: 0.3,
   force: 1.1,
+  continuous: false,
   intensity: 2,
   distortion: 0.4,
   blur: 0,
@@ -237,10 +240,14 @@ uniform sampler2D uTarget;
 uniform float uAspect;
 uniform vec3 uColor;
 uniform vec2 uPoint;
+uniform vec2 uFrom;
 uniform float uRadius;
 void main () {
   vec2 p = vUv - uPoint;
   p.x *= uAspect;
+  vec2 segment = (uFrom - uPoint) * vec2(uAspect, 1.0);
+  float t = clamp(dot(p, segment) / max(dot(segment, segment), 1e-8), 0.0, 1.0);
+  p -= segment * t;
   vec3 splat = exp(-dot(p, p) / uRadius) * uColor;
   vec3 base = texture(uTarget, vUv).xyz;
   outColor = vec4(base + splat, 1.0);
@@ -726,7 +733,7 @@ export function createLiquid(
     return unit;
   }
 
-  function applySplat(x: number, y: number, dx: number, dy: number) {
+  function applySplat(x: number, y: number, dx: number, dy: number, fromX = x, fromY = y) {
     const aspect = output.clientWidth / Math.max(output.clientHeight, 1);
     const radius = config.radius / 100;
 
@@ -737,6 +744,7 @@ export function createLiquid(
     );
     gl!.uniform1f(splatProgram.uniforms.uAspect, aspect);
     gl!.uniform2f(splatProgram.uniforms.uPoint, x, y);
+    gl!.uniform2f(splatProgram.uniforms.uFrom, config.continuous ? fromX : x, config.continuous ? fromY : y);
     gl!.uniform3f(splatProgram.uniforms.uColor, dx, dy, 10);
     gl!.uniform1f(splatProgram.uniforms.uRadius, radius);
     blit(fluidTargets.velocity.write);
@@ -888,9 +896,10 @@ export function createLiquid(
   const MAX_PENDING_SPLATS = 64;
   const MAX_SPLATS_PER_FRAME = 8;
   type Splat = [number, number, number, number];
+  type PointerSplat = [...Splat, number, number];
   const queued: Splat[] = [];
   // Keep the latest pointer position without replaying a drag over later frames.
-  const pointerSplats = new Map<number, Splat>();
+  const pointerSplats = new Map<number, PointerSplat>();
 
   let raf = 0;
   let lastTime = performance.now();
@@ -964,15 +973,18 @@ export function createLiquid(
     queued.push(splat);
   }
 
-  function enqueuePointerSplat(id: number, splat: Splat) {
+  function enqueuePointerSplat(id: number, splat: Splat, fromX = splat[0], fromY = splat[1]) {
     const previous = pointerSplats.get(id);
     if (previous) {
       splat[2] += previous[2];
       splat[3] += previous[3];
+      // Preserve the start while coalescing this frame's pointer events.
+      fromX = previous[4];
+      fromY = previous[5];
     } else if (pointerSplats.size >= MAX_SPLATS_PER_FRAME) {
       pointerSplats.delete(pointerSplats.keys().next().value!);
     }
-    pointerSplats.set(id, splat);
+    pointerSplats.set(id, [...splat, fromX, fromY]);
   }
 
   function suspend() {
@@ -1001,10 +1013,13 @@ export function createLiquid(
     }
     const previous = pointers.get(event.pointerId);
     pointers.set(event.pointerId, { x: px, y: py });
-    if (!previous) return;
+    if (!previous) {
+      if (config.continuous) pointerSplats.delete(event.pointerId);
+      return;
+    }
     const dx = (px - previous.x) * config.force;
     const dy = -(py - previous.y) * config.force;
-    enqueuePointerSplat(event.pointerId, [px / rect.width, 1 - py / rect.height, dx, dy]);
+    enqueuePointerSplat(event.pointerId, [px / rect.width, 1 - py / rect.height, dx, dy], previous.x / rect.width, 1 - previous.y / rect.height);
     start();
   }
 
@@ -1015,6 +1030,7 @@ export function createLiquid(
     const y = event.clientY - rect.top;
     if (x < 0 || x > rect.width || y < 0 || y > rect.height) return;
     pointers.set(event.pointerId, { x, y });
+    if (config.continuous) pointerSplats.delete(event.pointerId);
     enqueuePointerSplat(event.pointerId, [x / rect.width, 1 - y / rect.height, 1, 1]);
     start();
   }

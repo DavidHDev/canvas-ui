@@ -185,19 +185,20 @@ try {
 
   // Existing share links hydrate normally, and clicking the active component
   // retains even a control change still queued in the same event.
-  await load("?radius=0.75&color=abcdef&rainbow=true&prism=true&blur=1.5&tracking=keep");
+  await load("?radius=0.75&color=abcdef&rainbow=true&prism=true&blur=1.5&continuous=true&tracking=keep");
   assert.equal((await values()).radius, 0.75);
   assert.equal((await values()).prism, true);
   assert.equal((await values()).blur, 1.5);
+  assert.equal((await values()).continuous, true);
   await page.locator("#same-component").click();
-  await waitForQuery({ radius: "1.5", color: "abcdef", rainbow: "true", prism: "true", blur: "1.5", tracking: "keep" });
+  await waitForQuery({ radius: "1.5", color: "abcdef", rainbow: "true", prism: "true", blur: "1.5", continuous: "true", tracking: "keep" });
   assert.equal((await values()).radius, 1.5);
   assert.equal(await page.locator("#active").textContent(), "liquid");
 
   // Switching clears every outgoing control, including those absent from the
   // new schema, while preserving unrelated query parameters.
   await page.locator("#particle").click();
-  await waitForQuery({ c: "particle-reveal", radius: null, color: null, rainbow: null, prism: null, blur: null, tracking: "keep" });
+  await waitForQuery({ c: "particle-reveal", radius: null, color: null, rainbow: null, prism: null, blur: null, continuous: null, tracking: "keep" });
   assert.equal((await values()).radius, 500);
   const particleRenders = await page.evaluate(() => window.controlRenders.filter(render => render.title === "Particle Reveal controls"));
   assert.ok(particleRenders.length > 0);
