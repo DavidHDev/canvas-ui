@@ -35,15 +35,17 @@ export interface LiquidOptions {
   force?: number;
   /** Strength of the color tint left by the flow. */
   intensity?: number;
-  /** How strongly the flow warps the content and, with prism, blurs it. */
+  /** How strongly the flow warps the content. */
   distortion?: number;
+  /** Directional blur strength in every color mode. 0 disables it. Requires captured content. */
+  blur?: number;
   /** How much of the fluid color blends over the content. */
   blend?: number;
   /** Trail color as [r, g, b] in 0-1 range. Ignored when rainbow or prism is on. */
   color?: [number, number, number];
   /** Color the trail from the flow direction. Ignored when prism is on. */
   rainbow?: boolean;
-  /** Add iridescent colors and directional blur, overriding rainbow and color. */
+  /** Add iridescent oil-film colors, overriding rainbow and color. */
   prism?: boolean;
 }
 
@@ -81,6 +83,7 @@ const DEFAULTS: Required<LiquidOptions> = {
   force: 1.1,
   intensity: 2,
   distortion: 0.4,
+  blur: 0,
   blend: 5,
   color: [0.145, 0.239, 0.867],
   rainbow: false,
@@ -113,6 +116,7 @@ struct Params {
   rainbow: f32,
   hasContent: f32,
   prism: f32,
+  blur: f32,
 }
 
 @group(0) @binding(0) var<uniform> params: Params;
@@ -168,14 +172,18 @@ fn prismColor(base: vec3f, velocity: vec2f, interference: vec3f, mask: f32, film
 fn prismNoise(p: vec2f) -> f32 {
   return fract(sin(dot(p, vec2f(41.7, 289.3))) * 45758.5453);
 }
-fn prismContent(glUv: vec2f, velocity: vec2f) -> vec4f {
+fn sampleContent(glUv: vec2f, warpedUv: vec2f, velocity: vec2f) -> vec4f {
+  if (params.blur <= 0.0) {
+    return textureSampleLevel(uContent, uSampler, vec2f(warpedUv.x, 1.0 - warpedUv.y), 0.0);
+  }
   let size = vec2f(textureDimensions(uContent));
   // Match Fluid Prism's nine taps at its default quarter-resolution paint grid.
-  // Liquid's default distortion (0.4) corresponds to 15 pixels per tap at full flow.
-  let stepUv = velocity * params.distortion * 37.5 / size;
+  // A blur strength of 1 corresponds to 15 pixels per tap at full flow.
+  let stepUv = velocity * params.blur * 15.0 / size;
   let pixel = glUv * size;
   let jitter = vec2f(prismNoise(pixel + vec2f(17.0, 29.0)), prismNoise(pixel.yx + vec2f(29.0, 17.0)));
-  var uv = glUv + jitter * stepUv;
+  // Center the blur on the warped position so distortion stays independent.
+  var uv = warpedUv + (jitter - vec2f(4.5)) * stepUv;
   let edge = vec2f(0.5) / size;
   var content = vec4f(0.0);
   for (var i = 0; i < 9; i++) {
@@ -191,11 +199,11 @@ fn prismContent(glUv: vec2f, velocity: vec2f) -> vec4f {
 @fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let glUv = vec2f(uv.x, 1.0 - uv.y);
   let fluid = sampleFluid(glUv).rgb;
+  // Bound Liquid's accumulated impulses to Fluid Prism's velocity range.
+  let weight = 1.0 - exp(-abs(fluid.b) * 0.1);
+  let velocity = -clamp(fluid.rg * 0.0064, vec2f(-1.0), vec2f(1.0)) * weight;
+  let fluidUv = glUv - fluid.rg * params.distortion * 0.001;
   if (params.prism == 1.0) {
-    // Fluid Prism encodes pixel impulses at 0.0032 around a neutral value of 0.5.
-    // Bound Liquid's accumulated impulses before computing the color phases.
-    let weight = 1.0 - exp(-abs(fluid.b) * 0.1);
-    let velocity = -clamp(fluid.rg * 0.0064, vec2f(-1.0), vec2f(1.0)) * weight;
     let interference = sin(vec3f(velocity.x + velocity.y) * 40.0 + vec3f(0.0, 1.0, 2.0));
     let mask = (1.0 - smoothstep(-0.9, 0.4, weight)) * max(abs(velocity.x), abs(velocity.y));
     let film = smoothstep(0.015, 0.42, weight) * (1.0 - smoothstep(0.78, 1.0, weight));
@@ -204,7 +212,7 @@ fn prismContent(glUv: vec2f, velocity: vec2f) -> vec4f {
       let overlay = (1.0 - exp(-(mask * 12.5 + film * 0.08) * params.intensity)) * 0.82;
       return vec4f(tint * overlay, overlay);
     }
-    let content = prismContent(glUv, velocity);
+    let content = sampleContent(glUv, fluidUv, velocity);
     let color = mix(content.rgb, prismColor(content.rgb, velocity, interference, mask, film), vec3f(params.blend * params.intensity * 0.1));
     return vec4f(clamp(color, vec3f(0.0), vec3f(1.0)) * content.a, content.a);
   }
@@ -214,8 +222,7 @@ fn prismContent(glUv: vec2f, velocity: vec2f) -> vec4f {
     let overlay = (1.0 - exp(-mag * params.intensity * 0.5)) * 0.82;
     return vec4f(toSrgb(clamp(tint, vec3f(0.0), vec3f(1.0))) * overlay, overlay);
   }
-  let fluidUv = glUv - fluid.rg * params.distortion * 0.001;
-  var content = textureSampleLevel(uContent, uSampler, vec2f(fluidUv.x, 1.0 - fluidUv.y), 0.0);
+  var content = sampleContent(glUv, fluidUv, velocity);
   content = vec4f(toLinear(content.rgb), content.a);
   let tint = select(params.color * length(fluid), fluid, params.rainbow == 1.0);
   let fluidColor = vec4f(tint, 1.0);
@@ -859,6 +866,7 @@ export function createLiquid(
           srgbToLinear(config.color[2]),
         ],
         distortion: config.distortion,
+        blur: config.blur,
         intensity: config.intensity,
         blend: config.blend,
         rainbow: config.rainbow ? 1 : 0,

@@ -23,7 +23,7 @@ const PRISM_EXAMPLE = `import { Liquid } from "@/components/canvasui/Liquid";
 
 export default function Page() {
   return (
-    <Liquid prism>
+    <Liquid prism blur={1}>
       <main>Your content here</main>
     </Liquid>
   );
@@ -32,10 +32,19 @@ export default function Page() {
 const PRISM_USAGE =
   "Set prism to true for iridescent oil-film colors inspired by Fluid Prism. " +
   "Prism takes priority over rainbow and color. Turn it off to restore those settings. " +
-  "Captured content also softens along the flow with a nine-sample directional blur. " +
-  "Use distortion to adjust the warp and blur, and intensity and blend to adjust the film. " +
-  "Set intensity to 0 to keep just the warp and blur. " +
+  "Use intensity and blend to adjust the film, distortion to adjust the warp, and blur to soften captured content along the flow. " +
   "Without HTML-in-Canvas, the effect falls back to a colored trail over the live HTML; content distortion and blur require capture.";
+
+const BLUR_EXAMPLE = `<Liquid rainbow blur={1} distortion={0}>
+  <main>Your content here</main>
+</Liquid>`;
+
+const BLUR_USAGE =
+  "Blur works independently with Prism, Rainbow, or a fixed color. " +
+  "It defaults to 0 (off); 1 is the base strength, and larger values spread the nine samples farther along the flow. " +
+  "Set distortion to 0 to keep the blur without warping the content. " +
+  "Set blend to 0 to remove the color tint and keep only the content effects. " +
+  "Blur requires HTML-in-Canvas and has no effect on the DOM overlay fallback.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -64,9 +73,16 @@ const API_REFERENCE: ApiProp[] = [
   },
   {
     name: "distortion",
-    description: "How strongly the flow warps the content and, with prism, blurs it.",
+    description: "How strongly the flow warps the content. Independent of blur.",
     type: "number",
     defaultValue: "0.4",
+  },
+  {
+    name: "blur",
+    description:
+      "Directional blur strength in every color mode. 0 disables it; 1 is the base strength. Requires captured content.",
+    type: "number",
+    defaultValue: "0",
   },
   {
     name: "blend",
@@ -118,7 +134,7 @@ const API_REFERENCE: ApiProp[] = [
   {
     name: "prism",
     description:
-      "Add iridescent colors and directional blur, overriding rainbow and color.",
+      "Add iridescent oil-film colors, overriding rainbow and color.",
     type: "boolean",
     defaultValue: "false",
   },
@@ -143,6 +159,7 @@ const API_REFERENCE: ApiProp[] = [
 
 export default async function LiquidPage() {
   const prismExampleHtml = await highlight(PRISM_EXAMPLE, "tsx");
+  const blurExampleHtml = await highlight(BLUR_EXAMPLE, "tsx");
   const variants = await Promise.all(
     getComponentSources("liquid").map(async (file) => ({
       id: file.id,
@@ -162,11 +179,11 @@ export default async function LiquidPage() {
         installItem="liquid"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
-        usageMarkdown={`## Prism\n\n${PRISM_USAGE}\n\n\`\`\`tsx\n${PRISM_EXAMPLE}\n\`\`\``}
+        usageMarkdown={`## Prism\n\n${PRISM_USAGE}\n\n\`\`\`tsx\n${PRISM_EXAMPLE}\n\`\`\`\n\n## Blur\n\n${BLUR_USAGE}\n\n\`\`\`tsx\n${BLUR_EXAMPLE}\n\`\`\``}
         beforeInstall={
           <>
             <DemoImageSection
-              hint="Drag across the photo to stir it like liquid. Try Prism in the controls for iridescent colors."
+              hint="Drag across the photo to stir it like liquid. Try Prism for iridescent colors and Blur to soften the flow."
               alt="Demo photo for the Liquid effect"
             />
             <section className="mt-8" aria-label="Prism">
@@ -180,6 +197,21 @@ export default async function LiquidPage() {
                 <CodeBlock
                   html={prismExampleHtml}
                   source={PRISM_EXAMPLE}
+                  fileName="page.tsx"
+                />
+              </div>
+            </section>
+            <section className="mt-8" aria-label="Blur">
+              <h2 className="text-lg font-semibold tracking-[-0.01em]">
+                Blur
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                {BLUR_USAGE}
+              </p>
+              <div className="mt-4">
+                <CodeBlock
+                  html={blurExampleHtml}
+                  source={BLUR_EXAMPLE}
                   fileName="page.tsx"
                 />
               </div>

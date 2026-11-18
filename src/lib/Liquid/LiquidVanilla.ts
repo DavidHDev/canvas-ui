@@ -23,15 +23,17 @@ export interface LiquidOptions {
   force?: number;
   /** Strength of the color tint left by the flow. */
   intensity?: number;
-  /** How strongly the flow warps the content and, with prism, blurs it. */
+  /** How strongly the flow warps the content. */
   distortion?: number;
+  /** Directional blur strength in every color mode. 0 disables it. Requires captured content. */
+  blur?: number;
   /** How much of the fluid color blends over the content. */
   blend?: number;
   /** Trail color as [r, g, b] in 0-1 range. Ignored when rainbow or prism is on. */
   color?: [number, number, number];
   /** Color the trail from the flow direction. Ignored when prism is on. */
   rainbow?: boolean;
-  /** Add iridescent colors and directional blur, overriding rainbow and color. */
+  /** Add iridescent oil-film colors, overriding rainbow and color. */
   prism?: boolean;
 }
 
@@ -69,6 +71,7 @@ const DEFAULTS: Required<LiquidOptions> = {
   force: 1.1,
   intensity: 2,
   distortion: 0.4,
+  blur: 0,
   blend: 5,
   color: [0.145, 0.239, 0.867],
   rainbow: false,
@@ -118,6 +121,7 @@ uniform sampler2D uContent;
 uniform sampler2D uFluid;
 uniform vec3 uColor;
 uniform float uDistortion;
+uniform float uBlur;
 uniform float uIntensity;
 uniform float uBlend;
 uniform float uRainbow;
@@ -165,14 +169,16 @@ vec3 prismColor (vec3 base, vec2 velocity, vec3 interference, float mask, float 
 float prismNoise (vec2 p) {
   return fract(sin(dot(p, vec2(41.7, 289.3))) * 45758.5453);
 }
-vec4 prismContent (vec2 velocity) {
+vec4 sampleContent (vec2 uv, vec2 velocity) {
+  if (uBlur <= 0.0) return texture(uContent, vec2(uv.x, 1.0 - uv.y));
   vec2 size = vec2(textureSize(uContent, 0));
   // Match Fluid Prism's nine taps at its default quarter-resolution paint grid.
-  // Liquid's default distortion (0.4) corresponds to 15 pixels per tap at full flow.
-  vec2 stepUv = velocity * uDistortion * 37.5 / size;
+  // A blur strength of 1 corresponds to 15 pixels per tap at full flow.
+  vec2 stepUv = velocity * uBlur * 15.0 / size;
   vec2 pixel = vUv * size;
   vec2 jitter = vec2(prismNoise(pixel + vec2(17.0, 29.0)), prismNoise(pixel.yx + vec2(29.0, 17.0)));
-  vec2 uv = vUv + jitter * stepUv;
+  // Center the blur on the warped position so distortion stays independent.
+  uv += (jitter - 4.5) * stepUv;
   vec2 edge = 0.5 / size;
   vec4 content = vec4(0.0);
   for (int i = 0; i < 9; i++) {
@@ -186,11 +192,11 @@ vec4 prismContent (vec2 velocity) {
 }
 void main () {
   vec3 fluid = texture(uFluid, vUv).rgb;
+  // Bound Liquid's accumulated impulses to Fluid Prism's velocity range.
+  float weight = 1.0 - exp(-abs(fluid.b) * 0.1);
+  vec2 velocity = -clamp(fluid.rg * 0.0064, -1.0, 1.0) * weight;
+  vec2 uv = vUv - fluid.rg * uDistortion * 0.001;
   if (uPrism == 1.0) {
-    // Fluid Prism encodes pixel impulses at 0.0032 around a neutral value of 0.5.
-    // Bound Liquid's accumulated impulses before computing the color phases.
-    float weight = 1.0 - exp(-abs(fluid.b) * 0.1);
-    vec2 velocity = -clamp(fluid.rg * 0.0064, -1.0, 1.0) * weight;
     vec3 interference = sin(vec3(velocity.x + velocity.y) * 40.0 + vec3(0.0, 1.0, 2.0));
     float mask = (1.0 - smoothstep(-0.9, 0.4, weight)) * max(abs(velocity.x), abs(velocity.y));
     float film = smoothstep(0.015, 0.42, weight) * (1.0 - smoothstep(0.78, 1.0, weight));
@@ -200,7 +206,7 @@ void main () {
       outColor = vec4(tint * overlay, overlay);
       return;
     }
-    vec4 content = prismContent(velocity);
+    vec4 content = sampleContent(uv, velocity);
     vec3 color = mix(content.rgb, prismColor(content.rgb, velocity, interference, mask, film), uBlend * uIntensity * 0.1);
     outColor = vec4(clamp(color, 0.0, 1.0) * content.a, content.a);
     return;
@@ -214,8 +220,7 @@ void main () {
     outColor = vec4(toSrgb(clamp(tint, 0.0, 1.0)) * overlay, overlay);
     return;
   }
-  vec2 uv = vUv - fluid.rg * uDistortion * 0.001;
-  vec4 content = texture(uContent, vec2(uv.x, 1.0 - uv.y));
+  vec4 content = sampleContent(uv, velocity);
   content.rgb = toLinear(content.rgb);
   vec3 tint = uRainbow == 1.0 ? fluid : uColor * length(fluid);
   vec4 fluidColor = vec4(tint, 1.0);
@@ -871,6 +876,7 @@ export function createLiquid(
       srgbToLinear(config.color[2]),
     );
     gl!.uniform1f(displayProgram.uniforms.uDistortion, config.distortion);
+    gl!.uniform1f(displayProgram.uniforms.uBlur, config.blur);
     gl!.uniform1f(displayProgram.uniforms.uIntensity, config.intensity);
     gl!.uniform1f(displayProgram.uniforms.uBlend, config.blend);
     gl!.uniform1f(displayProgram.uniforms.uRainbow, config.rainbow ? 1 : 0);

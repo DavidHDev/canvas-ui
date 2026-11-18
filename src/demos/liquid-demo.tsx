@@ -30,6 +30,7 @@ const CONTROLS = {
   pressure: scrub("Pressure", 0.8, { min: 0, max: 1, step: 0.05 }),
   intensity: scrub("Intensity", 2, { min: 0, max: 10, step: 0.1, decimals: 1 }),
   distortion: scrub("Distortion", 0.4, { min: 0, max: 2, step: 0.05 }),
+  blur: scrub("Blur", 0, { min: 0, max: 4, step: 0.1, decimals: 1 }),
   blend: scrub("Blend", 5, { min: 0, max: 20, step: 0.5, decimals: 1 }),
   densityDissipation: scrub("Trail fade", 0.96, {
     min: 0.85,

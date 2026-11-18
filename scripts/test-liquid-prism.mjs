@@ -144,13 +144,12 @@ try {
           const fixed = await capture({ rainbow: false });
           const restored = await capture({ prism: true });
           const silent = await capture({ intensity: 0 });
+          const overlayBlur = captured ? null : await capture({ intensity: 2, blur: 2 });
           let blur = null;
           let transparent = null;
           if (captured) {
             window.stripedContent = true;
             document.querySelector("#source").requestPaint();
-            const sharp = await capture({ distortion: 0 });
-            const softened = await capture({ distortion: 0.8 });
             // A displaced single lookup keeps stripe interiors black/white.
             // Directional averaging must create broad intermediate shades.
             const midtones = pixels => {
@@ -163,13 +162,28 @@ try {
               }
               return count;
             };
-            blur = { sharp: midtones(sharp), softened: midtones(softened) };
+            blur = [];
+            for (const mode of [
+              { prism: true, rainbow: false },
+              { prism: false, rainbow: true },
+              { prism: false, rainbow: false },
+            ]) {
+              const sharp = await capture({ ...mode, blend: 0, distortion: 0, blur: 0 });
+              const softened = await capture({ blur: 2 });
+              const restored = await capture({ blur: 0 });
+              const warped = await capture({ distortion: 0.8 });
+              blur.push({
+                mode, sharp: midtones(sharp), softened: midtones(softened),
+                restored: JSON.stringify(sharp) === JSON.stringify(restored),
+                warped: JSON.stringify(sharp) !== JSON.stringify(warped),
+              });
+            }
             document.querySelector("#source").getContext("2d").drawElementImage = () => {};
             document.querySelector("#source").requestPaint();
             transparent = await capture({ intensity: 2 });
           }
           liquid.destroy();
-          return { blank, prism, overridden, rainbow, fixed, restored, silent, blur, transparent, gpuErrors: window.gpuErrors ?? [] };
+          return { blank, prism, overridden, rainbow, fixed, restored, silent, overlayBlur, blur, transparent, gpuErrors: window.gpuErrors ?? [] };
         }, { captured, backend });
         const label = `${backend} / ${captured ? "captured content" : "DOM overlay"}`;
         assert.ok(JSON.stringify(result.prism) === JSON.stringify(result.overridden), `${label}: prism must override rainbow and color`);
@@ -180,11 +194,16 @@ try {
         assert.ok(JSON.stringify(result.silent) === JSON.stringify(result.blank), `${label}: zero intensity must remove the film`);
         if (!captured) assert.ok(result.blank.every(value => value === 0), `${label}: empty field must stay transparent`);
         if (captured) assert.ok(result.transparent.every(value => value === 0), `${label}: transparent content must stay transparent`);
-        if (captured) assert.ok(result.blur.softened > result.blur.sharp + 200,
-          `${label}: moving flow must blur stripe edges (${JSON.stringify(result.blur)})`);
+        if (!captured) assert.deepEqual(result.overlayBlur, result.prism, `${label}: blur must leave DOM overlay unchanged`);
+        if (captured) for (const blur of result.blur) {
+          assert.ok(blur.softened > blur.sharp + 200,
+            `${label}: blur must soften edges without distortion (${JSON.stringify(blur)})`);
+          assert.ok(blur.restored, `${label}: zero blur must restore sharp edges`);
+          assert.ok(blur.warped, `${label}: distortion must work without blur`);
+        }
         assert.deepEqual(result.gpuErrors, [], `${label}: GPU errors`);
         assert.deepEqual(errors, [], `${label}: browser errors`);
-        console.log(`PASS ${label}: priority, live switching, visible film, zero intensity, transparency${captured ? `, directional blur (${result.blur.softened} softened pixels)` : ""}`);
+        console.log(`PASS ${label}: priority, live switching, visible film, zero intensity, transparency${captured ? ", independent blur and distortion in all three color modes" : ", blur fallback"}`);
       } finally {
         await context.close();
       }
