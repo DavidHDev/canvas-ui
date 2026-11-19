@@ -1171,6 +1171,18 @@ li:nth-child(3) .featured-video-card strong {
 .dark .docs-code .shiki span {
   color: var(--shiki-dark);
 }
+.docs-code .shiki .s {
+  --shiki-light: #0a0a0a;
+  --shiki-dark: #fafafa;
+}
+.docs-code .shiki .m {
+  --shiki-light: #737373;
+  --shiki-dark: #8a8a8a;
+}
+.docs-code .shiki .f {
+  --shiki-light: #a3a3a3;
+  --shiki-dark: #595959;
+}
 
 @keyframes newsletter-panel-enter {
   from {
