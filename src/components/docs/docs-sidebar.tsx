@@ -368,7 +368,7 @@ export function DocsSidebar() {
   }, [scrollEl]);
 
   return (
-    <aside className="surface-floating fixed top-4 bottom-4 left-4 z-40 hidden w-60 flex-col rounded-panel [view-transition-name:docs-sidebar] lg:flex">
+    <aside className="surface-panel fixed top-4 bottom-4 left-4 z-40 hidden w-60 flex-col rounded-panel [view-transition-name:docs-sidebar] lg:flex">
       <div className="px-5 pt-5 pb-4">
         <Link
           href="/"

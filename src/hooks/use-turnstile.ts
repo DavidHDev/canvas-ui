@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 const SCRIPT_SRC =
@@ -65,6 +65,17 @@ export function useTurnstile() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetRef = useRef<string | null>(null);
   const tokenRef = useRef<string | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!SITE_KEY || !container) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setVisible(entry.contentRect.height > 0);
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!SITE_KEY) return;
@@ -118,5 +129,5 @@ export function useTurnstile() {
     }
   }, []);
 
-  return { containerRef, getToken, reset };
+  return { containerRef, getToken, reset, visible };
 }

@@ -1289,6 +1289,3 @@ li:nth-child(3) .featured-video-card strong {
   }
 }
 
-.turnstile-slot:has(iframe) {
-  margin-top: 0.75rem;
-}

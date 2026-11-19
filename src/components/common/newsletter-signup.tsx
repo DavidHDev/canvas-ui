@@ -48,6 +48,7 @@ export function NewsletterSignup({
     containerRef: turnstileRef,
     getToken: getTurnstileToken,
     reset: resetTurnstile,
+    visible: turnstileVisible,
   } = useTurnstile();
   const [message, setMessage] = useState("");
 
@@ -255,7 +256,7 @@ export function NewsletterSignup({
 
       <div
         ref={turnstileRef}
-        className={cn(turnstileEnabled ? "turnstile-slot" : "hidden")}
+        className={cn(!turnstileEnabled && "hidden", turnstileVisible && "mt-3")}
       />
 
       <p
