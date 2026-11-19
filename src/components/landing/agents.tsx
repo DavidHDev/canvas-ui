@@ -2,12 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, ArrowUp, Check, Loader2, Terminal } from "lucide-react";
+import { ArrowRight, ArrowUp, Check, Loader2, Terminal } from "@/components/icons";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Reveal } from "@/components/landing/reveal";
-import { Stitches } from "@/components/landing/stitches";
 
 const ADD_COMMAND =
   "npx shadcn@latest add @canvas-ui/particle-reveal-react";
@@ -67,15 +64,14 @@ export function Agents() {
   return (
     <section
       aria-labelledby="agents-heading"
-      className="relative border-t border-dashed border-border/60"
+      className="relative"
     >
-      <Stitches />
       <div className="w-full px-5 py-24 sm:px-8 sm:py-32">
         <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-[1.2fr_1fr] lg:gap-16">
           <Reveal className="order-2 lg:order-1">
             <div
               ref={cardRef}
-              className="rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background px-1 pb-1"
+              className="frame pt-0"
             >
               <div className="flex items-center justify-between px-3 py-2">
                 <p className="text-sm font-medium">Agent</p>
@@ -88,7 +84,7 @@ export function Agents() {
                 </span>
               </div>
 
-              <div className="overflow-hidden rounded-lg border border-dashed border-border/70 bg-background">
+              <div className="overflow-hidden frame-inset bg-background">
                 <div className="flex min-h-72 flex-col gap-4 px-4 py-5 sm:px-5">
                   <Msg shown={stage >= 0} className="flex justify-end">
                     <p className="max-w-[85%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-sm leading-6 text-primary-foreground">
@@ -105,7 +101,7 @@ export function Agents() {
                   </Msg>
 
                   <Msg shown={stage >= 2}>
-                    <div className="w-full rounded-[calc(var(--radius)*0.8+0.25rem+1px)] border border-border/60 bg-background p-1">
+                    <div className="w-full rounded-[calc(var(--radius)*0.8+var(--frame-gap))] bg-muted/60 p-[var(--frame-gap)]">
                       <div className="flex items-center justify-between gap-3 px-2 pt-1.5 pb-1">
                         <span className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
                           <Terminal aria-hidden className="size-3" />
@@ -123,7 +119,7 @@ export function Agents() {
                           />
                         )}
                       </div>
-                      <p className="overflow-hidden rounded-md border border-dashed border-border/70 bg-background px-2.5 py-2 font-mono text-xs whitespace-nowrap text-foreground/90">
+                      <p className="overflow-hidden rounded-md bg-background px-2.5 py-2 font-mono text-xs whitespace-nowrap text-foreground/90">
                         {ADD_COMMAND}
                       </p>
                     </div>
@@ -139,24 +135,18 @@ export function Agents() {
                     </p>
                   </Msg>
                 </div>
+              </div>
 
-                <div className="px-3 pb-3">
-                  <div aria-hidden className="flex items-center gap-2">
-                    <Input
-                      readOnly
-                      tabIndex={-1}
-                      placeholder="Ask your agent anything…"
-                      className="pointer-events-none rounded-md bg-muted/30"
-                    />
-                    <Button
-                      size="icon"
-                      tabIndex={-1}
-                      className="pointer-events-none shrink-0 rounded-md"
-                    >
-                      <ArrowUp />
-                    </Button>
-                  </div>
-                </div>
+              <div
+                aria-hidden
+                className="mt-[var(--frame-gap)] flex h-11 items-center gap-2 rounded-control bg-background p-1 pl-4"
+              >
+                <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+                  Ask your agent anything…
+                </span>
+                <span className="grid size-9 shrink-0 place-items-center rounded-[6px] bg-primary text-primary-foreground">
+                  <ArrowUp className="size-4" />
+                </span>
               </div>
             </div>
           </Reveal>

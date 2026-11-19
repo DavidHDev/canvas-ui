@@ -1,7 +1,3 @@
-// Run against a running app with `node scripts/test-canvas-viewport.mjs`.
-// Prerequisite: `npm install --no-save --package-lock=false playwright`.
-// CANVAS_UI_URL defaults to http://localhost:3000. CHROME_EXECUTABLE or
-// CHROME_CHANNEL can override the installed Chrome used by these tests.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
@@ -109,8 +105,6 @@ try {
         await clickNativeButton();
       }
 
-      // Panning the visual viewport must preserve native hit testing without
-      // translating the full capture canvas or its DOM subtree.
       await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 2 });
       await page.waitForFunction(() => document.querySelector("#source").width === 390 * devicePixelRatio * 2);
       await page.locator("#source").evaluate((source) => { source.style.pointerEvents = "none"; });
@@ -144,8 +138,6 @@ try {
         assert.ok(width * height <= 16_777_216 + 1);
       }
 
-      // Respect the lower driver limit, and avoid synchronous GPU queries on
-      // every resize. Distinct contexts may expose different capabilities.
       const driverLimits = await page.evaluate(() => [
         { texture: 2048, renderbuffer: 8192 },
         { texture: 4096, renderbuffer: 1024 },
@@ -169,7 +161,6 @@ try {
         { dimensions: [1024, 1024, 1024], queried: [0x0d33, 0x84e8] },
       ]);
 
-      // Multiple resize sources in one frame should only allocate once.
       const resizeCalls = await page.evaluate(async () => {
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         window.viewportRegression.resizes = 0;

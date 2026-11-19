@@ -37,7 +37,6 @@ export function Glitch({ children, className, style, ...options }: GlitchProps) 
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    // Retry native initialization when switching renderer engines.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFailed(false);
   }, [renderer]);

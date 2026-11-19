@@ -1,8 +1,11 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
-import { X } from "lucide-react";
+import { X } from "@/components/icons";
 
+import { NewsletterFrame } from "@/components/common/newsletter-frame";
+import { isNewsletterHiddenOn } from "@/components/common/newsletter-gate";
 import { NewsletterSignup } from "@/components/common/newsletter-signup";
 import { useSubscribed } from "@/components/common/use-subscribed";
 import { usePreference } from "@/hooks/use-preference";
@@ -20,6 +23,7 @@ export function NewsletterPanel() {
   );
 
   const [subscribed] = useSubscribed();
+  const onCatalogue = isNewsletterHiddenOn(usePathname());
 
   const mounted = useSyncExternalStore(
     subscribeToNothing,
@@ -30,38 +34,41 @@ export function NewsletterPanel() {
   const visible =
     state === "open" || state === "reopened" || state === "shown";
 
-  if (!mounted || subscribed === "yes" || !visible) return null;
+  if (!mounted || onCatalogue || subscribed === "yes" || !visible) return null;
 
   return (
     <aside
       aria-label="Newsletter"
+      data-newsletter-panel
       onAnimationEnd={(event) => {
         if (event.animationName.startsWith("newsletter-panel-")) {
           setState("shown");
         }
       }}
       className={cn(
-        "fixed right-[calc(1rem+var(--demo-sbw,0px))] top-20 z-40 hidden w-[21rem] rounded-[calc(var(--radius)+1.25rem)] border border-border/60 bg-background/80 p-5 shadow-lg shadow-black/5 backdrop-blur-xl backdrop-saturate-150 origin-top-right will-change-transform xl:block dark:shadow-black/40",
+        "fixed top-[4.75rem] right-[calc(1rem+var(--demo-sbw,0px))] z-40 hidden w-[21rem] origin-top-right will-change-transform xl:block",
         state === "open" && "newsletter-panel-enter",
         state === "reopened" && "newsletter-panel-reopen",
       )}
     >
-      <NewsletterSignup
-        layout="stack"
-        action={
-          <button
-            type="button"
-            onClick={() => setState("dismissed")}
-            aria-label="Dismiss"
-            className="inline-flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-          >
-            <X aria-hidden className="size-3.5" />
-          </button>
-        }
-        onSuccess={() => {
-          window.setTimeout(() => setState("dismissed"), 4000);
-        }}
-      />
+      <NewsletterFrame floating>
+        <NewsletterSignup
+          layout="stack"
+          action={
+            <button
+              type="button"
+              onClick={() => setState("dismissed")}
+              aria-label="Dismiss"
+              className="pressable inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-[color,background-color,transform] duration-150 hover:bg-[var(--surface-hover)] hover:text-foreground"
+            >
+              <X aria-hidden className="size-3.5" />
+            </button>
+          }
+          onSuccess={() => {
+            window.setTimeout(() => setState("dismissed"), 4000);
+          }}
+        />
+      </NewsletterFrame>
     </aside>
   );
 }

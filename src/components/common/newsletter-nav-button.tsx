@@ -1,8 +1,10 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
-import { Mail } from "lucide-react";
+import { Mail } from "@/components/icons";
 
+import { isNewsletterHiddenOn } from "@/components/common/newsletter-gate";
 import { useSubscribed } from "@/components/common/use-subscribed";
 import { usePreference } from "@/hooks/use-preference";
 import { cn } from "@/lib/utils";
@@ -25,6 +27,7 @@ export function NewsletterNavButton({
   );
 
   const [subscribed] = useSubscribed();
+  const hiddenRoute = isNewsletterHiddenOn(usePathname());
   const [exiting, setExiting] = useState(false);
 
   const mounted = useSyncExternalStore(
@@ -34,7 +37,9 @@ export function NewsletterNavButton({
   );
 
   const scrollToSignup = () => {
-    const target = document.getElementById("newsletter");
+    const target = [
+      ...document.querySelectorAll<HTMLElement>("[data-newsletter-inline], #newsletter"),
+    ].find((element) => element.getClientRects().length > 0);
     if (!target) return;
 
     const reduce = window.matchMedia(
@@ -73,7 +78,7 @@ export function NewsletterNavButton({
     mode === "scroll" || state === "dismissed" || state === "hidden";
   const announcing = mode === "panel" && state === "dismissed" && !exiting;
 
-  if (!mounted || subscribed === "yes") return null;
+  if (!mounted || hiddenRoute || subscribed === "yes") return null;
   if (!visible && !exiting) return null;
 
   return (
@@ -82,6 +87,7 @@ export function NewsletterNavButton({
       aria-label={
         mode === "scroll" ? "Go to newsletter signup" : "Show newsletter signup"
       }
+      data-newsletter-button={mode}
       onClick={handleClick}
       onAnimationEnd={(event) => {
         if (event.animationName === "newsletter-nav-flash") setState("hidden");
@@ -89,14 +95,14 @@ export function NewsletterNavButton({
       className={cn(
         exiting && "newsletter-nav-exit pointer-events-none",
         announcing && "newsletter-nav-enter",
-        "relative size-8 shrink-0 place-items-center rounded-full border border-border/70 text-muted-foreground transition-[color,transform] duration-150 ease-out hover:text-foreground active:scale-95 motion-reduce:transition-none sm:border-transparent",
+        "btn-icon btn-icon-quiet relative",
         className ?? "hidden xl:grid",
       )}
     >
       {announcing ? (
         <span
           aria-hidden
-          className="newsletter-nav-pulse pointer-events-none absolute inset-0 rounded-full"
+          className="newsletter-nav-pulse pointer-events-none absolute inset-0 rounded-control"
         />
       ) : null}
       <Mail

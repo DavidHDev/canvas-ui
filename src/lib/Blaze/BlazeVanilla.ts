@@ -1,5 +1,6 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
+import { resolveOptions } from "../options";
 export interface BlazeOptions {
   /** Height of the blaze zone as a fraction of the screen (0 to 1). */
   height?: number;
@@ -28,20 +29,14 @@ export interface BlazeOptions {
 }
 
 export interface BlazeElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGL effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface BlazeInstance {
-  /** Update effect options live. */
   setOptions: (options: BlazeOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -50,12 +45,12 @@ const DEFAULTS: Required<BlazeOptions> = {
   distortion: 0.6,
   distortionScale: 0.5,
   speed: 1,
-  sparks: 0.5,
+  sparks: 0.7,
   sparkDensity: 1.5,
   sparkSize: 1,
   layers: 4,
-  smoke: 0.5,
-  glow: 1.5,
+  smoke: 0.8,
+  glow: 2.5,
   sparkColor: [1, 0.4, 0.05],
   smokeColor: [1, 0.43, 0.1],
 };
@@ -352,7 +347,7 @@ export function createBlaze(
   elements: BlazeElements,
   options: BlazeOptions = {},
 ): BlazeInstance | null {
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const gl = output.getContext("webgl2", {
@@ -642,14 +637,26 @@ export function createBlaze(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) => config[key as keyof BlazeOptions] !== value,
@@ -668,6 +675,7 @@ export function createBlaze(
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       motionQuery.removeEventListener("change", onMotionChange);
       gl!.deleteTexture(contentTexture);
       if (fireTexture) gl!.deleteTexture(fireTexture);

@@ -1,5 +1,3 @@
-// Run with `node scripts/test-subscribe-rate-limits.mjs`.
-// Exercise the Worker entry point without contacting Resend or Turnstile.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import ts from "typescript";

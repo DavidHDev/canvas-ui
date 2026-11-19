@@ -7,7 +7,13 @@ import {
   type InkObjectOptions,
 } from "./InkObjectVanilla";
 
-const props = defineProps<InkObjectOptions>();
+const props = withDefaults(defineProps<InkObjectOptions>(), {
+  ink: undefined,
+  invert: undefined,
+  orbit: undefined,
+  zoom: undefined,
+  autoRotate: undefined,
+});
 
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 

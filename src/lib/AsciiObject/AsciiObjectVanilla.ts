@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { resolveOptions } from "../options";
 
 export interface AsciiObjectOptions {
   /** URL of the asset to display: GLB/glTF, SVG, PNG, JPEG, WebP, or GIF. Object URLs from a file input work too. The format is sniffed from the bytes, not the extension. */
@@ -68,16 +69,12 @@ export interface AsciiObjectOptions {
 }
 
 export interface AsciiObjectElements {
-  /** Canvas the scene renders to. */
   canvas: HTMLCanvasElement;
 }
 
 export interface AsciiObjectInstance {
-  /** Update options live. Changing src loads the new asset. */
   setOptions: (options: AsciiObjectOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -395,6 +392,13 @@ const ROOM_FORMERS: FormerDef[] = [
 ];
 
 const CAMERA_DIR = new THREE.Vector3(0, -1, 4).normalize();
+
+function fitFov(fov: number, aspect: number): number {
+  if (aspect >= 1) return fov;
+  const half = THREE.MathUtils.degToRad(fov) / 2;
+  const margin = 1 + 0.25 * (1 - aspect);
+  return THREE.MathUtils.radToDeg(2 * Math.atan((Math.tan(half) * margin) / aspect));
+}
 const MODEL_LIFT = 0.3;
 const RASTER_SIZE = 2048;
 const TRACE_SIZE = 512;
@@ -899,7 +903,7 @@ export function createAsciiObject(
   options: AsciiObjectOptions = {},
 ): AsciiObjectInstance | null {
   const { canvas } = elements;
-  const config: Required<AsciiObjectOptions> = { ...DEFAULTS, ...options };
+  const config: Required<AsciiObjectOptions> = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
 
   let renderer: THREE.WebGLRenderer;
   try {
@@ -1279,7 +1283,7 @@ export function createAsciiObject(
     controls.enableZoom = config.zoom;
     controls.autoRotate = config.autoRotate && !reducedMotion;
     controls.autoRotateSpeed = config.autoRotateSpeed;
-    camera.fov = config.fov;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
     floatGroup.position.x = config.xOffset;
     floatGroup.position.y = MODEL_LIFT + config.yOffset;
@@ -1320,6 +1324,7 @@ export function createAsciiObject(
     target.setSize(deviceW, deviceH);
     sharedResolution.set(deviceW, deviceH);
     camera.aspect = width / height;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
     syncCellGrid();
   }
@@ -1331,10 +1336,12 @@ export function createAsciiObject(
   loadAsset();
 
   let inView = true;
+  let pageVisible =
+    typeof document === "undefined" || document.visibilityState !== "hidden";
   let loopRunning = false;
 
   function tick(time: number) {
-    if (!inView) {
+    if (!inView || !pageVisible) {
       lastTime = 0;
       stopLoop();
       return;
@@ -1372,7 +1379,7 @@ export function createAsciiObject(
   }
 
   function startLoop() {
-    if (loopRunning || !inView || disposed) return;
+    if (loopRunning || !inView || !pageVisible || disposed) return;
     loopRunning = true;
     renderer.setAnimationLoop(tick);
   }
@@ -1396,6 +1403,17 @@ export function createAsciiObject(
       : null;
   viewObserver?.observe(canvas);
 
+  const onVisibilityChange = () => {
+    pageVisible = document.visibilityState !== "hidden";
+    if (pageVisible) {
+      lastTime = 0;
+      startLoop();
+    } else {
+      stopLoop();
+    }
+  };
+  document.addEventListener("visibilitychange", onVisibilityChange);
+
   let lastTime = 0;
   let elapsed = Math.random() * 100;
 
@@ -1403,6 +1421,7 @@ export function createAsciiObject(
 
   return {
     setOptions(next: AsciiObjectOptions) {
+      next = resolveOptions(DEFAULTS, next);
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
         if (typeof value === "function") continue;
@@ -1435,6 +1454,7 @@ export function createAsciiObject(
       stopLoop();
       observer.disconnect();
       viewObserver?.disconnect();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       motionQuery.removeEventListener("change", onMotionChange);
       controls.dispose();
       clearModel();

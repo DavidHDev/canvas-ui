@@ -22,7 +22,6 @@ export function DependencyTabs({
 }: {
   dependencies: string[];
   devDependencies: string[];
-  /** Dependencies of the WebGPU build; omit when the component has none. */
   webgpuDependencies?: string[];
   webgpuDevDependencies?: string[];
 }) {
@@ -48,8 +47,8 @@ export function DependencyTabs({
   }
 
   return (
-    <div className="rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background p-1">
-      <div className="flex h-8 items-center">
+    <div className="frame">
+      <div className="frame-bar">
         <ChoiceSelect
           label="Package manager"
           options={MANAGERS}
@@ -57,7 +56,7 @@ export function DependencyTabs({
           onValueChange={setManagerId}
         />
       </div>
-      <div className="mt-1 flex items-center justify-between gap-3 overflow-hidden rounded-lg border border-dashed border-border/70 bg-muted/40 py-1.5 pr-1.5 pl-4">
+      <div className="frame-inset flex items-center justify-between gap-3 overflow-hidden py-1.5 pr-1.5 pl-4">
         <code className="overflow-x-auto text-[13px] whitespace-pre text-foreground/90">
           {commands.join("\n")}
         </code>

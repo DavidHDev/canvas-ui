@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowRight, Check, Loader2 } from "lucide-react";
+import { ArrowRight, Check, Loader2 } from "@/components/icons";
 
 import { useSubscribed } from "@/components/common/use-subscribed";
 import { turnstileEnabled, useTurnstile } from "@/hooks/use-turnstile";
@@ -21,6 +21,7 @@ export function NewsletterSignup({
   variant = "default",
   layout = "row",
   showHeader = true,
+  showPrivacy = true,
   label,
   title = NEWSLETTER_TITLE,
   description = NEWSLETTER_DESCRIPTION,
@@ -29,8 +30,9 @@ export function NewsletterSignup({
 }: {
   className?: string;
   variant?: "default" | "onDark";
-  layout?: "row" | "stack";
+  layout?: "row" | "stack" | "pill";
   showHeader?: boolean;
+  showPrivacy?: boolean;
   label?: string;
   title?: string;
   description?: string;
@@ -50,6 +52,7 @@ export function NewsletterSignup({
   const [message, setMessage] = useState("");
 
   const onDark = variant === "onDark";
+  const pill = layout === "pill";
   const isLoading = status === "loading";
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -156,9 +159,12 @@ export function NewsletterSignup({
         onSubmit={handleSubmit}
         noValidate
         className={cn(
-          "flex flex-col gap-2",
+          pill
+            ? "flex h-12 items-center gap-2 rounded-bar bg-background p-1 pl-4 transition-shadow duration-150 ease-out focus-within:ring-3 focus-within:ring-ring/30"
+            : "flex flex-col gap-2",
           showHeader ? "mt-4" : label && "mt-2.5",
           layout === "row" && "sm:flex-row",
+          pill && status === "error" && "ring-2 ring-destructive/40",
         )}
       >
         {label ? null : (
@@ -196,12 +202,17 @@ export function NewsletterSignup({
             }
           }}
           className={cn(
-            "h-10 w-full min-w-0 shrink-0 rounded-lg border px-3.5 text-[15px] outline-none transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm",
+            pill
+              ? "h-full w-full min-w-0 flex-1 bg-transparent text-[16px] text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+              : "h-10 w-full min-w-0 shrink-0 rounded-control border px-3.5 text-[16px] outline-none transition-[border-color,box-shadow] duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm",
             layout === "row" && "sm:flex-1",
-            onDark
-              ? "border-white/20 bg-white/5 text-white placeholder:text-white/40 focus-visible:border-white/40"
-              : "border-border bg-background text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
-            status === "error" &&
+            pill && "border-0",
+            !pill &&
+              (onDark
+                ? "border-white/20 bg-white/5 text-white placeholder:text-white/40 focus-visible:border-white/40"
+                : "border-border bg-background text-foreground placeholder:text-muted-foreground hover:border-border-strong focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40"),
+            !pill &&
+              status === "error" &&
               !onDark &&
               "border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20",
             status === "error" && onDark && "border-red-400/60",
@@ -212,7 +223,8 @@ export function NewsletterSignup({
           type="submit"
           disabled={isLoading || status === "success"}
           className={cn(
-            "group inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg px-5 text-[15px] font-medium tracking-[-0.01em] transition-[opacity,transform] duration-150 ease-out active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm",
+            "group inline-flex h-10 shrink-0 items-center justify-center gap-2 px-5 text-[15px] font-medium tracking-[-0.01em] transition-[opacity,transform] duration-150 ease-out active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm",
+            "rounded-control",
             onDark
               ? "bg-white text-black hover:opacity-85"
               : "bg-primary text-primary-foreground hover:opacity-85",
@@ -266,26 +278,29 @@ export function NewsletterSignup({
         {message}
       </p>
 
-      <p
-        className={cn(
-          "mt-2.5 text-center text-xs leading-5",
-          onDark ? "text-white/50" : "text-muted-foreground",
-        )}
-      >
-        <Link
-          href="/privacy"
-          target="_blank"
-          rel="noreferrer"
+      {showPrivacy ? (
+        <p
           className={cn(
-            "underline underline-offset-4 transition-colors duration-150",
-            onDark
-              ? "decoration-white/25 hover:decoration-white/60"
-              : "decoration-border hover:decoration-foreground",
+            "mt-2.5 text-xs leading-5",
+            pill ? "pl-4 text-left" : "text-center",
+            onDark ? "text-white/50" : "text-muted-foreground",
           )}
         >
-          Privacy policy
-        </Link>
-      </p>
+          <Link
+            href="/privacy"
+            target="_blank"
+            rel="noreferrer"
+            className={cn(
+              "underline underline-offset-4 transition-colors duration-150",
+              onDark
+                ? "decoration-white/25 hover:decoration-white/60"
+                : "decoration-border-strong hover:decoration-foreground",
+            )}
+          >
+            Privacy policy
+          </Link>
+        </p>
+      ) : null}
     </div>
   );
 }

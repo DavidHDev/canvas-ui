@@ -6,7 +6,7 @@ import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { GlitchDemo } from "@/demos/glitch-demo";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Glitch",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const DESCRIPTION =
-  "Broadcast glitch bursts tear this page into shifted slices with RGB splits and corrupted blocks, then let it settle back to a clean read. Tune the timing, tear strength, and noise. This page is the demo.";
+  "Broadcast glitch bursts tear the page into shifted slices with RGB splits and corrupted blocks, then let it settle back to a clean read.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -96,14 +96,9 @@ export default async function GlitchPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Photos make the tears and RGB splits easy to see. Drop the interval to 0 for a constant broadcast failure."
-            alt="Demo photo for the Glitch effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={0} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </GlitchDemo>

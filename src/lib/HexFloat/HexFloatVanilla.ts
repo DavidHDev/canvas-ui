@@ -1,5 +1,6 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
+import { resolveOptions } from "../options";
 export interface HexFloatOptions {
   /** Width of each hex tile in CSS pixels. */
   size?: number;
@@ -38,20 +39,14 @@ export interface HexFloatOptions {
 }
 
 export interface HexFloatElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGL effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface HexFloatInstance {
-  /** Update effect options live. */
   setOptions: (options: HexFloatOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -635,7 +630,7 @@ export function createHexFloat(
   elements: HexFloatElements,
   options: HexFloatOptions = {},
 ): HexFloatInstance | null {
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const gl = output.getContext("webgl2", {
@@ -1574,10 +1569,21 @@ export function createHexFloat(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   const mutation = new MutationObserver(() => {
@@ -1591,6 +1597,7 @@ export function createHexFloat(
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) => config[key as keyof HexFloatOptions] !== value,
@@ -1618,6 +1625,7 @@ export function createHexFloat(
       window.removeEventListener("mouseup", onSelEnd, true);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       mutation.disconnect();
       motionQuery.removeEventListener("change", onMotionChange);
       gl!.deleteTexture(contentTexture);

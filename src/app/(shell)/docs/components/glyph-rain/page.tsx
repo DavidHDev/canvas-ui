@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
 import { ComponentDoc } from "@/components/docs/component-doc";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
 import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { GlyphRainDemo } from "@/demos/glyph-rain-demo";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Glyph Rain",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const DESCRIPTION =
-  "Glyphs rain down a dimmed page, and every drop head drags a pool of light across the content below. Run your cursor through the stream and it surges. This page is the demo.";
+  "Glyphs rain down a dimmed page, and every drop head drags a pool of light across the content below. Run your cursor through the stream and it surges.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -174,14 +174,9 @@ export default async function GlyphRainPage() {
         installItem="glyph-rain"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Watch the rain light the photo below."
-            alt="Demo photo for the Glyph Rain effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={2} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </GlyphRainDemo>

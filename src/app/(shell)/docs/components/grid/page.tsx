@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
 import { ComponentDoc } from "@/components/docs/component-doc";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
 import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { GridDemo } from "@/demos/grid-demo";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Grid",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const DESCRIPTION =
-  "Your page becomes a grid of 3D tiles. Waves ripple out from the cursor, lifting and magnifying tiles as they pass. This page is the demo.";
+  "Your page becomes a grid of 3D tiles. Waves ripple out from the cursor, lifting and magnifying tiles as they pass.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -68,7 +68,7 @@ const API_REFERENCE: ApiProp[] = [
     description:
       "Seconds for a wave to fade to roughly a third of its strength.",
     type: "number",
-    defaultValue: "0.2",
+    defaultValue: "0.6",
   },
   {
     name: "maxLift",
@@ -155,14 +155,9 @@ export default async function GridPage() {
         installItem="grid"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Move your cursor across the photo to ripple it tile by tile."
-            alt="Demo photo for the Grid effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={3} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </GridDemo>

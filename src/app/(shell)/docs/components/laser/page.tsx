@@ -140,7 +140,7 @@ export default async function LaserPage() {
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </LaserDemo>

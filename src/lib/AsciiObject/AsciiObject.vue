@@ -7,7 +7,14 @@ import {
   type AsciiObjectOptions,
 } from "./AsciiObjectVanilla";
 
-const props = defineProps<AsciiObjectOptions>();
+const props = withDefaults(defineProps<AsciiObjectOptions>(), {
+  ascii: undefined,
+  colored: undefined,
+  invert: undefined,
+  orbit: undefined,
+  zoom: undefined,
+  autoRotate: undefined,
+});
 
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 

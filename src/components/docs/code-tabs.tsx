@@ -10,15 +10,10 @@ import {
 import { usePreference } from "@/hooks/use-preference";
 
 export interface CodeVariant {
-  /** Short identifier, e.g. "react". */
   id: string;
-  /** Tab label, e.g. "React". */
   label: string;
-  /** File name shown above the code. */
   fileName: string;
-  /** Raw source, used for the copy button. */
   source: string;
-  /** Pre-highlighted HTML produced on the server. */
   html: string;
 }
 
@@ -26,9 +21,7 @@ export function CodeTabs({
   variants,
   webgpuVariants = [],
 }: {
-  /** WebGL sources, one per framework. */
   variants: CodeVariant[];
-  /** WebGPU (vgpu) sources; empty when the component has no WebGPU build. */
   webgpuVariants?: CodeVariant[];
 }) {
   const hasWebGPU = webgpuVariants.length > 0;
@@ -45,8 +38,8 @@ export function CodeTabs({
   if (!active) return null;
 
   return (
-    <div className="rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background p-1">
-      <div className="flex h-8 items-center justify-between gap-2">
+    <div className="frame">
+      <div className="frame-bar">
         <div className="flex min-w-0 items-center gap-1">
           {hasWebGPU ? (
             <ChoiceSelect
@@ -65,8 +58,8 @@ export function CodeTabs({
         </div>
         <CopyButton text={active.source} />
       </div>
-      <div className="mt-1 overflow-hidden rounded-lg border border-dashed border-border/70 bg-muted/40">
-        <div className="flex items-center justify-between border-b border-dashed border-border/70 px-4 py-2">
+      <div className="frame-inset overflow-hidden">
+        <div className="flex items-center justify-between px-4 pt-3 pb-1">
           <span className="text-[12px] text-muted-foreground">
             {active.fileName}
           </span>
@@ -75,7 +68,8 @@ export function CodeTabs({
           </span>
         </div>
         <div
-          className="docs-code max-h-[480px] overflow-y-auto text-[13px] leading-6"
+          key={`${renderer}-${active.id}`}
+          className="docs-code framework-snippet-enter max-h-[480px] overflow-y-auto text-[13px] leading-6"
           dangerouslySetInnerHTML={{ __html: active.html }}
         />
       </div>

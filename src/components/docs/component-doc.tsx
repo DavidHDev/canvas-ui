@@ -1,48 +1,38 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "@/components/icons";
 
 import { HtmlInCanvasBanner } from "@/components/common/html-in-canvas-banner";
 import { ApiReference, type ApiProp } from "@/components/docs/api-reference";
 import { CodeTabs, type CodeVariant } from "@/components/docs/code-tabs";
 import { CopyMenu } from "@/components/docs/copy-menu";
+import { DemoStage } from "@/components/demos/demo-stage";
 import { DependencyTabs } from "@/components/docs/dependency-tabs";
 import { highlight } from "@/components/docs/highlight";
 import { InstallNote, InstallTabs } from "@/components/docs/install-tabs";
+import { getDemoSource } from "@/lib/demo-source";
+import { getComponentDependencies, getComponentSources } from "@/lib/registry";
 import {
-  getComponentDependencies,
-  getComponentSources,
-  getDemoSource,
-} from "@/lib/registry";
-import { COMPONENTS } from "@/data/components";
+  categoryHref,
+  getComponent,
+  ORDERED_COMPONENTS,
+} from "@/components/common/component-groups";
+import { CATEGORY_META, type ComponentEntry } from "@/data/components";
 import { cn } from "@/lib/utils";
 
 export interface ComponentDocProps {
   title: string;
   description: string;
-  /** Optional boxed demo. Omit when the whole page is the demo. */
   preview?: ReactNode;
-  /** Optional extra content rendered before the Install section. */
   beforeInstall?: ReactNode;
-  /** Usage guidance included in Copy for AI and Copy as Markdown. */
   usageMarkdown?: string;
-  /** One entry per framework, pre-highlighted on the server. */
   variants: CodeVariant[];
-  /** Registry item base name, e.g. "liquid" for /r/liquid-react.json. */
   installItem: string;
-  /** Small tag chips shown under the description, e.g. ["html-in-canvas"]. */
   tags?: string[];
-  /**
-   * Show a warning above the demo when Chrome's HTML-in-Canvas flag is off.
-   * Set this only for effects that don't render without the flag, not for
-   * effects that degrade to a usable fallback.
-   */
   requiresHtmlInCanvas?: boolean;
-  /** Props table shown in the API reference section. */
   apiReference?: ApiProp[];
 }
 
-/** Pre-highlights the WebGPU (vgpu) sources; empty when the component has none. */
 async function getWebGPUVariants(installItem: string): Promise<CodeVariant[]> {
   return Promise.all(
     getComponentSources(installItem, "webgpu").map(async (file) => ({
@@ -70,14 +60,20 @@ export async function ComponentDoc({
   const { dependencies, devDependencies } =
     getComponentDependencies(installItem);
   const webgpuDeps = getComponentDependencies(installItem, "webgpu");
-  const demoSource = getDemoSource(installItem);
+  const demoSource = getDemoSource(installItem, title);
   const webgpuVariants = await getWebGPUVariants(installItem);
   const hasWebGPU = webgpuVariants.length > 0;
+  const entry = getComponent(`/docs/components/${installItem}`);
+  const chips = Array.from(
+    new Set([...(tags ?? []), ...(hasWebGPU ? ["webgl", "webgpu"] : [])]),
+  ).filter(
+    (tag) => !(entry?.category === "live-html" && tag === "html-in-canvas"),
+  );
 
   return (
-    <article className="mx-auto w-full max-w-3xl">
+    <article data-wide-page="" className="mx-auto w-full max-w-4xl">
       <div className="flex items-start justify-between gap-4">
-        <h1 className="min-w-0 text-3xl font-semibold tracking-[-0.02em]">
+        <h1 className="min-w-0 text-3xl leading-[1.15] font-medium tracking-tighter text-balance">
           {title}
         </h1>
         <CopyMenu
@@ -95,18 +91,21 @@ export async function ComponentDoc({
           usageMarkdown={usageMarkdown}
         />
       </div>
-      <p className="mt-3 max-w-xl text-base leading-7 text-muted-foreground">
+      <p className="mt-3 max-w-xl text-base leading-7 text-pretty text-muted-foreground">
         {description}
       </p>
-      {(tags && tags.length > 0) || hasWebGPU ? (
+      {entry || chips.length > 0 ? (
         <div className="mt-4 flex flex-wrap gap-1.5">
-          {Array.from(
-            new Set([...(tags ?? []), ...(hasWebGPU ? ["webgl", "webgpu"] : [])]),
-          ).map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full border border-border/60 px-2.5 py-0.5 text-[11.5px] text-muted-foreground"
+          {entry ? (
+            <Link
+              href={categoryHref(entry.category)}
+              className="chip pressable font-medium text-foreground/80 transition-[color,background-color,transform] duration-150 ease-out hover:bg-muted hover:text-foreground"
             >
+              {CATEGORY_META[entry.category].label}
+            </Link>
+          ) : null}
+          {chips.map((tag) => (
+            <span key={tag} className="chip">
               {tag}
             </span>
           ))}
@@ -116,19 +115,21 @@ export async function ComponentDoc({
       {requiresHtmlInCanvas ? <HtmlInCanvasBanner /> : null}
 
       {preview ? (
-        <section className="mt-8" aria-label="Preview">
-          <div className="relative h-105 touch-none overflow-hidden rounded-xl border border-border/60 bg-background">
-            {preview}
-          </div>
-        </section>
+        <DemoStage
+          title={title}
+          htmlInCanvas={tags?.includes("html-in-canvas") ?? false}
+          requiresHtmlInCanvas={requiresHtmlInCanvas}
+        >
+          {preview}
+        </DemoStage>
       ) : null}
 
       {beforeInstall}
 
-      <section className="mt-8" aria-label="Installation">
+      <section className="mt-12" aria-label="Installation">
         <h2
           id="install"
-          className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
+          className="scroll-mt-24 text-xl font-medium tracking-tight"
         >
           Install
         </h2>
@@ -139,14 +140,14 @@ export async function ComponentDoc({
       </section>
 
       {dependencies.length > 0 || devDependencies.length > 0 || hasWebGPU ? (
-        <section className="mt-8" aria-label="Dependencies">
+        <section className="mt-12" aria-label="Dependencies">
           <h2
             id="dependencies"
-            className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
+            className="scroll-mt-24 text-xl font-medium tracking-tight"
           >
             Dependencies
           </h2>
-          <p className="mt-2 text-[13px] text-muted-foreground">
+          <p className="mt-1.5 text-[13px] leading-5 text-muted-foreground">
             The install command above adds these automatically. If you copy the
             source by hand, install them yourself.
           </p>
@@ -163,10 +164,10 @@ export async function ComponentDoc({
         </section>
       ) : null}
 
-      <section className="mt-8" aria-label="Code">
+      <section className="mt-12" aria-label="Code">
         <h2
           id="code"
-          className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
+          className="scroll-mt-24 text-xl font-medium tracking-tight"
         >
           Code
         </h2>
@@ -176,10 +177,10 @@ export async function ComponentDoc({
       </section>
 
       {apiReference && apiReference.length > 0 ? (
-        <section className="mt-8" aria-label="API reference">
+        <section className="mt-12" aria-label="API reference">
           <h2
             id="api-reference"
-            className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
+            className="scroll-mt-24 text-xl font-medium tracking-tight"
           >
             API reference
           </h2>
@@ -195,12 +196,13 @@ export async function ComponentDoc({
 }
 
 function ComponentPager({ slug }: { slug: string }) {
-  const index = COMPONENTS.findIndex(
+  const index = ORDERED_COMPONENTS.findIndex(
     (entry) => entry.href === `/docs/components/${slug}`,
   );
   if (index === -1) return null;
-  const prev = index > 0 ? COMPONENTS[index - 1] : null;
-  const next = index < COMPONENTS.length - 1 ? COMPONENTS[index + 1] : null;
+  const prev = index > 0 ? ORDERED_COMPONENTS[index - 1] : null;
+  const next =
+    index < ORDERED_COMPONENTS.length - 1 ? ORDERED_COMPONENTS[index + 1] : null;
 
   return (
     <nav
@@ -217,7 +219,7 @@ function PagerLink({
   entry,
   direction,
 }: {
-  entry: (typeof COMPONENTS)[number];
+  entry: ComponentEntry;
   direction: "prev" | "next";
 }) {
   const isPrev = direction === "prev";
@@ -228,13 +230,11 @@ function PagerLink({
       href={entry.href}
       rel={direction}
       className={cn(
-        // Same double-border frame as the code panels: the dashed box sits 4px
-        // inside a 1px border, so its 10px corners are concentric with the frame.
-        "group block min-w-0 rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background p-1 outline-none transition-colors duration-150 hover:border-border focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+        "group frame block min-w-0 transition-[background-color,transform] duration-150 ease-out hover:bg-muted/70 active:scale-[0.99]",
         !isPrev && "text-right sm:col-start-2",
       )}
     >
-      <span className="flex min-w-0 flex-col rounded-lg border border-dashed border-border/70 bg-muted/40 px-4 py-3.5 transition-colors duration-150 group-hover:bg-muted/60">
+      <span className="frame-inset flex min-w-0 flex-col px-4 py-3.5 transition-colors duration-150 ease-out group-hover:bg-muted/70">
         <span
           className={cn(
             "flex items-center gap-1.5 text-[13px] text-muted-foreground transition-colors duration-150 group-hover:text-foreground",

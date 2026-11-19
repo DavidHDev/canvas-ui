@@ -1,11 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
-/* WebGPU port. three.js is kept for loading, shape tracing, matrices, and controls; rendering goes through vgpu.
- * The studio environment that the WebGL build gets from PMREMGenerator is reproduced by ray casting the same
- * room (shell, blocks, emissive formers, lights) into an equirect radiance map on the CPU, prefiltering it per
- * roughness on the GPU, and shading with the MeshStandardMaterial IBL terms (SH irradiance + split-sum specular). */
 import {
   draw,
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   geometry,
   init,
@@ -24,6 +20,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { resolveOptions } from "../options";
 
 export interface AsciiObjectOptions {
   /** URL of the asset to display: GLB/glTF, SVG, PNG, JPEG, WebP, or GIF. Object URLs from a file input work too. The format is sniffed from the bytes, not the extension. */
@@ -89,16 +86,12 @@ export interface AsciiObjectOptions {
 }
 
 export interface AsciiObjectElements {
-  /** Canvas the scene renders to. */
   canvas: HTMLCanvasElement;
 }
 
 export interface AsciiObjectInstance {
-  /** Update options live. Changing src loads the new asset. */
   setOptions: (options: AsciiObjectOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -141,7 +134,7 @@ const ENV_WIDTH = 128;
 const ENV_HEIGHT = 64;
 const ENV_LEVELS = 6;
 
-const FORWARD_SHADER = /* wgsl */ `
+const FORWARD_SHADER = `
 const PI = 3.14159265359;
 const ENV_LEVELS = 6.0;
 const ENV_ROWS = 64.0;
@@ -188,8 +181,6 @@ fn equirect(d: vec3f) -> vec2f {
   return vec2f(u, v);
 }
 
-// Ring weight lives in alpha; it is tinted with the highlight color here so a
-// highlight change never needs a re-bake.
 fn envRadiance(d: vec3f, roughness: f32) -> vec3f {
   let uv = equirect(d);
   let lod = clamp(roughness, 0.0, 1.0) * (ENV_LEVELS - 1.0);
@@ -202,7 +193,6 @@ fn envRadiance(d: vec3f, roughness: f32) -> vec3f {
   return s.rgb + params.highlight * s.a;
 }
 
-// Cosine-weighted irradiance over pi, from order-2 spherical harmonics.
 fn shIrradiance(n: vec3f) -> vec3f {
   let c = params.sh;
   var e = c[0] * 0.282095;
@@ -217,7 +207,6 @@ fn shIrradiance(n: vec3f) -> vec3f {
   return max(e.rgb + params.highlight * e.a, vec3f(0.0));
 }
 
-// three.js DFGApprox (environment BRDF fit).
 fn dfgApprox(ndv: f32, roughness: f32) -> vec2f {
   let c0 = vec4f(-1.0, -0.0275, -0.572, 0.022);
   let c1 = vec4f(1.0, 0.0425, 1.04, -0.04);
@@ -261,7 +250,6 @@ fn dfgApprox(ndv: f32, roughness: f32) -> vec2f {
   let rough = clamp(params.roughness, 0.0, 1.0);
   let metal = clamp(params.metalness, 0.0, 1.0);
 
-  // MeshStandardMaterial indirect lighting (RE_IndirectDiffuse / RE_IndirectSpecular).
   let diffuseColor = albedo * (1.0 - metal);
   let specularColor = mix(vec3f(0.04), albedo, vec3f(metal));
   let irradiance = shIrradiance(n) * params.envIntensity;
@@ -283,7 +271,7 @@ fn dfgApprox(ndv: f32, roughness: f32) -> vec2f {
   return vec4f(color * alpha, alpha);
 }`;
 
-const PREFILTER_SHADER = /* wgsl */ `
+const PREFILTER_SHADER = `
 const PI = 3.14159265359;
 const LEVELS = 6.0;
 const SRC_W = 64u;
@@ -332,7 +320,7 @@ fn dirFor(u: f32, v: f32) -> vec3f {
   return acc / max(wsum, 1e-6);
 }`;
 
-const CELL_SHADER = /* wgsl */ `
+const CELL_SHADER = `
 struct Params {
   resolution: vec2f,
   cellPx: vec2f,
@@ -437,7 +425,7 @@ fn dirContrast(value: f32, ext: f32) -> f32 {
   return vec4f(cellColor, f32(best) / 255.0);
 }`;
 
-const POST_SHADER = /* wgsl */ `
+const POST_SHADER = `
 struct Params {
   resolution: vec2f,
   cellPx: vec2f,
@@ -534,9 +522,7 @@ interface RoomSurface {
   kind: "box" | "ring";
   inverse: THREE.Matrix4;
   normalMatrix: THREE.Matrix3;
-  /** Linear emissive radiance, or null for a lit (Lambert) surface. */
   emissive: [number, number, number] | null;
-  /** Ring former: its radiance is `highlight * 15`, stored separately as a weight. */
   ring: boolean;
   albedo: number;
   backSide: boolean;
@@ -553,22 +539,13 @@ interface RoomLight {
 }
 
 interface StudioRadiance {
-  /** 128x64 RGBA float: rgb radiance, a = ring weight. */
   hi: Float32Array;
-  /** 64x32 box-filtered copy for the rough prefilter levels. */
   lo: Float32Array;
-  /** Nine SH coefficients of irradiance / pi (rgb) and ring weight (a). */
   sh: [number, number, number, number][];
 }
 
 let studioRadiance: StudioRadiance | null = null;
 
-/**
- * Casts the same room three.js's PMREMGenerator renders in the WebGL build
- * (gray shell, white blocks, emissive formers, point and spot lights) into an
- * equirect radiance map, seen from the scene origin. Lit surfaces use the
- * physically based light falloff and Lambert term MeshStandardMaterial uses.
- */
 function bakeStudioRadiance(): StudioRadiance {
   if (studioRadiance) return studioRadiance;
   const surfaces: RoomSurface[] = [];
@@ -624,7 +601,6 @@ function bakeStudioRadiance(): StudioRadiance {
     });
   }
 
-  // The room group sits at y = -0.5, so the world origin is (0, 0.5, 0) in room space.
   const origin = new THREE.Vector3(0, 0.5, 0);
   const localO = new THREE.Vector3();
   const localD = new THREE.Vector3();
@@ -662,7 +638,6 @@ function bakeStudioRadiance(): StudioRadiance {
     for (const surface of surfaces) {
       localO.copy(origin).applyMatrix4(surface.inverse);
       localD.copy(dir).transformDirection(surface.inverse);
-      // transformDirection normalizes; undo that so t stays in world units.
       const scale = new THREE.Vector3().copy(dir).applyMatrix4(surface.inverse).sub(new THREE.Vector3().applyMatrix4(surface.inverse)).length();
       localD.multiplyScalar(scale);
       if (surface.kind === "ring") {
@@ -725,7 +700,6 @@ function bakeStudioRadiance(): StudioRadiance {
     hitNormal.set(0, 0, 0);
     hitNormal.setComponent(bestAxis, Math.sign(localO.getComponent(bestAxis)) || 1);
     hitNormal.applyMatrix3(best.normalMatrix).normalize();
-    // Lit from the side we see, as three.js flips back-face normals.
     if (hitNormal.dot(dir) > 0) hitNormal.negate();
     const l = shade(hitPoint, hitNormal, best.albedo);
     out[0] = out[1] = out[2] = l;
@@ -822,6 +796,13 @@ function toHalfArray(data: Float32Array): Uint16Array<ArrayBuffer> {
 }
 
 const CAMERA_DIR = new THREE.Vector3(0, -1, 4).normalize();
+
+function fitFov(fov: number, aspect: number): number {
+  if (aspect >= 1) return fov;
+  const half = THREE.MathUtils.degToRad(fov) / 2;
+  const margin = 1 + 0.25 * (1 - aspect);
+  return THREE.MathUtils.radToDeg(2 * Math.atan((Math.tan(half) * margin) / aspect));
+}
 const MODEL_LIFT = 0.3;
 const RASTER_SIZE = 2048;
 const TRACE_SIZE = 512;
@@ -1268,14 +1249,12 @@ function imageSize(image: TextureImage): [number, number] {
   return [Math.max(1, Math.round(width)), Math.max(1, Math.round(height))];
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every AsciiObject instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -1289,7 +1268,7 @@ function acquireGpu(): Promise<Gpu> {
 export function createAsciiObject(elements: AsciiObjectElements, options: AsciiObjectOptions = {}): AsciiObjectInstance | null {
   if (!supportsWebGPU()) return null;
   const { canvas } = elements;
-  const config: Required<AsciiObjectOptions> = { ...DEFAULTS, ...options };
+  const config: Required<AsciiObjectOptions> = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(config.fov, 1, 0.1, 200);
@@ -1662,7 +1641,7 @@ export function createAsciiObject(elements: AsciiObjectElements, options: AsciiO
     controls.enableZoom = config.zoom;
     controls.autoRotate = config.autoRotate && !reducedMotion;
     controls.autoRotateSpeed = config.autoRotateSpeed;
-    camera.fov = config.fov;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
     floatGroup.position.x = config.xOffset;
     floatGroup.position.y = MODEL_LIFT + config.yOffset;
@@ -1691,6 +1670,7 @@ export function createAsciiObject(elements: AsciiObjectElements, options: AsciiO
       if (w !== deviceW || h !== deviceH) sceneTarget.resize([deviceW, deviceH]);
     }
     camera.aspect = width / height;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
     syncCellGrid();
   }
@@ -1712,7 +1692,6 @@ export function createAsciiObject(elements: AsciiObjectElements, options: AsciiO
   const modelViewProjection = new THREE.Matrix4();
   const normalMatrix4 = new THREE.Matrix4();
 
-  /** Builds the prefiltered studio environment once per instance. */
   function buildEnvironment() {
     if (!gpu || envAtlas) return;
     const baked = bakeStudioRadiance();
@@ -1733,7 +1712,7 @@ export function createAsciiObject(elements: AsciiObjectElements, options: AsciiO
     gpu.gpu.queue.writeTexture({ texture: lo.gpu }, toHalfArray(baked.lo), { bytesPerRow: (ENV_WIDTH / 2) * 8 }, [ENV_WIDTH / 2, ENV_HEIGHT / 2]);
     envAtlas = target(gpu, { size: [ENV_WIDTH, ENV_HEIGHT * ENV_LEVELS], format: "rgba16float", label: "ascii-object.env" });
     envSampler = sampler(gpu, { minFilter: "linear", magFilter: "linear", addressModeU: "repeat", addressModeV: "clamp-to-edge" });
-    const prefilter = effect(gpu, PREFILTER_SHADER, {
+    const prefilter = gpuEffect(gpu, PREFILTER_SHADER, {
       label: "ascii-object.prefilter",
       set: { params: { hiSize: [ENV_WIDTH, ENV_HEIGHT] }, uHi: hi, uLo: lo },
     });
@@ -1915,11 +1894,11 @@ export function createAsciiObject(elements: AsciiObjectElements, options: AsciiO
       buildEnvironment();
       rebuildAtlas();
       if (!atlasTexture || !shapeTexture) uploadAtlas();
-      cellFx = effect(gpu, CELL_SHADER, {
+      cellFx = gpuEffect(gpu, CELL_SHADER, {
         label: "ascii-object.cells",
         set: { tScene: sceneTarget, sceneSampler: linearSampler, tShapes: shapeTexture! },
       });
-      postFx = effect(gpu, POST_SHADER, {
+      postFx = gpuEffect(gpu, POST_SHADER, {
         label: "ascii-object.post",
         set: { tScene: sceneTarget, sceneSampler: linearSampler, tCells: cellTarget, tAtlas: atlasTexture!, atlasSampler: linearSampler },
       });
@@ -1939,6 +1918,7 @@ export function createAsciiObject(elements: AsciiObjectElements, options: AsciiO
 
   return {
     setOptions(next: AsciiObjectOptions) {
+      next = resolveOptions(DEFAULTS, next);
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
         if (typeof value === "function") continue;

@@ -3,14 +3,15 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   Check,
+  ChevronRight,
+  Code2,
   Link as LinkIcon,
   RotateCcw,
   SlidersHorizontal,
   X,
-} from "lucide-react";
+} from "@/components/icons";
 import { play } from "cuelume";
 import {
-  createContext,
   Fragment,
   useContext,
   useEffect,
@@ -22,18 +23,29 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-import type { ControlSchema } from "@/components/demos/control-schema";
+import type {
+  Control,
+  ControlSchema,
+  ControlValue,
+  DemoPreset,
+} from "@/components/demos/control-schema";
 import { ColorRow } from "@/components/demos/color-picker";
 import {
+  DemoControlsTargetContext,
+  useStage,
+} from "@/components/demos/demo-context";
+import {
+  buildConfiguredJsx,
   publishDemoSnippet,
   type DemoSnippet,
 } from "@/components/demos/snippet-store";
 import { Scrubber } from "@/components/docs/scrubber";
+import { EASE_OUT, DURATION } from "@/components/common/motion-tokens";
+import { SegmentedRow } from "@/components/demos/segmented-row";
 import type { DemoControlsHandle } from "@/hooks/use-demo-controls";
+import { cn } from "@/lib/utils";
 
-export { ColorRow };
-
-const EASE = [0.23, 1, 0.32, 1] as const;
+export { ColorRow, DemoControlsTargetContext };
 
 const emptySubscribe = () => () => {};
 
@@ -155,161 +167,459 @@ function ScrollFade({ children }: { children: ReactNode }) {
   return (
     <div
       ref={setScrollEl}
-      className="demo-controls-scroll flex max-h-[min(60vh,480px)] flex-col gap-1.5 overflow-y-auto"
+      className="demo-controls-scroll -mr-1.5 flex max-h-[min(60vh,480px)] flex-col overflow-y-auto pr-1.5"
     >
       {children}
     </div>
   );
 }
 
-export const DemoControlsTargetContext = createContext<HTMLElement | null>(
-  null,
-);
-
-function ShareLinkButton() {
+function useCopied(duration = 1200) {
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, []);
 
-  const copy = async () => {
-    await navigator.clipboard.writeText(window.location.href);
-    // play() fires an audible sound, so it's worth skipping once this
-    // button is gone -- unlike the setState calls below, a sound with no
-    // visible source is actually perceivable after unmount.
+  const flash = () => {
     if (!mountedRef.current) return;
     play("bloom");
     setCopied(true);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => setCopied(false), 1200);
+    timeoutRef.current = setTimeout(() => setCopied(false), duration);
+  };
+
+  return [copied, flash] as const;
+}
+
+const ICON_BUTTON =
+  "pressable inline-grid size-8 shrink-0 cursor-pointer place-items-center rounded-control text-muted-foreground transition-colors duration-150 ease-out hover:bg-muted/60 hover:text-foreground";
+
+function SwapIcon({ done, icon }: { done: boolean; icon: ReactNode }) {
+  return (
+    <span aria-hidden className="relative inline-flex size-3.5">
+      <span
+        className={cn(
+          "absolute inset-0 inline-flex transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none",
+          done ? "scale-50 opacity-0" : "scale-100 opacity-100",
+        )}
+      >
+        {icon}
+      </span>
+      <Check
+        className={cn(
+          "absolute inset-0 size-3.5 transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none",
+          done ? "scale-100 opacity-100" : "scale-50 opacity-0",
+        )}
+      />
+    </span>
+  );
+}
+
+function ShareLinkButton() {
+  const [copied, flash] = useCopied();
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      flash();
+    } catch {}
   };
 
   return (
     <button
       type="button"
       onClick={copy}
-      aria-label="Copy link to this configuration"
+      aria-label={copied ? "Link copied" : "Copy a link to this configuration"}
       title="Copy a link to this exact configuration"
-      className="inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+      className={ICON_BUTTON}
     >
-      {copied ? (
-        <Check aria-hidden className="size-3" />
-      ) : (
-        <LinkIcon aria-hidden className="size-3" />
-      )}
-      {copied ? "Copied" : "Share"}
+      <SwapIcon done={copied} icon={<LinkIcon className="size-3.5" />} />
+    </button>
+  );
+}
+
+function CopyCodeButton({ snippet }: { snippet: DemoSnippet }) {
+  const [copied, flash] = useCopied();
+
+  const copy = async () => {
+    const code = [
+      `import { ${snippet.component} } from "@/components/canvasui/${snippet.component}";`,
+      "",
+      buildConfiguredJsx(snippet.component, snippet.props),
+      "",
+    ].join("\n");
+    try {
+      await navigator.clipboard.writeText(code);
+      flash();
+    } catch {}
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      aria-label={copied ? "Code copied" : "Copy code with these settings"}
+      title="Copy the component with these settings"
+      className={ICON_BUTTON}
+    >
+      <SwapIcon done={copied} icon={<Code2 className="size-3.5" />} />
     </button>
   );
 }
 
 export interface DemoControlsProps<S extends ControlSchema> {
-  /** Panel heading, e.g. "Peel controls". */
   title: string;
-  /** Schema-backed control state from `useDemoControls`. */
   controls: DemoControlsHandle<S>;
-  /**
-   * Replace the generated row for specific schema keys with bespoke UI,
-   * rendered at the key's schema position (e.g. a model loader for a
-   * `custom` control, or a color row with a theme-derived swatch).
-   */
   rows?: Partial<Record<keyof S & string, ReactNode>>;
-  /** Extra cleanup after the URL state resets (ephemeral local state). */
+  presets?: DemoPreset<S>[];
   onReset?: () => void;
-  /**
-   * Portal the widget to document.body. Use for boxed demos inside docs
-   * pages, where an animated ancestor transform would otherwise become the
-   * containing block for fixed positioning.
-   */
   portal?: boolean;
-  /**
-   * Current component configuration, published to the playground sidebar
-   * so its copy actions can emit the component exactly as configured.
-   */
   snippet?: DemoSnippet;
 }
 
-function SchemaRows<S extends ControlSchema>({
-  controls,
-  rows,
+interface Group {
+  name: string;
+  keys: string[];
+}
+
+function groupKeys(schema: ControlSchema, keys: string[]): Group[] {
+  const groups: Group[] = [];
+  for (const key of keys) {
+    const name = schema[key].group ?? "";
+    let group = groups.find((entry) => entry.name === name);
+    if (!group) {
+      group = { name, keys: [] };
+      groups.push(group);
+    }
+    group.keys.push(key);
+  }
+  return groups;
+}
+
+function ControlRow({
+  name,
+  def,
+  value,
+  set,
 }: {
-  controls: DemoControlsHandle<S>;
-  rows?: Partial<Record<keyof S & string, ReactNode>>;
+  name: string;
+  def: Control;
+  value: ControlValue;
+  set: (key: string, value: ControlValue) => void;
 }) {
-  const set = controls.setValue as (key: string, value: unknown) => void;
-  const values = controls.values as Record<string, string | number | boolean>;
+  switch (def.kind) {
+    case "scrub":
+      return (
+        <Scrubber
+          label={def.label}
+          min={def.min}
+          max={def.max}
+          step={def.step}
+          decimals={def.decimals}
+          value={value as number}
+          onValueChange={(next) => set(name, next)}
+        />
+      );
+    case "toggle":
+      return (
+        <SwitchRow
+          label={def.label}
+          checked={value as boolean}
+          onCheckedChange={(next) => set(name, next)}
+        />
+      );
+    case "radio":
+      return (
+        <RadioRow
+          label={def.label}
+          options={def.options}
+          value={value as string}
+          onValueChange={(next) => set(name, next)}
+        />
+      );
+    case "color": {
+      const color = value as string;
+      const auto = def.auto !== undefined && color === def.defaultValue;
+      return (
+        <ColorRow
+          label={def.label}
+          value={auto && def.auto ? def.auto.swatch : color}
+          displayValue={auto && def.auto ? def.auto.label : undefined}
+          onValueChange={(next) => set(name, next)}
+          onReset={
+            color !== def.defaultValue
+              ? () => set(name, def.defaultValue)
+              : undefined
+          }
+        />
+      );
+    }
+    case "custom":
+      return null;
+  }
+}
+
+function GroupGrid({
+  groups,
+  renderRow,
+}: {
+  groups: Group[];
+  renderRow: (key: string) => ReactNode;
+}) {
+  if (groups.length === 0) return null;
+  const titled = groups.length > 1 || groups[0].name !== "";
+
+  if (!titled || groups.length === 1) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        {titled ? <GroupTitle>{groups[0].name}</GroupTitle> : null}
+        <div className="grid grid-cols-1 gap-1.5 @md:grid-cols-2 @2xl:grid-cols-3">
+          {groups[0].keys.map((key) => (
+            <Fragment key={key}>{renderRow(key)}</Fragment>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <>
-      {Object.entries(controls.schema).map(([key, def]) => {
-        if (def.when && !def.when(values)) return null;
+    <div
+      className={cn(
+        "grid grid-cols-1 gap-x-3 gap-y-4 @md:grid-cols-2",
+        groups.length >= 3 && "@2xl:grid-cols-3",
+      )}
+    >
+      {groups.map((group) => (
+        <section
+          key={group.name}
+          aria-label={group.name || undefined}
+          className="flex min-w-0 flex-col gap-1.5"
+        >
+          {group.name ? <GroupTitle>{group.name}</GroupTitle> : null}
+          {group.keys.map((key) => (
+            <Fragment key={key}>{renderRow(key)}</Fragment>
+          ))}
+        </section>
+      ))}
+    </div>
+  );
+}
 
-        const override = rows?.[key as keyof S & string];
-        if (override !== undefined) {
-          return <Fragment key={key}>{override}</Fragment>;
-        }
+function GroupTitle({ children }: { children: ReactNode }) {
+  return (
+    <h3 className="px-1 text-[11.5px] leading-5 font-medium text-muted-foreground">
+      {children}
+    </h3>
+  );
+}
 
-        switch (def.kind) {
-          case "scrub":
-            return (
-              <Scrubber
-                key={key}
-                label={def.label}
-                min={def.min}
-                max={def.max}
-                step={def.step}
-                decimals={def.decimals}
-                value={values[key] as number}
-                onValueChange={(next) => set(key, next)}
-              />
-            );
-          case "toggle":
-            return (
-              <SwitchRow
-                key={key}
-                label={def.label}
-                checked={values[key] as boolean}
-                onCheckedChange={(next) => set(key, next)}
-              />
-            );
-          case "radio":
-            return (
-              <RadioRow
-                key={key}
-                label={def.label}
-                options={def.options}
-                value={values[key] as string}
-                onValueChange={(next) => set(key, next)}
-              />
-            );
-          case "color": {
-            const value = values[key] as string;
-            const auto = def.auto !== undefined && value === def.defaultValue;
-            return (
-              <ColorRow
-                key={key}
-                label={def.label}
-                value={auto && def.auto ? def.auto.swatch : value}
-                displayValue={auto && def.auto ? def.auto.label : undefined}
-                onValueChange={(next) => set(key, next)}
-                onReset={
-                  value !== def.defaultValue
-                    ? () => set(key, def.defaultValue)
-                    : undefined
-                }
-              />
-            );
-          }
-          case "custom":
-            return null;
+function sameValue(a: unknown, b: unknown) {
+  if (typeof a === "string" && typeof b === "string") {
+    return a.toLowerCase() === b.toLowerCase();
+  }
+  if (typeof a === "number" && typeof b === "number") {
+    return Math.abs(a - b) < 1e-6;
+  }
+  return a === b;
+}
+
+const CUSTOM = "__custom";
+
+function PresetPicker<S extends ControlSchema>({
+  controls,
+  presets,
+  onApply,
+}: {
+  controls: DemoControlsHandle<S>;
+  presets: DemoPreset<S>[];
+  onApply?: () => void;
+}) {
+  const values = controls.values as Record<string, ControlValue>;
+  const schema = controls.schema;
+  const all: DemoPreset<S>[] = [{ label: "Default", values: {} }, ...presets];
+  const [custom, setCustom] = useState<{
+    key: string;
+    values: Record<string, ControlValue>;
+  } | null>(null);
+
+  const matches = (preset: DemoPreset<S>) =>
+    Object.entries(schema).every(([key, def]) => {
+      const target = (preset.values as Record<string, ControlValue>)[key];
+      if (def.kind === "custom" && target === undefined) return true;
+      return sameValue(values[key], target ?? def.defaultValue);
+    });
+
+  const active = all.findIndex(matches);
+  if (active === -1) {
+    const snapshot: Record<string, ControlValue> = {};
+    for (const [key, def] of Object.entries(schema)) {
+      if (def.kind !== "custom") snapshot[key] = values[key];
+    }
+    const key = JSON.stringify(snapshot);
+    if (custom?.key !== key) setCustom({ key, values: snapshot });
+  }
+
+  const options = [
+    ...all.map((preset, index) => ({ id: String(index), label: preset.label })),
+    ...(custom ? [{ id: CUSTOM, label: "Custom" }] : []),
+  ];
+
+  return (
+    <SegmentedRow
+      label="Preset"
+      overflow="select"
+      options={options}
+      value={active === -1 ? CUSTOM : String(active)}
+      onValueChange={(id) => {
+        if (id === CUSTOM) {
+          if (custom) controls.apply(custom.values as SchemaValuesOf<S>);
+        } else {
+          controls.apply(all[Number(id)].values);
         }
-      })}
-    </>
+        onApply?.();
+      }}
+      className="w-fit max-w-full"
+    />
+  );
+}
+
+type SchemaValuesOf<S extends ControlSchema> = DemoPreset<S>["values"];
+
+function Advanced({
+  count,
+  aside,
+  children,
+}: {
+  count: number;
+  aside?: ReactNode;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="flex flex-col">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((prev) => !prev)}
+          className="pressable -mx-1 flex h-7 cursor-pointer items-center gap-1.5 self-start rounded-control px-2 text-[12px] font-medium text-muted-foreground transition-colors duration-150 ease-out hover:bg-[var(--surface-hover)] hover:text-foreground"
+        >
+          <ChevronRight
+            aria-hidden
+            className={cn(
+              "size-3.5 transition-transform duration-200 ease-out motion-reduce:transition-none",
+              open && "rotate-90",
+            )}
+          />
+          Advanced
+          <span className="text-muted-foreground/70 tabular-nums">{count}</span>
+        </button>
+        {aside}
+      </div>
+      <div
+        className="grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none"
+        style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
+      >
+        <div className="-m-1 min-h-0 overflow-hidden p-1" inert={!open}>
+          <div
+            className={cn(
+              "pt-2 transition-opacity duration-200 ease-out motion-reduce:transition-none",
+              open ? "opacity-100" : "opacity-0",
+            )}
+          >
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ControlsBody<S extends ControlSchema>({
+  controls,
+  rows,
+  presets,
+  onReset,
+  snippet,
+}: Omit<DemoControlsProps<S>, "title" | "portal">) {
+  const set = controls.setValue as (key: string, value: ControlValue) => void;
+  const values = controls.values as Record<string, ControlValue>;
+  const schema = controls.schema as ControlSchema;
+
+  const visible = Object.keys(schema).filter((key) => {
+    const def = schema[key];
+    if (def.when && !def.when(values)) return false;
+    if (
+      def.kind === "custom" &&
+      rows?.[key as keyof S & string] === undefined
+    ) {
+      return false;
+    }
+    return true;
+  });
+  const primary = groupKeys(
+    schema,
+    visible.filter((key) => !schema[key].advanced),
+  );
+  const advancedKeys = visible.filter((key) => schema[key].advanced);
+  const advanced = groupKeys(schema, advancedKeys);
+
+  const renderRow = (key: string) => {
+    const override = rows?.[key as keyof S & string];
+    if (override !== undefined) return override;
+    return (
+      <ControlRow name={key} def={schema[key]} value={values[key]} set={set} />
+    );
+  };
+
+  const handleReset = () => {
+    controls.reset();
+    onReset?.();
+  };
+
+  const hasPresets = presets !== undefined && presets.length > 0;
+
+  const actions = (
+    <div className="-mr-1 ml-auto flex items-center gap-0.5">
+      {snippet ? <CopyCodeButton snippet={snippet} /> : null}
+      <ShareLinkButton />
+      <button
+        type="button"
+        onClick={handleReset}
+        disabled={controls.isDefault}
+        aria-label="Reset"
+        className="pressable inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-control px-2.5 text-[12.5px] font-medium text-muted-foreground transition-[color,background-color,opacity,transform] duration-150 ease-out hover:bg-muted/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-40 @max-xs:w-8 @max-xs:px-0"
+      >
+        <RotateCcw aria-hidden className="size-3" />
+        <span className="@max-xs:sr-only">Reset</span>
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="@container flex flex-col gap-4">
+      {hasPresets ? (
+        <PresetPicker controls={controls} presets={presets} onApply={onReset} />
+      ) : null}
+
+      <GroupGrid groups={primary} renderRow={renderRow} />
+
+      {advancedKeys.length > 0 ? (
+        <Advanced count={advancedKeys.length} aside={actions}>
+          <GroupGrid groups={advanced} renderRow={renderRow} />
+        </Advanced>
+      ) : (
+        <div className="-mt-1 flex items-center">{actions}</div>
+      )}
+    </div>
   );
 }
 
@@ -317,24 +627,20 @@ export function DemoControls<S extends ControlSchema>({
   title,
   controls,
   rows,
+  presets,
   onReset,
   portal = false,
   snippet,
 }: DemoControlsProps<S>) {
   const shouldReduceMotion = useReducedMotion();
-  const inlineTarget = useContext(DemoControlsTargetContext);
+  const target = useContext(DemoControlsTargetContext);
+  const stage = useStage();
   const [open, setOpen] = useState(false);
   const mounted = useSyncExternalStore(
     emptySubscribe,
     () => true,
     () => false,
   );
-
-  const { isDefault } = controls;
-  const handleReset = () => {
-    controls.reset();
-    onReset?.();
-  };
 
   useEffect(() => {
     if (!snippet) return;
@@ -343,30 +649,18 @@ export function DemoControls<S extends ControlSchema>({
 
   useEffect(() => () => publishDemoSnippet(null), []);
 
-  if (inlineTarget) {
-    return createPortal(
-      <div className="flex flex-col">
-        <div className="mb-1.5 flex items-center justify-between">
-          <p className="text-[12px] font-medium text-muted-foreground/70">
-            Controls
-          </p>
-          <button
-            type="button"
-            onClick={handleReset}
-            disabled={isDefault}
-            className="inline-flex cursor-pointer items-center gap-1 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-          >
-            <RotateCcw aria-hidden className="size-3" />
-            Reset
-          </button>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <SchemaRows controls={controls} rows={rows} />
-        </div>
-      </div>,
-      inlineTarget,
-    );
-  }
+  const body = (
+    <ControlsBody
+      controls={controls}
+      rows={rows}
+      presets={presets}
+      onReset={onReset}
+      snippet={snippet}
+    />
+  );
+
+  if (target) return createPortal(body, target);
+  if (stage) return null;
 
   if (portal && !mounted) return null;
 
@@ -383,32 +677,20 @@ export function DemoControls<S extends ControlSchema>({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={
               shouldReduceMotion
-                ? { opacity: 0 }
-                : { opacity: 0, y: 8, scale: 0.98 }
+                ? { opacity: 0, transition: { duration: DURATION.exit } }
+                : {
+                    opacity: 0,
+                    y: 8,
+                    scale: 0.98,
+                    transition: { duration: DURATION.fast, ease: EASE_OUT },
+                  }
             }
-            transition={{ duration: open ? 0.3 : 0.15, ease: EASE }}
-            className="w-72 rounded-2xl border border-border/60 bg-background/85 p-3 shadow-xl shadow-black/5 backdrop-blur-xl backdrop-saturate-150"
+            transition={{ duration: DURATION.slow, ease: EASE_OUT }}
+            style={{ transformOrigin: "bottom right" }}
+            className="surface-panel w-[min(21rem,calc(100vw-2rem))] rounded-panel p-2"
           >
-                <div className="mb-2 flex items-center justify-between pl-1">
-              <p className="text-[13px] font-semibold tracking-[-0.01em]">
-                {title}
-              </p>
-              <div className="flex items-center">
-                <ShareLinkButton />
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  disabled={isDefault}
-                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-                >
-                  <RotateCcw aria-hidden className="size-3" />
-                  Reset
-                </button>
-              </div>
-            </div>
-            <ScrollFade>
-              <SchemaRows controls={controls} rows={rows} />
-            </ScrollFade>
+            <p className="sr-only">{title}</p>
+            <ScrollFade>{body}</ScrollFade>
           </motion.div>
         )}
       </AnimatePresence>
@@ -417,7 +699,7 @@ export function DemoControls<S extends ControlSchema>({
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
-        className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border/60 bg-background/70 px-4 py-2.5 text-[13px] font-medium backdrop-blur-xl backdrop-saturate-150 transition-colors hover:bg-muted/70"
+        className="surface-floating pressable inline-flex h-10 cursor-pointer items-center gap-2 rounded-control px-4 text-[13px] font-medium"
       >
         {open ? (
           <X aria-hidden className="size-3.5" />
@@ -447,20 +729,22 @@ export function SwitchRow({
       role="switch"
       aria-checked={checked}
       onClick={() => onCheckedChange(!checked)}
-      className="flex h-8 w-full shrink-0 cursor-pointer items-center justify-between rounded-lg bg-muted/60 px-3 transition-[background-color,opacity] hover:bg-muted/80"
+      className="flex h-8 w-full shrink-0 cursor-pointer items-center justify-between rounded-control bg-muted/60 px-3 transition-colors duration-150 ease-out hover:bg-muted/80"
     >
       <span className="text-[12.5px] font-medium text-foreground/90">
         {label}
       </span>
       <span
-        className={`relative h-4.5 w-8 rounded-full transition-colors ${
-          checked ? "bg-foreground" : "bg-border"
-        }`}
+        className={cn(
+          "relative h-4.5 w-8 rounded-[6px] transition-colors duration-200 ease-out",
+          checked ? "bg-foreground" : "bg-border-strong",
+        )}
       >
         <span
-          className={`absolute top-0.5 left-0.5 size-3.5 rounded-full bg-background transition-transform ${
-            checked ? "translate-x-3.5" : ""
-          }`}
+          className={cn(
+            "absolute top-0.5 left-0.5 size-3.5 rounded-[4px] bg-background shadow-sm transition-transform duration-200 ease-out",
+            checked && "translate-x-3.5",
+          )}
         />
       </span>
     </button>
@@ -479,27 +763,15 @@ export function RadioRow<V extends string>({
   onValueChange: (value: V) => void;
 }) {
   return (
-    <div
-      role="radiogroup"
-      aria-label={label}
-      className="flex h-8 w-full shrink-0 items-center gap-1 rounded-lg bg-muted/60 p-1"
-    >
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          role="radio"
-          aria-checked={value === option.value}
-          onClick={() => onValueChange(option.value)}
-          className={`h-6 flex-1 cursor-pointer rounded-md text-[12px] font-medium transition-colors ${
-            value === option.value
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
+    <SegmentedRow
+      label={label}
+      options={options.map((option) => ({
+        id: option.value,
+        label: option.label,
+      }))}
+      value={value}
+      onValueChange={onValueChange}
+      className="w-full shrink-0"
+    />
   );
 }

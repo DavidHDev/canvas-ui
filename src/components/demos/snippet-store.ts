@@ -1,7 +1,5 @@
 export interface DemoSnippet {
-  /** Exported component name, e.g. "Liquid". */
   component: string;
-  /** Props exactly as currently configured in the demo controls. */
   props: Record<string, unknown>;
 }
 

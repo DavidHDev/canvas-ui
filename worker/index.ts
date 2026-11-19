@@ -233,7 +233,6 @@ async function subscribe(request: Request, env: Env): Promise<Response> {
   }
 
   if (!response.ok) {
-    // Contacts are global in Resend. An address may already exist in another
     if (response.status === 409 || response.status === 422) {
       let segmentResponse: Response;
       try {

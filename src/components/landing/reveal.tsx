@@ -12,7 +12,6 @@ export function Reveal({
 }: {
   children: ReactNode;
   className?: string;
-  /** Stagger delay in ms (keep within 0-240). */
   delay?: number;
   as?: "div" | "li" | "section";
 }) {

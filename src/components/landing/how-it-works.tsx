@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MousePointer2 } from "lucide-react";
+import { MousePointer2 } from "@/components/icons";
 
 import { Reveal } from "@/components/landing/reveal";
-import { Stitches } from "@/components/landing/stitches";
 
 const TYPED = "npx shadcn@latest add @canvas-ui/particle-reveal-react";
 const PHASE_MS = 5200;
@@ -38,7 +37,7 @@ function PickStage() {
       {TILES.map((name, index) => (
         <div
           key={name}
-          className={`flex items-center justify-center rounded-md border border-border/60 bg-muted/30 px-2 text-center text-xs text-muted-foreground ${
+          className={`flex items-center justify-center rounded-md bg-muted/45 px-2 text-center text-xs text-muted-foreground ${
             index === 4 ? "hiw-tile-selected" : ""
           }`}
         >
@@ -153,9 +152,8 @@ export function HowItWorks() {
   return (
     <section
       aria-labelledby="how-it-works-heading"
-      className="relative border-t border-dashed border-border/60"
+      className="relative"
     >
-      <Stitches />
       <div className="w-full px-5 py-24 sm:px-8 sm:py-32">
         <Reveal>
           <h2
@@ -170,7 +168,7 @@ export function HowItWorks() {
           delay={80}
           className="mt-12 grid grid-cols-1 items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-16"
         >
-          <ol className="order-2 flex flex-col lg:order-1">
+          <ol className="order-2 flex flex-col gap-2 lg:order-1">
             {STEPS.map((step, index) => {
               const active = phase === index;
               return (
@@ -179,50 +177,53 @@ export function HowItWorks() {
                     type="button"
                     onClick={() => goTo(index)}
                     aria-current={active ? "step" : undefined}
-                    className="w-full py-5 text-left"
+                    className={`relative w-full cursor-pointer overflow-hidden rounded-frame px-5 py-4 text-left transition-colors duration-200 ease-out ${
+                      active ? "bg-muted/70" : "bg-muted/35 hover:bg-muted/55"
+                    }`}
                   >
-                    <p
-                      className={`font-mono text-sm transition-colors duration-200 ${
-                        active ? "text-foreground" : "text-muted-foreground/70"
-                      }`}
-                    >
-                      {step.index}
-                    </p>
-                    <h3
-                      className={`mt-2 text-lg font-medium tracking-tight transition-colors duration-200 ${
-                        active ? "text-foreground" : "text-muted-foreground"
-                      }`}
-                    >
-                      {step.title}
-                    </h3>
-                    <div
-                      className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-                        active ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-                      }`}
-                    >
-                      <div className="overflow-hidden">
-                        <p
-                          className={`max-w-sm pt-2 text-sm leading-6 text-muted-foreground transition-opacity duration-300 ${
-                            active ? "opacity-100" : "opacity-0"
-                          }`}
-                        >
-                          {step.body}
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                  <div className="relative h-px overflow-hidden bg-border/60">
                     {active && (
-                      <div
+                      <span
                         key={`${phase}-${tick}`}
-                        className="hiw-progress absolute inset-0 bg-foreground"
+                        aria-hidden
+                        className="hiw-progress absolute inset-0 bg-foreground/[0.045]"
                         style={{
                           animationDuration: `${PHASE_MS}ms`,
                           animationPlayState: inView ? "running" : "paused",
                         }}
                       />
                     )}
-                  </div>
+                    <span className="relative block">
+                      <span
+                        className={`block font-mono text-sm transition-colors duration-200 ${
+                          active ? "text-foreground" : "text-muted-foreground/70"
+                        }`}
+                      >
+                        {step.index}
+                      </span>
+                      <span
+                        className={`mt-1.5 block text-lg font-medium tracking-tight transition-colors duration-200 ${
+                          active ? "text-foreground" : "text-muted-foreground"
+                        }`}
+                      >
+                        {step.title}
+                      </span>
+                      <span
+                        className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+                          active ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                        }`}
+                      >
+                        <span className="overflow-hidden">
+                          <span
+                            className={`block max-w-sm pt-2 text-sm leading-6 text-muted-foreground transition-opacity duration-300 ${
+                              active ? "opacity-100" : "opacity-0"
+                            }`}
+                          >
+                            {step.body}
+                          </span>
+                        </span>
+                      </span>
+                    </span>
+                  </button>
                 </li>
               );
             })}
@@ -230,19 +231,14 @@ export function HowItWorks() {
 
           <div
             ref={stageRef}
-            className="order-1 min-w-0 rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background px-1 pb-1 lg:order-2"
+            className="order-1 min-w-0 frame pt-0 lg:order-2"
           >
             <div className="flex items-center gap-2 px-3 py-2">
-              <span className="flex gap-1.5" aria-hidden>
-                <span className="size-2.5 rounded-full bg-foreground/10" />
-                <span className="size-2.5 rounded-full bg-foreground/10" />
-                <span className="size-2.5 rounded-full bg-foreground/10" />
-              </span>
-              <span className="ml-2 font-mono text-[11px] text-muted-foreground">
+              <span className="font-mono text-[11px] text-muted-foreground">
                 {STEPS[phase].window}
               </span>
             </div>
-            <div className="h-64 min-w-0 overflow-hidden rounded-lg border border-dashed border-border/70 bg-background sm:h-72">
+            <div className="h-64 min-w-0 overflow-hidden frame-inset bg-background sm:h-72">
               {phase === 0 && <PickStage key={tick} />}
               {phase === 1 && <TerminalStage key={tick} />}
               {phase === 2 && <EditStage key={tick} />}

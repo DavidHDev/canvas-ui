@@ -1,14 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
-/*
- * WebGPU/vgpu port of InkObject. The three.js PMREM studio-room environment
- * cannot be reproduced 1:1 without the old three.js GPU backend, so this
- * port keeps three.js for loading, geometry, texture and camera/control CPU
- * work, then approximates MeshStandardMaterial with analytic room lights plus
- * Lambert/GGX-ish shading before running the ink post-process in WGSL.
- */
 import {
   draw,
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   geometry,
   init,
@@ -27,13 +20,14 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { resolveOptions } from "../options";
 
 export interface InkObjectOptions {
   /** URL of the asset to display: GLB/glTF, SVG, PNG, JPEG, WebP, or GIF. Object URLs from a file input work too. The format is sniffed from the bytes, not the extension. */
   src?: string;
   /** Enable the ink pass. Turn off to see the raw render. */
   ink?: boolean;
-  /** Color of the ink strokes. */
+  /** Color of the ink strokes, as any CSS color. Empty string picks one automatically: dark or light against `background`, or the page text color when the canvas is transparent, so it follows your theme. */
   inkColor?: string;
   /** Distance between stroke centers in CSS pixels. */
   lineSpacing?: number;
@@ -104,23 +98,19 @@ export interface InkObjectOptions {
 }
 
 export interface InkObjectElements {
-  /** Canvas the scene renders to. */
   canvas: HTMLCanvasElement;
 }
 
 export interface InkObjectInstance {
-  /** Update options live. Changing src loads the new asset. */
   setOptions: (options: InkObjectOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
 const DEFAULTS: Required<InkObjectOptions> = {
   src: "",
   ink: true,
-  inkColor: "#111111",
+  inkColor: "",
   lineSpacing: 8,
   strokeWeight: 1,
   angle: 0,
@@ -156,7 +146,7 @@ const DEFAULTS: Required<InkObjectOptions> = {
   onError: null,
 };
 
-const FORWARD_SHADER = /* wgsl */ `
+const FORWARD_SHADER = `
 struct SceneParams {
   viewProj: mat4x4f,
   view: mat4x4f,
@@ -272,7 +262,7 @@ fn addLight(sum: ptr<function, vec3f>, pos: vec3f, color: vec3f, intensity: f32,
   return FSOut(vec4f(mapped, alpha), vec4f(in.viewZ, 0.0, 0.0, 1.0));
 }`;
 
-const POST_SHADER = /* wgsl */ `
+const POST_SHADER = `
 struct Params {
   inkColor: vec4f,
   paperColor: vec4f,
@@ -364,7 +354,8 @@ fn sampleHeight(pixel: vec2f) -> f32 {
 @fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let raw = textureSampleLevel(tDiffuse, uSampler, uv, 0.0);
   if (params.ink < 0.5) {
-    return vec4f(toSrgb(raw.rgb) * raw.a, raw.a);
+    let rawPaper = params.paperAlpha * (1.0 - raw.a);
+    return vec4f(toSrgb(raw.rgb) * raw.a + toSrgb(params.paperColor.rgb) * rawPaper, raw.a + rawPaper);
   }
 
   let frag = uv * params.resolution;
@@ -785,8 +776,6 @@ function createImageObject(
   const longest = Math.max(canvas.width, canvas.height, 1);
   const aspectW = canvas.width / longest;
   const aspectH = canvas.height / longest;
-  // The bevel is capped against the slab thickness so a nearly flat extrusion
-  // keeps a proportionate edge instead of being swallowed by its own bevel.
   const bevel = Math.min(BEVEL_SIZE, depth * 0.25);
   const geometry = new THREE.ExtrudeGeometry(
     buildShapes(canvas, aspectW, aspectH),
@@ -811,11 +800,6 @@ function createImageObject(
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = anisotropy;
-  // Photographs carry their own tonal range, which is what the ink strokes are
-  // meant to reproduce. Routing them through the lit + tone-mapped pipeline
-  // crushes white to ~0.67 and lifts black to ~0.10, leaving the shader barely
-  // half a stop to work with. Vector art is flat by nature, so it keeps the lit
-  // material and gains dimension from the extrusion instead.
   const material = lit
     ? new THREE.MeshStandardMaterial({
         map: texture,
@@ -844,7 +828,51 @@ function disposeObject(root: THREE.Object3D) {
   });
 }
 
+let colorProbe: CanvasRenderingContext2D | null | undefined;
+
+function parseCssColor(value: string): [number, number, number] | null {
+  if (!value || typeof document === "undefined") return null;
+  if (colorProbe === undefined) {
+    const probe = document.createElement("canvas");
+    probe.width = 1;
+    probe.height = 1;
+    colorProbe = probe.getContext("2d", { willReadFrequently: true });
+  }
+  if (!colorProbe) return null;
+  colorProbe.clearRect(0, 0, 1, 1);
+  colorProbe.fillStyle = "#000000";
+  colorProbe.fillStyle = value;
+  colorProbe.fillRect(0, 0, 1, 1);
+  const [r, g, b] = colorProbe.getImageData(0, 0, 1, 1).data;
+  return [r / 255, g / 255, b / 255];
+}
+
+const LIGHT_PAPER_INK: [number, number, number] = [0.067, 0.067, 0.067];
+const DARK_PAPER_INK: [number, number, number] = [0.96, 0.96, 0.96];
+
+function resolveInkColor(
+  inkColor: string,
+  background: string,
+  canvas: HTMLCanvasElement,
+): [number, number, number] {
+  const explicit = parseCssColor(inkColor);
+  if (explicit) return explicit;
+  const paper = parseCssColor(background);
+  if (paper) {
+    const luma = 0.2126 * paper[0] + 0.7152 * paper[1] + 0.0722 * paper[2];
+    return luma > 0.5 ? LIGHT_PAPER_INK : DARK_PAPER_INK;
+  }
+  return parseCssColor(getComputedStyle(canvas).color) ?? LIGHT_PAPER_INK;
+}
+
 const CAMERA_DIR = new THREE.Vector3(0, -1, 4).normalize();
+
+function fitFov(fov: number, aspect: number): number {
+  if (aspect >= 1) return fov;
+  const half = THREE.MathUtils.degToRad(fov) / 2;
+  const margin = 1 + 0.25 * (1 - aspect);
+  return THREE.MathUtils.radToDeg(2 * Math.atan((Math.tan(half) * margin) / aspect));
+}
 const MODEL_LIFT = 0.3;
 const RASTER_SIZE = 2048;
 const TRACE_SIZE = 512;
@@ -875,14 +903,12 @@ interface RenderMesh {
   material: MaterialInfo;
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every InkObject instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -957,7 +983,7 @@ export function createInkObject(
 ): InkObjectInstance | null {
   if (!supportsWebGPU()) return null;
   const { canvas } = elements;
-  const config: Required<InkObjectOptions> = { ...DEFAULTS, ...options };
+  const config: Required<InkObjectOptions> = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(config.fov, 1, 0.1, 200);
@@ -1200,13 +1226,23 @@ export function createInkObject(
   const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
   let reducedMotion = motionQuery.matches;
 
+  let inkCheckedAt = -Infinity;
+  function applyInkColor(force: boolean) {
+    const now = performance.now();
+    if (!force && (config.inkColor || now - inkCheckedAt < 250)) return;
+    inkCheckedAt = now;
+    const [r, g, b] = resolveInkColor(config.inkColor, config.background, canvas);
+    inkColor.setRGB(r, g, b, THREE.SRGBColorSpace);
+  }
+
   function applyOptions() {
+    applyInkColor(true);
     if (imageSource && Math.min(Math.max(config.depth, 0.002), 1) !== builtDepth) buildImageModel();
     controls.enableRotate = config.orbit;
     controls.enableZoom = config.zoom;
     controls.autoRotate = config.autoRotate && !reducedMotion;
     controls.autoRotateSpeed = config.autoRotateSpeed;
-    camera.fov = config.fov;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
     floatGroup.position.x = config.xOffset;
     floatGroup.position.y = MODEL_LIFT + config.yOffset;
@@ -1231,6 +1267,7 @@ export function createInkObject(
       if (postFx) postFx.set({ tDiffuse: sceneTarget, uHeight: sceneTarget.colors[1] });
     }
     camera.aspect = width / height;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
   }
 
@@ -1240,11 +1277,6 @@ export function createInkObject(
   const highlightColor = new THREE.Color();
   const inkColor = new THREE.Color();
   const paperColor = new THREE.Color();
-
-  function colorTuple(color: string, fallback: string): [number, number, number, number] {
-    const c = new THREE.Color(color || fallback);
-    return [c.r, c.g, c.b, color ? 1 : 0];
-  }
 
   function renderFallback() {
     if (!fallback2d) return;
@@ -1261,7 +1293,6 @@ export function createInkObject(
     camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
     viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     scene.updateMatrixWorld(true);
-    const bg = colorTuple(config.background, "#000000");
     backgroundColor.set(config.background || "#000000");
     highlightColor.set(config.highlight || "#066aff");
     const sceneParams = {
@@ -1285,7 +1316,7 @@ export function createInkObject(
       });
     }
     const radians = (config.angle * Math.PI) / 180;
-    inkColor.set(config.inkColor || "#111111");
+    applyInkColor(false);
     paperColor.set(config.background || "#ffffff");
     postFx.set({
       params: {
@@ -1315,7 +1346,7 @@ export function createInkObject(
       },
     });
     gpuFrame(gpu, (f) => {
-      f.pass({ target: sceneTarget!, clear: bg, clearDepth: 1 }, (pass) => {
+      f.pass({ target: sceneTarget!, clear: [0, 0, 0, 0], clearDepth: 1 }, (pass) => {
         for (const item of renderMeshes) pass.draw(item.draw);
       });
       f.pass({ target: screen!, clear: [0, 0, 0, 0] }, postFx!);
@@ -1411,7 +1442,7 @@ export function createInkObject(
       depth: true,
       label: "ink-object.scene",
     });
-    postFx = effect(gpu, POST_SHADER, {
+    postFx = gpuEffect(gpu, POST_SHADER, {
       label: "ink-object.post",
       set: {
         uSampler: linearSampler,
@@ -1431,6 +1462,7 @@ export function createInkObject(
 
   return {
     setOptions(next: InkObjectOptions) {
+      next = resolveOptions(DEFAULTS, next);
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
         if (typeof value === "function") continue;

@@ -1,7 +1,3 @@
-// Run with `node scripts/test-android-fallback.mjs`.
-// Prerequisite: npm install --no-save --package-lock=false playwright esbuild
-// Desktop Chrome with an Android identity verifies the fallback policy, not
-// Android's GPU driver or the original renderer-process crash.
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -100,8 +96,6 @@ try {
           device.addEventListener("uncapturederror", event => window.gpuErrors.push(event.error.message));
           return device;
         };
-        // A WebGPU presentation texture may be cleared after compositing. Read
-        // just after submission, while the rendered texture is still current.
         const submit = GPUQueue.prototype.submit;
         GPUQueue.prototype.submit = function (...args) {
           const result = submit.apply(this, args);
@@ -119,8 +113,6 @@ try {
       const support = await page.evaluate(() => Object.values(window.engines).map(engine => engine.supportsHtmlInCanvas()));
       assert.deepEqual(support, engines.map(() => profile === "desktop"), `${profile}: all engines must agree`);
 
-      // A native-capable browser can still have sibling fallback content, e.g.
-      // the first React effect during hydration or after native-init failure.
       for (const layout of profile === "desktop" ? ["fallback", "native"] : ["fallback", "capture-child"]) {
         for (const component of ["Bend", "Blaze"]) {
           for (const flavor of ["Vanilla", "WebGPU"]) {

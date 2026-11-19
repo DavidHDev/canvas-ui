@@ -1,6 +1,3 @@
-// Run with `node scripts/test-playground-controls.mjs`.
-// Prerequisite: npm install --no-save --package-lock=false playwright esbuild
-// SOURCE_REF=HEAD tests committed sources without changing the checkout.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
@@ -23,6 +20,7 @@ const stubs = {
     }
   `,
   "@/components/playground/mock-site": `export const MockSite = () => <div>Example content</div>;`,
+  "@/components/common/newsletter-inline": `export const NewsletterInline = () => null;`,
   "@/components/docs/live/Liquid": `export const Liquid = ({ children }) => <div>{children}</div>;`,
   "@/components/docs/live/ParticleReveal": `export const ParticleReveal = ({ children }) => <div>{children}</div>;`,
   "@/components/playground/playground-sidebar": `
@@ -47,7 +45,7 @@ const stubs = {
   "@/components/playground/demos": `
     import { lazy, Suspense } from "react";
     import { LiquidDemo } from "@/demos/liquid-demo";
-    import { ParticleRevealEntry } from "@/components/playground/entries/particle-reveal-entry";
+    import { ParticleRevealDemo } from "@/demos/particle-reveal-demo";
     import { DemoControls } from "@/components/demos/demo-controls";
     import { custom } from "@/components/demos/control-schema";
     import { useDemoControls } from "@/hooks/use-demo-controls";
@@ -64,15 +62,13 @@ const stubs = {
     export const DEFAULT_PLAYGROUND_SLUG = "liquid";
     const demos = [
       { slug: "liquid", kind: "wrap", Component: new URLSearchParams(location.search).has("delayLiquid") ? DelayedLiquid : LiquidDemo },
-      { slug: "particle-reveal", kind: "custom", Component: ParticleRevealEntry },
+      { slug: "particle-reveal", kind: "wrap", Component: ParticleRevealDemo },
       { slug: "custom-probe", kind: "custom", Component: CustomProbe },
     ];
     export const getPlaygroundDemo = slug => demos.find(demo => demo.slug === slug) ?? demos[0];
   `,
 };
 
-// Keep the actual state, selection and production demo schemas. Replacing only
-// rendering-heavy modules makes this independent of GPU/browser feature flags.
 const bundled = await build({
   absWorkingDir: root,
   stdin: {
@@ -154,8 +150,6 @@ async function waitForQuery(expected) {
 }
 
 try {
-  // A shared URL can be changed before its dynamically imported demo mounts.
-  // The outgoing schema must still reset before the next component renders.
   await load("?delayLiquid=1&radius=1.5&tracking=keep", false);
   await page.locator("#particle").click();
   await page.evaluate(() => window.finishLiquidLoad());
@@ -165,8 +159,6 @@ try {
     .filter(render => render.title === "Particle Reveal controls")
     .every(render => render.values.radius === 500)));
 
-  // While the initial chunk loads, the latest request wins. Selecting the
-  // current component again cancels the pending switch and preserves its URL.
   await load("?delayLiquid=1&radius=1.5&tracking=keep", false);
   await page.locator("#particle").click();
   await page.locator("#custom").click();
@@ -182,8 +174,6 @@ try {
   assert.equal((await values()).radius, 1.5);
   assert.equal(new URL(page.url()).searchParams.get("radius"), "1.5");
 
-  // Existing share links hydrate normally, and clicking the active component
-  // retains even a control change still queued in the same event.
   await load("?radius=0.75&color=abcdef&rainbow=true&tracking=keep");
   assert.equal((await values()).radius, 0.75);
   await page.locator("#same-component").click();
@@ -191,8 +181,6 @@ try {
   assert.equal((await values()).radius, 1.5);
   assert.equal(await page.locator("#active").textContent(), "liquid");
 
-  // Switching clears every outgoing control, including those absent from the
-  // new schema, while preserving unrelated query parameters.
   await page.locator("#particle").click();
   await waitForQuery({ c: "particle-reveal", radius: null, color: null, rainbow: null, tracking: "keep" });
   assert.equal((await values()).radius, 500);
@@ -200,14 +188,12 @@ try {
   assert.ok(particleRenders.length > 0);
   assert.ok(particleRenders.every(render => render.values.radius === 500), "The new component must never render with the outgoing radius");
 
-  // Reverse switching restores Liquid's default and removes the default c key.
   await page.evaluate(() => window.controls.setValue("radius", 700));
   await waitForQuery({ radius: "700" });
   await page.locator("#liquid").click();
   await waitForQuery({ c: null, radius: null, tracking: "keep" });
   assert.equal((await values()).radius, 0.3);
 
-  // A pending edit must be replaced by the reset before nuqs flushes the URL.
   await page.locator("#edit-and-switch").click();
   await waitForQuery({ c: "particle-reveal", radius: null, tracking: "keep" });
   assert.equal((await values()).radius, 500);
@@ -216,9 +202,8 @@ try {
   await page.waitForFunction(() => Boolean(window.controls));
   assert.equal((await values()).radius, 500, "Reload must retain the reset");
 
-  // Exercise actual configured ranges plus stricter numeric URL parsing.
   for (const [query, expected] of [
-    ["-10", 60], ["1.5", 60], ["9000", 900], ["325.5", 325.5],
+    ["-10", 60], ["1.5", 60], ["9000", 600], ["325.5", 325.5],
     ["", 500], [" ", 500], ["12oops", 500], ["NaN", 500],
     ["Infinity", 500], ["-Infinity", 500], ["1e309", 500],
   ]) {
@@ -230,7 +215,6 @@ try {
     assert.equal((await values()).count, expected, `Unexpected custom number for ${JSON.stringify(query)}`);
   }
 
-  // Local upload URLs remain local and cannot leak into a newly selected demo.
   await page.evaluate(() => window.controls.setValue("source", "blob:local-upload"));
   await page.waitForFunction(() => window.controls.values.source === "blob:local-upload");
   assert.equal(new URL(page.url()).searchParams.get("source"), null);

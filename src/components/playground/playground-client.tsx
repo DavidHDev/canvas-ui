@@ -40,7 +40,6 @@ export function PlaygroundClient() {
 
   const applySelection = useCallback((slug: string) => {
     pendingSelection.current = null;
-    // nuqs batches the reset with selection and replaces any queued control edits.
     resetControls.current?.();
     void setParam(
       slug === DEFAULT_PLAYGROUND_SLUG ? null : slug,
@@ -61,9 +60,6 @@ export function PlaygroundClient() {
       pendingSelection.current = null;
       return;
     }
-    // On a cold load, wait for the outgoing demo's schema before clearing its
-    // query keys. This preserves unrelated parameters without importing demos
-    // eagerly or letting a shared URL's settings leak into the next component.
     if (!resetControls.current) {
       pendingSelection.current = resolved;
       return;

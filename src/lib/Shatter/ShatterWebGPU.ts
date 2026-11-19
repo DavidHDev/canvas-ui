@@ -13,6 +13,7 @@ import {
   type Surface,
 } from "vgpu";
 import type { Texture } from "vgpu";
+import { resolveOptions } from "../options";
 
 export interface ShatterOptions {
   /** Radius of the shatter lens around the cursor, relative to the screen height. */
@@ -33,8 +34,8 @@ export interface ShatterOptions {
   scatter?: number;
   /** Perspective distance in CSS pixels. Lower is more dramatic. */
   perspective?: number;
-  /** Color of the void behind lifted tiles as [r, g, b] in 0-1 range. */
-  gapColor?: [number, number, number];
+  /** Color of the void behind lifted tiles as [r, g, b] in 0-1 range, or "auto" to match the page background. */
+  gapColor?: [number, number, number] | "auto";
   /** Opacity of the drop shadows under lifted tiles (0 to 2). */
   shadow?: number;
   /** Strength of the per-tile lighting (0 to 2). */
@@ -54,20 +55,14 @@ export interface ShatterOptions {
 }
 
 export interface ShatterElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGPU effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface ShatterInstance {
-  /** Update effect options live. */
   setOptions: (options: ShatterOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -81,7 +76,7 @@ const DEFAULTS: Required<ShatterOptions> = {
   tilt: 2,
   scatter: 5,
   perspective: 1500,
-  gapColor: [0, 0, 0],
+  gapColor: "auto",
   shadow: 0.5,
   shading: 0.5,
   refraction: 1.5,
@@ -129,7 +124,7 @@ function createRectCache(element: Element): RectCache {
   };
 }
 
-const SHADER = /* wgsl */ `
+const SHADER = `
 struct Params {
   resolution: vec2f,
   pointer: vec2f,
@@ -442,14 +437,12 @@ export function supportsHtmlInCanvas(): boolean {
   );
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every Shatter instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -465,7 +458,7 @@ export function createShatter(
   options: ShatterOptions = {},
 ): ShatterInstance | null {
   if (!supportsWebGPU()) return null;
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
@@ -539,7 +532,6 @@ export function createShatter(
       contentTexture.size[0] !== width ||
       contentTexture.size[1] !== height
     ) {
-      // A new wrapper invalidates vgpu's cached bindings to the old texture.
       contentTexture?.destroy();
       contentTexture = gpu!.device.createTexture({
         size: [width, height],
@@ -586,7 +578,7 @@ export function createShatter(
         tilt: config.tilt,
         scatter: Math.max(config.scatter, 0) * dpr,
         persp: Math.max(config.perspective, 200) * dpr,
-        gap: config.gapColor,
+        gap: config.gapColor === "auto" ? pageBg : config.gapColor,
         shadow: config.shadow,
         shading: config.shading,
         refract: Math.max(config.refraction, 0),
@@ -730,11 +722,66 @@ export function createShatter(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
+
+  let pageBg: [number, number, number] = [1, 1, 1];
+  const bgProbe = document.createElement("canvas");
+  bgProbe.width = bgProbe.height = 1;
+  const bgCtx = bgProbe.getContext("2d", { willReadFrequently: true });
+
+  function syncPageBg() {
+    if (!bgCtx) return;
+    let el: Element | null = content;
+    while (el) {
+      const css = getComputedStyle(el).backgroundColor;
+      if (css && css !== "transparent") {
+        bgCtx.clearRect(0, 0, 1, 1);
+        bgCtx.fillStyle = css;
+        bgCtx.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = bgCtx.getImageData(0, 0, 1, 1).data;
+        if (a > 0) {
+          pageBg = [r / 255, g / 255, b / 255];
+          return;
+        }
+      }
+      el = el.parentElement;
+    }
+    pageBg = [1, 1, 1];
+  }
+  syncPageBg();
+
+  let themeTimer = 0;
+  function onThemeShift() {
+    syncPageBg();
+    start();
+    window.clearTimeout(themeTimer);
+    themeTimer = window.setTimeout(() => {
+      syncPageBg();
+      start();
+    }, 300);
+  }
+  const themeObserver = new MutationObserver(onThemeShift);
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class", "style", "data-theme"],
+  });
+  const schemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  schemeQuery.addEventListener("change", onThemeShift);
 
   const listenTarget = output.parentElement ?? output;
   const rectCache = createRectCache(output);
@@ -758,13 +805,16 @@ export function createShatter(
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) => config[key as keyof ShatterOptions] !== value,
         )
       )
         return;
+      const wasAuto = config.gapColor === "auto";
       Object.assign(config, next);
+      if (config.gapColor === "auto" && !wasAuto) syncPageBg();
       start();
     },
     resize() {
@@ -777,6 +827,10 @@ export function createShatter(
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();
+      themeObserver.disconnect();
+      schemeQuery.removeEventListener("change", onThemeShift);
+      window.clearTimeout(themeTimer);
+      document.removeEventListener("visibilitychange", syncVisibility);
       motionQuery.removeEventListener("change", onMotionChange);
       listenTarget.removeEventListener("pointermove", onPointerMove);
       listenTarget.removeEventListener("pointerleave", onPointerLeave);

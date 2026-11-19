@@ -1,78 +1,88 @@
 "use client";
 
-import { type ReactNode } from "react";
-
-import { color, scrub } from "@/components/demos/control-schema";
-import {
-  DemoControls,
-  useDemoScrollbarGutter,
-} from "@/components/demos/demo-controls";
+import { color, hexToRgb, presets, scrub } from "@/components/demos/control-schema";
+import { DemoControls } from "@/components/demos/demo-controls";
+import { useDemoSurface, type DemoProps } from "@/components/demos/demo-surface";
 import { useDemoControls } from "@/hooks/use-demo-controls";
 import { Blaze } from "@/components/docs/live/Blaze";
+import { DocsScene } from "@/demos/scenes";
 
 const CONTROLS = {
-  height: scrub("Height", 0.97, { min: 0.1, max: 1, step: 0.01 }),
-  distortion: scrub("Distortion", 0.6, {
+  height: scrub("Flame height", 0.97, { min: 0.1, max: 1, step: 0.01, group: "Fire" }),
+  glow: scrub("Glow", 2.5, { min: 0, max: 3, step: 0.1, decimals: 1, group: "Fire" }),
+  smoke: scrub("Smoke", 0.8, { min: 0, max: 2, step: 0.05, group: "Fire" }),
+  distortion: scrub("Heat haze", 0.6, {
     min: 0,
     max: 3,
     step: 0.1,
     decimals: 1,
+    group: "Fire",
   }),
-  distortionScale: scrub("Heat scale", 0.5, { min: 0.3, max: 3, step: 0.05 }),
-  speed: scrub("Speed", 1, { min: 0, max: 3, step: 0.1, decimals: 1 }),
-  sparks: scrub("Sparks", 0.5, { min: 0, max: 2, step: 0.05 }),
-  sparkDensity: scrub("Spark density", 1.5, { min: 0.3, max: 3, step: 0.05 }),
-  sparkSize: scrub("Spark size", 1, { min: 0.5, max: 3, step: 0.05 }),
-  layers: scrub("Layers", 4, { min: 1, max: 10, step: 1, decimals: 0 }),
-  smoke: scrub("Smoke", 0.5, { min: 0, max: 2, step: 0.05 }),
-  glow: scrub("Glow", 1.5, { min: 0, max: 3, step: 0.1, decimals: 1 }),
-  spark: color("Spark", "#ff660d"),
-  smokeColor: color("Smoke", "#ff6e1a"),
+  speed: scrub("Speed", 1, { min: 0, max: 3, step: 0.1, decimals: 1, group: "Fire" }),
+  sparks: scrub("Sparks", 0.7, { min: 0, max: 2, step: 0.05, group: "Sparks" }),
+  sparkDensity: scrub("Spark density", 1.5, {
+    min: 0.3,
+    max: 3,
+    step: 0.05,
+    group: "Sparks",
+  }),
+  sparkSize: scrub("Spark size", 1, { min: 0.5, max: 3, step: 0.05, group: "Sparks" }),
+  spark: color("Spark color", "#ff660d", { group: "Color" }),
+  smokeColor: color("Smoke & glow", "#ff6e1a", { group: "Color" }),
+  distortionScale: scrub("Haze detail", 0.5, {
+    min: 0.3,
+    max: 3,
+    step: 0.05,
+    group: "Fire",
+    advanced: true,
+  }),
+  layers: scrub("Spark layers", 4, {
+    min: 1,
+    max: 10,
+    step: 1,
+    decimals: 0,
+    group: "Sparks",
+    advanced: true,
+  }),
 };
 
-function hexToRgb(hex: string): [number, number, number] {
-  const value = parseInt(hex.slice(1), 16);
-  return [
-    ((value >> 16) & 255) / 255,
-    ((value >> 8) & 255) / 255,
-    (value & 255) / 255,
-  ];
-}
+const PRESETS = presets(CONTROLS, [
+  {
+    label: "Embers",
+    values: { height: 0.45, glow: 1, smoke: 0.2, distortion: 0.3, sparks: 1.2 },
+  },
+  {
+    label: "Inferno",
+    values: { glow: 2.6, smoke: 1.2, distortion: 1.6, sparks: 1, speed: 1.4 },
+  },
+  {
+    label: "Blue flame",
+    values: { spark: "#3d8bff", smokeColor: "#2463ff", glow: 2, smoke: 0.3 },
+  },
+]);
 
-export function BlazeDemo({ children }: { children: ReactNode }) {
+export function BlazeDemo({ children }: DemoProps) {
   const controls = useDemoControls(CONTROLS);
-  const setContentEl = useDemoScrollbarGutter();
+  const surface = useDemoSurface(
+    children,
+    <DocsScene slug="blaze" photo={0} />,
+  );
 
   const { spark, smokeColor, ...values } = controls.values;
+  const props = {
+    ...values,
+    sparkColor: hexToRgb(spark),
+    smokeColor: hexToRgb(smokeColor),
+  };
 
   return (
     <>
-      <Blaze
-        {...values}
-        sparkColor={hexToRgb(spark)}
-        smokeColor={hexToRgb(smokeColor)}
-        className="page-enter inset-0 z-30"
-        style={{ position: "fixed" }}
-      >
-        <div
-          ref={setContentEl}
-          className="min-h-full bg-background px-5 pt-24 pb-10 sm:px-8 lg:pt-16 lg:pr-8 lg:pl-72"
-        >
-          {children}
-        </div>
-      </Blaze>
-
+      <Blaze {...props} {...surface.props} />
       <DemoControls
         title="Blaze controls"
-        snippet={{
-          component: "Blaze",
-          props: {
-            ...values,
-            sparkColor: hexToRgb(spark),
-            smokeColor: hexToRgb(smokeColor),
-          },
-        }}
         controls={controls}
+        presets={PRESETS}
+        snippet={{ component: "Blaze", props }}
       />
     </>
   );

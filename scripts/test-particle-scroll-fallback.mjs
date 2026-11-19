@@ -1,6 +1,3 @@
-// Start the app, then run `node scripts/test-particle-scroll-fallback.mjs`.
-// Prerequisites: Playwright, its WebKit browser, and installed Chrome.
-// CANVAS_UI_URL defaults to http://localhost:3000.
 import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -72,8 +69,6 @@ async function checkPage(context, name, { renderer, native = false, rejectGpu = 
 
   await page.screenshot({ path: join(screenshots, `${name}.png`) });
   if (mobile) {
-    // Playwright's mobile WebKit has no wheel API. Check its actual overflow
-    // scroller and the resulting layout after changing its scroll position.
     await content.evaluate((element) => { element.scrollTop = 500; });
   } else {
     const rect = await content.boundingBox();

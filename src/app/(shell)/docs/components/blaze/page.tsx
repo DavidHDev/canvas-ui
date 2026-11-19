@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
 import { ComponentDoc } from "@/components/docs/component-doc";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
 import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { BlazeDemo } from "@/demos/blaze-demo";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Blaze",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const DESCRIPTION =
-  "Fire at the bottom of the page. Sparks, smoke, and heat distortion rise into your content. Look down, it is already burning.";
+  "Fire at the bottom of the page. Sparks, smoke, and heat distortion rise into your content.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -49,7 +49,7 @@ const API_REFERENCE: ApiProp[] = [
     name: "sparks",
     description: "Brightness of the rising sparks. 0 disables them.",
     type: "number",
-    defaultValue: "0.5",
+    defaultValue: "0.7",
   },
   {
     name: "sparkDensity",
@@ -74,13 +74,13 @@ const API_REFERENCE: ApiProp[] = [
     name: "smoke",
     description: "Intensity of the smoke. 0 disables it.",
     type: "number",
-    defaultValue: "0.5",
+    defaultValue: "0.8",
   },
   {
     name: "glow",
     description: "Warm ambient glow near the bottom edge.",
     type: "number",
-    defaultValue: "1.5",
+    defaultValue: "2.5",
   },
   {
     name: "sparkColor",
@@ -121,14 +121,9 @@ export default async function BlazePage() {
         installItem="blaze"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Sweep your cursor across the photo to set it alight."
-            alt="Demo photo for the Blaze effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={0} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </BlazeDemo>

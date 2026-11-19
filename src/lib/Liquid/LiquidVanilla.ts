@@ -1,6 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import { createRectCache } from "../rect-cache";
+import { resolveOptions } from "../options";
 
 export interface LiquidOptions {
   /** Resolution of the simulation grid. */
@@ -34,24 +35,15 @@ export interface LiquidOptions {
 }
 
 export interface LiquidElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGL effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface LiquidInstance {
-  /** Inject a splat at (x, y) in [0,1] space with velocity (dx, dy).
-   * Keeps the newest 64 pending calls while suspended; applies at most 8 per frame.
-   */
   splat: (x: number, y: number, dx: number, dy: number) => void;
-  /** Update simulation options live, including simulation target resolution. */
   setOptions: (options: LiquidOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -331,7 +323,7 @@ export function createLiquid(
   elements: LiquidElements,
   options: LiquidOptions = {},
 ): LiquidInstance | null {
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const gl = output.getContext("webgl2", {
@@ -568,7 +560,8 @@ export function createLiquid(
   function updateTexelSize() {
     const width = Math.max(output.clientWidth, 1);
     const height = Math.max(output.clientHeight, 1);
-    texelX = 1 / (config.simResolution * (width / (height + 400)));
+    const stretch = Math.min(width / (height + 400), 1.5);
+    texelX = 1 / (config.simResolution * stretch);
     texelY = 1 / config.simResolution;
   }
 
@@ -801,11 +794,8 @@ export function createLiquid(
   }
 
   const MAX_PENDING_SPLATS = 64;
-  const MAX_SPLATS_PER_FRAME = 8;
   type Splat = [number, number, number, number];
   const queued: Splat[] = [];
-  // Keep the latest pointer position without replaying a drag over later frames.
-  const pointerSplats = new Map<number, Splat>();
 
   let raf = 0;
   let lastTime = performance.now();
@@ -828,25 +818,13 @@ export function createLiquid(
     }
     const delta = Math.min((now - lastTime) / 1000, 1 / 30);
     lastTime = now;
-    if (queued.length > 0 || pointerSplats.size > 0) {
+    if (queued.length > 0) {
       idleAt = now + idleDelayMs();
-      let remaining = MAX_SPLATS_PER_FRAME;
-      // Reserve one slot so continuous pointer motion cannot starve API calls.
-      const pointerBudget = remaining - (queued.length > 0 ? 1 : 0);
-      let appliedPointers = 0;
-      for (const [id, splat] of pointerSplats) {
-        if (appliedPointers >= pointerBudget) break;
-        pointerSplats.delete(id);
-        applySplat(...splat);
-        appliedPointers++;
-        remaining--;
-      }
-      const count = Math.min(queued.length, remaining);
-      for (let i = 0; i < count; i++) applySplat(...queued.shift()!);
+      while (queued.length > 0) applySplat(...queued.shift()!);
     }
     step(delta);
     render();
-    if (now >= idleAt && !contentDirty && queued.length === 0 && pointerSplats.size === 0) {
+    if (now >= idleAt && !contentDirty && queued.length === 0) {
       running = false;
       return;
     }
@@ -879,22 +857,10 @@ export function createLiquid(
     queued.push(splat);
   }
 
-  function enqueuePointerSplat(id: number, splat: Splat) {
-    const previous = pointerSplats.get(id);
-    if (previous) {
-      splat[2] += previous[2];
-      splat[3] += previous[3];
-    } else if (pointerSplats.size >= MAX_SPLATS_PER_FRAME) {
-      pointerSplats.delete(pointerSplats.keys().next().value!);
-    }
-    pointerSplats.set(id, splat);
-  }
-
   function suspend() {
     cancelAnimationFrame(raf);
     running = false;
     pointers.clear();
-    pointerSplats.clear();
   }
 
   function onVisibilityChange() {
@@ -919,7 +885,7 @@ export function createLiquid(
     if (!previous) return;
     const dx = (px - previous.x) * config.force;
     const dy = -(py - previous.y) * config.force;
-    enqueuePointerSplat(event.pointerId, [px / rect.width, 1 - py / rect.height, dx, dy]);
+    enqueueSplat([px / rect.width, 1 - py / rect.height, dx, dy]);
     start();
   }
 
@@ -930,7 +896,7 @@ export function createLiquid(
     const y = event.clientY - rect.top;
     if (x < 0 || x > rect.width || y < 0 || y > rect.height) return;
     pointers.set(event.pointerId, { x, y });
-    enqueuePointerSplat(event.pointerId, [x / rect.width, 1 - y / rect.height, 1, 1]);
+    enqueueSplat([x / rect.width, 1 - y / rect.height, 1, 1]);
     start();
   }
 
@@ -975,11 +941,11 @@ export function createLiquid(
   return {
     splat(x, y, dx, dy) {
       if (destroyed || reducedMotion) return;
-      // Explicit API input is retained while suspended, up to the queue limit.
       enqueueSplat([x, y, dx, dy]);
       start();
     },
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (destroyed) return;
       if (
         !Object.entries(next).some(

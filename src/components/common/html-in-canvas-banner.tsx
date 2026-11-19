@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { Check, Copy, Info } from "lucide-react";
+import { Check, Copy, Info } from "@/components/icons";
 
 import { Accordion, AccordionHeader, AccordionItem, AccordionPanel, AccordionTrigger } from "@/components/ui/accordion";
 import { isHtmlInCanvasBlocked } from "@/lib/html-in-canvas";
@@ -32,10 +32,8 @@ const getServerSnapshot = () => true;
 type BrowserKind = "chromium" | "unsupported" | "unknown";
 
 interface BrowserInfo {
-  /** Display name, or null when we couldn't identify the browser. */
   name: string | null;
   kind: BrowserKind;
-  /** Flags URL for this browser (chromium), or the Chrome one as a reference. */
   flag: string;
 }
 
@@ -91,8 +89,6 @@ export function HtmlInCanvasBanner() {
 
   const browser = detectBrowser();
 
-  // HTML-in-Canvas ships in Chrome 157. Other engines don't implement it, so
-  // there is nothing to enable there: the only advice is to switch browsers.
   if (browser.kind !== "chromium") {
     return (
       <Notice>
@@ -105,8 +101,8 @@ export function HtmlInCanvasBanner() {
   }
 
   return (
-    <Accordion className="not-typeset mt-6 mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
-      <AccordionItem value="enable">
+    <Accordion className="not-typeset frame mt-6 mb-4">
+      <AccordionItem value="enable" className="frame-inset px-4 py-3">
         <AccordionHeader render={<div />} className="flex">
           <AccordionTrigger className="w-full flex-wrap items-start gap-x-2.5 gap-y-1.5 text-left [&>svg]:mt-[3px] [&>svg]:ml-auto sm:[&>svg]:ml-0">
             <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
@@ -148,9 +144,11 @@ export function HtmlInCanvasBanner() {
 
 function Notice({ children }: { children: ReactNode }) {
   return (
-    <div className="not-typeset mt-6 mb-4 flex gap-2.5 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
-      <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-      <p className="text-[13px] leading-5 text-muted-foreground">{children}</p>
+    <div className="not-typeset frame mt-6 mb-4">
+      <div className="frame-inset flex gap-2.5 px-4 py-3">
+        <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <p className="text-[13px] leading-5 text-muted-foreground">{children}</p>
+      </div>
     </div>
   );
 }
@@ -181,15 +179,15 @@ function CopyFlag({ flag }: { flag: string }) {
       type="button"
       onClick={copy}
       aria-label={`Copy ${flag} to clipboard`}
-      className="mr-1.5 ml-0.5 inline cursor-pointer rounded bg-muted/60 box-decoration-clone px-1.5 py-0.5 align-middle font-mono text-[12px] break-all text-foreground/90 transition-colors duration-150 hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+      className="mr-1.5 ml-0.5 inline cursor-pointer rounded-sm bg-muted box-decoration-clone px-1.5 py-0.5 align-middle font-mono text-[12px] break-all text-foreground/90 transition-colors duration-150 hover:bg-[var(--surface-hover)]"
     >
       {flag}
       <span aria-hidden className="relative ml-1.5 inline-flex size-3 translate-y-px">
         <Copy
-          className={`absolute inset-0 size-3 text-muted-foreground transition-all duration-150 ease-out motion-reduce:transition-none ${copied ? "scale-50 opacity-0" : "scale-100 opacity-100"}`}
+          className={`absolute inset-0 size-3 text-muted-foreground transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-[opacity] ${copied ? "scale-75 opacity-0" : "scale-100 opacity-100"}`}
         />
         <Check
-          className={`absolute inset-0 size-3 text-muted-foreground transition-all duration-150 ease-out motion-reduce:transition-none ${copied ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}
+          className={`absolute inset-0 size-3 text-muted-foreground transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-[opacity] ${copied ? "scale-100 opacity-100" : "scale-75 opacity-0"}`}
         />
       </span>
       <span aria-live="polite" className="sr-only">

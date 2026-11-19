@@ -37,7 +37,6 @@ export function Ripple({ children, className, style, ...options }: RippleProps) 
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    // Retry native initialization when switching renderer engines.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFailed(false);
   }, [renderer]);

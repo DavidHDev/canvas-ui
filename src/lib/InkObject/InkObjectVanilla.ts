@@ -3,13 +3,14 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { resolveOptions } from "../options";
 
 export interface InkObjectOptions {
   /** URL of the asset to display: GLB/glTF, SVG, PNG, JPEG, WebP, or GIF. Object URLs from a file input work too. The format is sniffed from the bytes, not the extension. */
   src?: string;
   /** Enable the ink pass. Turn off to see the raw render. */
   ink?: boolean;
-  /** Color of the ink strokes. */
+  /** Color of the ink strokes, as any CSS color. Empty string picks one automatically: dark or light against `background`, or the page text color when the canvas is transparent, so it follows your theme. */
   inkColor?: string;
   /** Distance between stroke centers in CSS pixels. */
   lineSpacing?: number;
@@ -80,23 +81,19 @@ export interface InkObjectOptions {
 }
 
 export interface InkObjectElements {
-  /** Canvas the scene renders to. */
   canvas: HTMLCanvasElement;
 }
 
 export interface InkObjectInstance {
-  /** Update options live. Changing src loads the new asset. */
   setOptions: (options: InkObjectOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
 const DEFAULTS: Required<InkObjectOptions> = {
   src: "",
   ink: true,
-  inkColor: "#111111",
+  inkColor: "",
   lineSpacing: 8,
   strokeWeight: 1,
   angle: 0,
@@ -201,17 +198,14 @@ float fbm3(vec2 p) {
   return vnoise(p) * 0.55 + vnoise(p * 2.11 + 3.1) * 0.3 + vnoise(p * 4.13 + 11.7) * 0.15;
 }
 
-/** Rotates screen pixels into stroke space, where x runs along a stroke. */
 vec2 toStroke(vec2 p) {
   return vec2(p.x * uDir.x + p.y * uDir.y, p.y * uDir.x - p.x * uDir.y);
 }
 
-/** Rotates stroke space back to screen pixels. */
 vec2 toScreen(vec2 p) {
   return vec2(p.x * uDir.x - p.y * uDir.y, p.x * uDir.y + p.y * uDir.x);
 }
 
-/** Returns the inked tone weighted by coverage in x, and the coverage in y. */
 vec2 sampleTone(vec2 pixel) {
   vec2 uv = pixel / uResolution;
   if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec2(0.0);
@@ -223,11 +217,6 @@ vec2 sampleTone(vec2 pixel) {
   return vec2(tone * alpha, alpha);
 }
 
-/**
- * Surface height in 0..1 from the scene depth buffer, normalised around the
- * model so the usable range covers the object rather than the whole frustum.
- * Bare background resolves to the neutral 0.5 so relief fades out at the edges.
- */
 float sampleHeight(vec2 pixel) {
   vec2 uv = pixel / uResolution;
   if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 0.5;
@@ -241,7 +230,8 @@ float sampleHeight(vec2 pixel) {
 void main() {
   vec4 raw = texture(tDiffuse, vUv);
   if (uInk < 0.5) {
-    outColor = vec4(toSrgb(raw.rgb) * raw.a, raw.a);
+    float rawPaper = uPaperAlpha * (1.0 - raw.a);
+    outColor = vec4(toSrgb(raw.rgb) * raw.a + toSrgb(uPaperColor) * rawPaper, raw.a + rawPaper);
     return;
   }
 
@@ -249,8 +239,6 @@ void main() {
   vec2 q = toStroke(frag);
   vec2 n = q / uSpacing;
 
-  // Rows are pushed around by the surface height, so a stroke crossing a raised
-  // form bends with it and the line pattern reads as volume, not as a flat fill.
   float relief = (sampleHeight(frag) - 0.5) * uRelief * uSpacing * 2.0;
   float wobble = (fbm2(n * vec2(0.06, 0.11)) - 0.5) * uWobble * uSpacing;
   float shift = wobble + relief;
@@ -259,8 +247,6 @@ void main() {
   float center = (row + 0.5) * uSpacing;
   float within = lineY - center;
 
-  // Tone is read on the stroke centreline, so a stroke's weight tracks the tone
-  // it actually covers and stays stable instead of shimmering per pixel.
   vec2 band = vec2(q.x, center - shift);
   vec2 bandStep = toScreen(vec2(0.0, uSpacing * 0.22));
   vec2 tone =
@@ -270,28 +256,16 @@ void main() {
   float presence = smoothstep(0.03, 0.45, clamp(tone.y * 0.2, 0.0, 1.0));
   float level = tone.x / max(tone.y, 1e-4);
 
-  // Highlights are allowed to fall all the way to bare paper. Clamping them to
-  // a floor instead paints a faint bead over every lit pixel, which reads as a
-  // mechanical screen rather than a drawing.
   float amount = clamp(0.5 + (level - uThreshold) * uContrast, 0.0, 1.0) * presence;
   float mark = smoothstep(0.0, 0.02, amount);
 
-  // The stroke is laid down as a chain of ink beads. Dark tone stretches them
-  // until they fuse into a solid bar; light tone shrinks them back into
-  // separate dots, which is what gives the print its speckled highlights.
   float pitch = max(uDash, 2.0);
-  // Every row starts its bead chain at its own offset, otherwise the beads line
-  // up into visible columns and the hatching reads as a printed dot screen.
   float rowPhase = hash21(vec2(row * 0.73 + 5.1, 8.2)) * pitch;
   float qx = q.x + rowPhase;
   float cell = floor(qx / pitch);
   float rowJitter = 0.88 + 0.24 * hash21(vec2(row, 3.3));
-  // Strokes hold a hairline of paper between them until the tone is nearly
-  // black, then swell past their neighbours and flood into a solid mass.
   float fill = mix(0.18, 0.80, amount) + 0.34 * smoothstep(0.90, 1.0, amount);
   float maxHalf = 0.5 * uSpacing * uWeight * rowJitter * fill;
-  // Beads stretch with tone: short and isolated in the light, long enough to
-  // overlap their neighbours and read as one solid stroke in the shadows.
   float lenScale = mix(mix(2.6, 0.3, clamp(uVariation, 0.0, 1.0)), 2.6, amount);
 
   float d = -uSpacing * 4.0;
@@ -300,10 +274,6 @@ void main() {
     float r1 = hash21(vec2(ci, row * 1.7 + 0.5));
     float r2 = hash21(vec2(ci + 31.4, row * 2.3 + 0.5));
     float r3 = hash21(vec2(ci + 77.7, row * 3.9 + 0.5));
-    // Faint tone drops beads at random instead of shrinking them uniformly, so
-    // highlights thin out into irregular speckle and then into clean paper. The
-    // dropout is scaled by variation so that at 0 the strokes stay unbroken and
-    // only their weight carries the tone, the way an engraving reads.
     float keep = mix(1.0, clamp(amount * 3.6 + 0.1, 0.0, 1.0), clamp(uVariation, 0.0, 1.0));
     if (hash21(vec2(ci + 13.7, row * 5.1 + 2.0)) > keep) continue;
     float beadX = (ci + 0.5 + (r1 - 0.5) * 0.5) * pitch;
@@ -440,7 +410,51 @@ const ROOM_FORMERS: FormerDef[] = [
   },
 ];
 
+let colorProbe: CanvasRenderingContext2D | null | undefined;
+
+function parseCssColor(value: string): [number, number, number] | null {
+  if (!value || typeof document === "undefined") return null;
+  if (colorProbe === undefined) {
+    const probe = document.createElement("canvas");
+    probe.width = 1;
+    probe.height = 1;
+    colorProbe = probe.getContext("2d", { willReadFrequently: true });
+  }
+  if (!colorProbe) return null;
+  colorProbe.clearRect(0, 0, 1, 1);
+  colorProbe.fillStyle = "#000000";
+  colorProbe.fillStyle = value;
+  colorProbe.fillRect(0, 0, 1, 1);
+  const [r, g, b] = colorProbe.getImageData(0, 0, 1, 1).data;
+  return [r / 255, g / 255, b / 255];
+}
+
+const LIGHT_PAPER_INK: [number, number, number] = [0.067, 0.067, 0.067];
+const DARK_PAPER_INK: [number, number, number] = [0.96, 0.96, 0.96];
+
+function resolveInkColor(
+  inkColor: string,
+  background: string,
+  canvas: HTMLCanvasElement,
+): [number, number, number] {
+  const explicit = parseCssColor(inkColor);
+  if (explicit) return explicit;
+  const paper = parseCssColor(background);
+  if (paper) {
+    const luma = 0.2126 * paper[0] + 0.7152 * paper[1] + 0.0722 * paper[2];
+    return luma > 0.5 ? LIGHT_PAPER_INK : DARK_PAPER_INK;
+  }
+  return parseCssColor(getComputedStyle(canvas).color) ?? LIGHT_PAPER_INK;
+}
+
 const CAMERA_DIR = new THREE.Vector3(0, -1, 4).normalize();
+
+function fitFov(fov: number, aspect: number): number {
+  if (aspect >= 1) return fov;
+  const half = THREE.MathUtils.degToRad(fov) / 2;
+  const margin = 1 + 0.25 * (1 - aspect);
+  return THREE.MathUtils.radToDeg(2 * Math.atan((Math.tan(half) * margin) / aspect));
+}
 const MODEL_LIFT = 0.3;
 const RASTER_SIZE = 2048;
 const TRACE_SIZE = 512;
@@ -809,8 +823,6 @@ function createImageObject(
   const longest = Math.max(canvas.width, canvas.height, 1);
   const aspectW = canvas.width / longest;
   const aspectH = canvas.height / longest;
-  // The bevel is capped against the slab thickness so a nearly flat extrusion
-  // keeps a proportionate edge instead of being swallowed by its own bevel.
   const bevel = Math.min(BEVEL_SIZE, depth * 0.25);
   const geometry = new THREE.ExtrudeGeometry(
     buildShapes(canvas, aspectW, aspectH),
@@ -835,11 +847,6 @@ function createImageObject(
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = anisotropy;
-  // Photographs carry their own tonal range, which is what the ink strokes are
-  // meant to reproduce. Routing them through the lit + tone-mapped pipeline
-  // crushes white to ~0.67 and lifts black to ~0.10, leaving the shader barely
-  // half a stop to work with. Vector art is flat by nature, so it keeps the lit
-  // material and gains dimension from the extrusion instead.
   const material = lit
     ? new THREE.MeshStandardMaterial({
         map: texture,
@@ -873,7 +880,7 @@ export function createInkObject(
   options: InkObjectOptions = {},
 ): InkObjectInstance | null {
   const { canvas } = elements;
-  const config: Required<InkObjectOptions> = { ...DEFAULTS, ...options };
+  const config: Required<InkObjectOptions> = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
 
   let renderer: THREE.WebGLRenderer;
   try {
@@ -904,8 +911,6 @@ export function createInkObject(
 
   const target = new THREE.WebGLRenderTarget(1, 1, { samples: 4 });
   target.texture.colorSpace = THREE.SRGBColorSpace;
-  // Surface height for the ink pass comes straight from the scene depth buffer,
-  // so strokes can ride the form instead of lying flat on the silhouette.
   target.depthTexture = new THREE.DepthTexture(1, 1, THREE.UnsignedIntType);
   target.depthTexture.format = THREE.DepthFormat;
 
@@ -1042,8 +1047,6 @@ export function createInkObject(
   let modelMaxDim = 1;
   let loadedSrc: string | null = null;
   let loadToken = 0;
-  // The decoded artwork is kept so a depth change can re-extrude the slab
-  // without refetching and re-rasterizing the asset.
   let imageSource: { canvas: HTMLCanvasElement; lit: boolean } | null = null;
   let builtDepth = 0;
   let disposed = false;
@@ -1169,11 +1172,10 @@ export function createInkObject(
   };
   motionQuery.addEventListener("change", onMotionChange);
 
+  let inkCheckedAt = -Infinity;
+
   function applyOptions() {
-    renderer.setClearColor(
-      new THREE.Color(config.background || "#000000"),
-      config.background ? 1 : 0,
-    );
+    renderer.setClearColor(0x000000, 0);
     scene.environmentIntensity = config.environmentIntensity;
     if (
       imageSource &&
@@ -1185,7 +1187,7 @@ export function createInkObject(
     controls.enableZoom = config.zoom;
     controls.autoRotate = config.autoRotate && !reducedMotion;
     controls.autoRotateSpeed = config.autoRotateSpeed;
-    camera.fov = config.fov;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
     floatGroup.position.x = config.xOffset;
     floatGroup.position.y = MODEL_LIFT + config.yOffset;
@@ -1208,7 +1210,7 @@ export function createInkObject(
     uniforms.uSoftness.value = config.softness;
     uniforms.uInvert.value = config.invert ? 1 : 0;
     uniforms.uInk.value = config.ink ? 1 : 0;
-    uniforms.uInkColor.value.set(config.inkColor || "#111111");
+    applyInkColor(true);
     uniforms.uPaperColor.value.set(config.background || "#ffffff");
     uniforms.uPaperAlpha.value = config.background ? 1 : 0;
     applyRoughness();
@@ -1233,6 +1235,7 @@ export function createInkObject(
     postMaterial.uniforms.uSpacing.value = Math.max(config.lineSpacing, 1) * pr;
     postMaterial.uniforms.uDash.value = Math.max(config.dashLength, 1) * pr;
     camera.aspect = width / height;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
   }
 
@@ -1246,6 +1249,14 @@ export function createInkObject(
   let pageVisible =
     typeof document === "undefined" || document.visibilityState !== "hidden";
   let loopRunning = false;
+
+  function applyInkColor(force: boolean) {
+    const now = performance.now();
+    if (!force && (config.inkColor || now - inkCheckedAt < 250)) return;
+    inkCheckedAt = now;
+    const [r, g, b] = resolveInkColor(config.inkColor, config.background, canvas);
+    postMaterial.uniforms.uInkColor.value.setRGB(r, g, b, THREE.SRGBColorSpace);
+  }
 
   function tick(time: number) {
     if (!inView || !pageVisible) {
@@ -1283,6 +1294,7 @@ export function createInkObject(
       .copy(floatGroup.position)
       .applyMatrix4(camera.matrixWorldInverse).z;
 
+    applyInkColor(false);
     renderer.setRenderTarget(target);
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
@@ -1332,6 +1344,7 @@ export function createInkObject(
 
   return {
     setOptions(next: InkObjectOptions) {
+      next = resolveOptions(DEFAULTS, next);
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
         if (typeof value === "function") continue;

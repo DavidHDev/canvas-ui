@@ -14,7 +14,7 @@ const links = [
 
 export function Navbar() {
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-border/40 bg-background/70 backdrop-blur-xl backdrop-saturate-150">
+    <header className="scroll-edge fixed inset-x-0 top-0 z-50 border-b bg-[var(--surface-bar)] backdrop-blur-xl backdrop-saturate-150">
       <nav
         aria-label="Main"
         className="mx-auto grid h-14 w-full max-w-6xl grid-cols-[1fr_auto_1fr] items-center px-5 sm:px-8"
@@ -22,7 +22,7 @@ export function Navbar() {
         <Link
           href="/"
           aria-label="Canvas UI home"
-          className="col-start-1 justify-self-start transition-opacity duration-150 hover:opacity-70"
+          className="col-start-1 justify-self-start rounded-sm transition-opacity duration-150 hover:opacity-70"
         >
           <SiteLogo />
         </Link>
@@ -32,7 +32,7 @@ export function Navbar() {
             <li key={link.href}>
               <Link
                 href={link.href}
-                className="rounded-full px-3.5 py-1.5 text-sm text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
+                className="rounded-control px-3.5 py-1.5 text-sm text-muted-foreground transition-colors duration-150 hover:bg-[var(--surface-hover)] hover:text-foreground"
               >
                 {link.label}
               </Link>

@@ -1,7 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import {
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   init,
   sampler,
@@ -13,6 +13,7 @@ import {
   type Target as GpuTarget,
 } from "vgpu";
 import type { Texture } from "vgpu";
+import { resolveOptions } from "../options";
 
 
 export interface FrostOptions {
@@ -73,24 +74,15 @@ export interface FrostOptions {
 }
 
 export interface FrostElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGPU effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface FrostInstance {
-  /** Melt a spot at (x, y) in [0,1] space, top-left origin.
-   * Keeps the newest 32 pending calls while suspended; applies at most 4 per frame.
-   */
   melt: (x: number, y: number) => void;
-  /** Update options live. */
   setOptions: (options: FrostOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -136,7 +128,7 @@ type ElementImageContext = CanvasRenderingContext2D & {
   drawElementImage?: (element: Element, x: number, y: number) => void;
 };
 
-const FRAG_NOISE = /* wgsl */ `
+const FRAG_NOISE = `
 fn mod2(x: vec2f, y: f32) -> vec2f {
   return x - vec2f(y) * floor(x / vec2f(y));
 }
@@ -196,7 +188,7 @@ fn pwarp(p: vec2f, period: f32, g: f32) -> f32 {
   return vec4f(pattern, mottle, sparkle, meltEdge);
 }`;
 
-const FRAG_HEIGHT = /* wgsl */ `
+const FRAG_HEIGHT = `
 fn mod2(x: vec2f, y: f32) -> vec2f {
   return x - vec2f(y) * floor(x / vec2f(y));
 }
@@ -244,7 +236,7 @@ fn pfbm(p0: vec2f, period0: f32, octaves: i32) -> f32 {
   return vec4f(broad, fine, 0.0, 1.0);
 }`;
 
-const FRAG_BLUR = /* wgsl */ `
+const FRAG_BLUR = `
 struct Params {
   texelSize: vec2f,
   stepDir: vec2f,
@@ -273,7 +265,7 @@ fn srcUv(uv: vec2f) -> vec2f {
   return sum;
 }`;
 
-const FRAG_POINTER = /* wgsl */ `
+const FRAG_POINTER = `
 struct Params {
   point: vec2f,
   prevPoint: vec2f,
@@ -330,7 +322,7 @@ fn sdSegment(p: vec2f, a: vec2f, b: vec2f) -> f32 {
   return vec4f(vec3f(melt), 1.0);
 }`;
 
-const FRAG_FROST = /* wgsl */ `
+const FRAG_FROST = `
 struct Params {
   scroll: vec2f,
   tintThin: vec3f,
@@ -470,7 +462,7 @@ fn rgb2hsv(c: vec3f) -> vec3f {
   return vec4f(clamp(color.rgb, vec3f(0.0), vec3f(1.0)), frostMask * op);
 }`;
 
-const FRAG_OUTPUT = /* wgsl */ `
+const FRAG_OUTPUT = `
 struct Params {
   resolution: vec2f,
   scrollPx: vec2f,
@@ -555,14 +547,12 @@ export function supportsHtmlInCanvas(): boolean {
   );
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every Frost instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -612,7 +602,7 @@ export function createFrost(
   options: FrostOptions = {},
 ): FrostInstance | null {
   if (!supportsWebGPU()) return null;
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
@@ -635,7 +625,7 @@ export function createFrost(
   function captureContent() {
     try {
       sourceCtx!.reset();
-      drawHtmlInCanvas(source, sourceCtx!, content);
+      drawHtmlInCanvas(source, sourceCtx!, content, true);
       contentDirty = true;
       wake();
     } catch {}
@@ -674,7 +664,6 @@ export function createFrost(
       contentTexture.size[0] !== w ||
       contentTexture.size[1] !== h
     ) {
-      // A new wrapper invalidates vgpu's cached bindings to the old texture.
       contentTexture?.destroy();
       contentTexture = gpu!.device.createTexture({
         size: [w, h],
@@ -1038,9 +1027,9 @@ export function createFrost(
         addressModeU: "repeat",
         addressModeV: "repeat",
       });
-      noiseFx = effect(gpu, FRAG_NOISE, { label: "frost.noise" });
-      heightFx = effect(gpu, FRAG_HEIGHT, { label: "frost.height" });
-      blurFx = effect(gpu, FRAG_BLUR, {
+      noiseFx = gpuEffect(gpu, FRAG_NOISE, { label: "frost.noise" });
+      heightFx = gpuEffect(gpu, FRAG_HEIGHT, { label: "frost.height" });
+      blurFx = gpuEffect(gpu, FRAG_BLUR, {
         label: "frost.blur",
         set: { uSampler: linearClamp, uScene: ensureContentTexture() },
       });
@@ -1048,15 +1037,15 @@ export function createFrost(
       noiseTarget = createRenderTarget(NOISE_RES, NOISE_RES, "rgba8unorm", "frost.noise-map");
       heightFx.draw(heightTarget);
       noiseFx.draw(noiseTarget);
-      pointerFx = effect(gpu, FRAG_POINTER, {
+      pointerFx = gpuEffect(gpu, FRAG_POINTER, {
         label: "frost.pointer",
         set: { uClampSampler: linearClamp, uRepeatSampler: linearRepeat, uNoise: noiseTarget },
       });
-      frostFx = effect(gpu, FRAG_FROST, {
+      frostFx = gpuEffect(gpu, FRAG_FROST, {
         label: "frost.layer",
         set: { uClampSampler: linearClamp, uRepeatSampler: linearRepeat, uContent: ensureContentTexture(), uNoise: noiseTarget },
       });
-      outputFx = effect(gpu, FRAG_OUTPUT, {
+      outputFx = gpuEffect(gpu, FRAG_OUTPUT, {
         label: "frost.output",
         set: { uClampSampler: linearClamp, uRepeatSampler: linearRepeat, uHeights: heightTarget },
       });
@@ -1143,13 +1132,13 @@ export function createFrost(
   return {
     melt(x, y) {
       if (destroyed || reducedMotion) return;
-      // Explicit API input is retained while suspended, up to the queue limit.
       if (queuedMelts.length >= MAX_PENDING_MELTS) queuedMelts.shift();
       queuedMelts.push([x, y]);
       activeUntil = performance.now() + refreezeDelayMs();
       start();
     },
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (destroyed) return;
       if (
         !Object.entries(next).some(

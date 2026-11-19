@@ -8,7 +8,17 @@ import {
   type MagnifyOptions,
 } from "./MagnifyVanilla";
 
-const props = defineProps<MagnifyOptions>();
+const props = withDefaults(defineProps<MagnifyOptions>(), {
+  scrollZoom: undefined,
+  ring: undefined,
+  crosshair: undefined,
+  ticks: undefined,
+  brackets: undefined,
+  dot: undefined,
+  grid: undefined,
+  readout: undefined,
+  ripples: undefined,
+});
 
 const sourceEl = ref<HTMLCanvasElement | null>(null);
 const contentEl = ref<HTMLDivElement | null>(null);

@@ -6,3 +6,14 @@
 
 /r/*
   Cache-Control: public,max-age=3600,stale-while-revalidate=86400
+
+# Sample models for the 3D object demos (and the logo they use as the default
+# SVG). Copied demos load these straight from canvasui.dev, so other sites
+# need CORS; CORP covers sites that set Cross-Origin-Embedder-Policy.
+/assets/models/*
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin
+
+/logo-icon.svg
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin

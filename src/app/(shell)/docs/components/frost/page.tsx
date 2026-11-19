@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
 import { ComponentDoc } from "@/components/docs/component-doc";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
 import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { FrostDemo } from "@/demos/frost-demo";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Frost",
@@ -210,12 +210,7 @@ export default async function FrostPage() {
         installItem="frost"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Hover across the photo to melt a hole through the ice."
-            alt="Demo photo for the Frost effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={2} />}
       />
       <p className="mx-auto mt-16 w-full max-w-3xl text-xs text-muted-foreground">
         The frost effect is adapted from{" "}
@@ -229,7 +224,7 @@ export default async function FrostPage() {
         </a>
         .
       </p>
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </FrostDemo>

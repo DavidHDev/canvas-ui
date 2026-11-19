@@ -6,7 +6,7 @@ import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { VHSDemo } from "@/demos/vhs-demo";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "VHS",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const DESCRIPTION =
-  "Your page plays back like a worn VHS tape. Tape wave, head-switch noise, chroma bleed, grain, and scanlines. This page is the demo.";
+  "Your page plays back like a worn VHS tape. Tape wave, head-switch noise, chroma bleed, grain, and scanlines.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -141,14 +141,9 @@ export default async function VHSPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Photos show the tape playback treatment best, wave, chroma bleed, and grain included."
-            alt="Demo photo for the VHS effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={0} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </VHSDemo>

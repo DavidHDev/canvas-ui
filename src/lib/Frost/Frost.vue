@@ -8,7 +8,9 @@ import {
   type FrostOptions,
 } from "./FrostVanilla";
 
-const props = defineProps<FrostOptions>();
+const props = withDefaults(defineProps<FrostOptions>(), {
+  meltEdges: undefined,
+});
 
 const sourceEl = ref<HTMLCanvasElement | null>(null);
 const contentEl = ref<HTMLDivElement | null>(null);

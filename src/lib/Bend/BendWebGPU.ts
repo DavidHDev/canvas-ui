@@ -1,7 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import {
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   init,
   sampler,
@@ -11,6 +11,7 @@ import {
   type Surface,
   type Texture,
 } from "vgpu";
+import { resolveOptions } from "../options";
 
 export interface BendOptions {
   /** Height of the folded region at each edge in CSS pixels. */
@@ -40,20 +41,14 @@ export interface BendOptions {
 }
 
 export interface BendElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The scrollable element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGPU effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface BendInstance {
-  /** Update effect options live. */
   setOptions: (options: BendOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -107,7 +102,7 @@ type ElementImageContext = CanvasRenderingContext2D & {
   drawElementImage?: (element: Element, x: number, y: number) => void;
 };
 
-const MIPMAP_SHADER = /* wgsl */ `
+const MIPMAP_SHADER = `
 struct VSOut {
   @builtin(position) pos: vec4f,
   @location(0) uv: vec2f,
@@ -133,7 +128,7 @@ struct VSOut {
   return textureSampleLevel(uSrc, uSampler, uv, 0.0);
 }`;
 
-const SHADER = /* wgsl */ `
+const SHADER = `
 struct Params {
   contentSize: vec2f,
   bg: vec3f,
@@ -292,14 +287,12 @@ export function supportsHtmlInCanvas(): boolean {
   );
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every Bend instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -350,11 +343,9 @@ export function createBend(
   options: BendOptions = {},
 ): BendInstance | null {
   if (!supportsWebGPU()) return null;
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
-  // Bending needs captured pixels. Its fallback is ordinary scrollable HTML;
-  // do not allocate a GPU context or run a transparent shader over that HTML.
   if (!source.contains(content) || !supportsHtmlInCanvas()) return null;
 
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
@@ -724,7 +715,7 @@ export function createBend(
         addressModeU: "clamp-to-edge",
         addressModeV: "clamp-to-edge",
       });
-      fx = effect(gpu, SHADER, {
+      fx = gpuEffect(gpu, SHADER, {
         label: "bend",
         set: { uSampler: linearSampler, uContent: ensureContentTexture() },
       });
@@ -1139,14 +1130,26 @@ export function createBend(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) => config[key as keyof BendOptions] !== value,
@@ -1179,6 +1182,7 @@ export function createBend(
       window.removeEventListener("mouseup", onSelEnd, true);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       motionQuery.removeEventListener("change", onMotionChange);
       contentTexture?.destroy();
       screen?.dispose();

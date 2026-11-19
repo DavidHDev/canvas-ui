@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
 import { ComponentDoc } from "@/components/docs/component-doc";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
 import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { BubbleDemo } from "@/demos/bubble-demo";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Bubble",
@@ -76,13 +76,13 @@ const API_REFERENCE: ApiProp[] = [
     name: "shine",
     description: "Specular highlight strength (0 to 2).",
     type: "number",
-    defaultValue: "0.25",
+    defaultValue: "0.5",
   },
   {
     name: "rim",
     description: "Darkened glassy band around the droplet edge (0 to 2).",
     type: "number",
-    defaultValue: "0.5",
+    defaultValue: "1",
   },
   {
     name: "iridescence",
@@ -158,14 +158,9 @@ export default async function BubblePage() {
         installItem="bubble"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Drag the droplet across the photo, then stop and watch it pool back together."
-            alt="Demo photo for the Bubble effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={1} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </BubbleDemo>

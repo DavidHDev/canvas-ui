@@ -1,7 +1,6 @@
 import { highlight } from "@/components/docs/highlight";
 import { FrameworkTabs } from "@/components/landing/framework-tabs";
 import { Reveal } from "@/components/landing/reveal";
-import { Stitches } from "@/components/landing/stitches";
 
 const SNIPPETS = [
   {
@@ -105,9 +104,8 @@ export async function Frameworks() {
   return (
     <section
       aria-labelledby="frameworks-heading"
-      className="relative border-t border-dashed border-border/60"
+      className="relative"
     >
-      <Stitches />
       <div className="w-full px-5 py-24 sm:px-8 sm:py-32">
         <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-[1fr_1.2fr] lg:gap-16">
           <Reveal>

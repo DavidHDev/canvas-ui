@@ -6,7 +6,7 @@ import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { ParticleScrollDemo } from "@/demos/particle-scroll-demo";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Particle Scroll",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const DESCRIPTION =
-  "Everything below a chosen line dissolves into drifting sand. Scroll down and the page reassembles, grain by grain.";
+  "Everything below a chosen line dissolves into drifting sand. Scroll and the content reassembles, grain by grain.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -128,14 +128,9 @@ export default async function ParticleScrollPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Rich imagery makes the effect shine, watch every pixel of the photo scatter into dust and settle back as it crosses the line."
-            alt="Demo photo for the Particle Scroll effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </ParticleScrollDemo>

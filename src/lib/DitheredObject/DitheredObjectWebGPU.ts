@@ -1,12 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
-/*
- * WebGPU/vgpu port of DitheredObject. three.js remains on the CPU for loading,
- * geometry, texture and camera/control work; all rendering and post-processing run
- * through vgpu.
- */
 import {
   draw,
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   geometry,
   init,
@@ -25,6 +20,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { resolveOptions } from "../options";
 
 export type DitherMethod = "bayer" | "halftone" | "floyd";
 
@@ -84,16 +80,12 @@ export interface DitheredObjectOptions {
 }
 
 export interface DitheredObjectElements {
-  /** Canvas the scene renders to. */
   canvas: HTMLCanvasElement;
 }
 
 export interface DitheredObjectInstance {
-  /** Update options live. Changing src loads the new asset. */
   setOptions: (options: DitheredObjectOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -130,7 +122,7 @@ const ENV_WIDTH = 128;
 const ENV_HEIGHT = 64;
 const ENV_LEVELS = 6;
 
-const FORWARD_SHADER = /* wgsl */ `
+const FORWARD_SHADER = `
 const PI = 3.14159265359;
 const ENV_LEVELS = 6.0;
 const ENV_ROWS = 64.0;
@@ -265,7 +257,7 @@ fn dfgApprox(ndv: f32, roughness: f32) -> vec2f {
   return vec4f(color * alpha, alpha);
 }`;
 
-const PREFILTER_SHADER = /* wgsl */ `
+const PREFILTER_SHADER = `
 const PI = 3.14159265359;
 const LEVELS = 6.0;
 const SRC_W = 64u;
@@ -314,7 +306,7 @@ fn dirFor(u: f32, v: f32) -> vec3f {
   return acc / max(wsum, 1e-6);
 }`;
 
-const POST_SHADER = /* wgsl */ `
+const POST_SHADER = `
 struct Params {
   resolution: vec2f,
   gridSize: f32,
@@ -392,7 +384,7 @@ fn maskAt(cellCoord: vec2f) -> bool {
   return vec4f(color * tex.a, tex.a);
 }`;
 
-const LEVEL_SHADER = /* wgsl */ `
+const LEVEL_SHADER = `
 struct Params {
   resolution: vec2f,
   gridSize: f32,
@@ -728,6 +720,13 @@ function toHalfArray(data: Float32Array): Uint16Array<ArrayBuffer> {
 }
 
 const CAMERA_DIR = new THREE.Vector3(0, -1, 4).normalize();
+
+function fitFov(fov: number, aspect: number): number {
+  if (aspect >= 1) return fov;
+  const half = THREE.MathUtils.degToRad(fov) / 2;
+  const margin = 1 + 0.25 * (1 - aspect);
+  return THREE.MathUtils.radToDeg(2 * Math.atan((Math.tan(half) * margin) / aspect));
+}
 const MODEL_LIFT = 0.3;
 const RASTER_SIZE = 2048;
 const TRACE_SIZE = 512;
@@ -1126,14 +1125,12 @@ function diffuse(pixels: Uint8Array, mask: Uint8Array, rows: [Float32Array, Floa
   }
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every DitheredObject instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -1208,7 +1205,7 @@ export function createDitheredObject(
 ): DitheredObjectInstance | null {
   if (!supportsWebGPU()) return null;
   const { canvas } = elements;
-  const config: Required<DitheredObjectOptions> = { ...DEFAULTS, ...options };
+  const config: Required<DitheredObjectOptions> = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(config.fov, 1, 0.1, 200);
@@ -1277,7 +1274,6 @@ export function createDitheredObject(
 
   function ensureMaskTexture(width = 1, height = 1) {
     if (!maskTexture || maskTexture.size[0] !== width || maskTexture.size[1] !== height) {
-      // Pinch zoom changes this mask's size; replace its cached GPU binding too.
       maskTexture?.destroy();
       maskTexture = gpu!.device.createTexture({
         size: [width, height],
@@ -1517,7 +1513,7 @@ export function createDitheredObject(
     controls.enableZoom = config.zoom;
     controls.autoRotate = config.autoRotate && !reducedMotion;
     controls.autoRotateSpeed = config.autoRotateSpeed;
-    camera.fov = config.fov;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
     floatGroup.position.x = config.xOffset;
     floatGroup.position.y = MODEL_LIFT + config.yOffset;
@@ -1546,6 +1542,7 @@ export function createDitheredObject(
     resizeDiffusion(diffusionSize[0], diffusionSize[1]);
     if (levelTarget && (levelTarget.size[0] !== diffusionSize[0] || levelTarget.size[1] !== diffusionSize[1])) levelTarget.resize(diffusionSize);
     camera.aspect = width / height;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
   }
 
@@ -1578,7 +1575,7 @@ export function createDitheredObject(
     gpu.gpu.queue.writeTexture({ texture: lo.gpu }, toHalfArray(baked.lo), { bytesPerRow: (ENV_WIDTH / 2) * 8 }, [ENV_WIDTH / 2, ENV_HEIGHT / 2]);
     envAtlas = target(gpu, { size: [ENV_WIDTH, ENV_HEIGHT * ENV_LEVELS], format: "rgba16float", label: "dithered-object.env" });
     envSampler = sampler(gpu, { minFilter: "linear", magFilter: "linear", addressModeU: "repeat", addressModeV: "clamp-to-edge" });
-    const prefilter = effect(gpu, PREFILTER_SHADER, {
+    const prefilter = gpuEffect(gpu, PREFILTER_SHADER, {
       label: "dithered-object.prefilter",
       set: { params: { hiSize: [ENV_WIDTH, ENV_HEIGHT] }, uHi: hi, uLo: lo },
     });
@@ -1734,8 +1731,8 @@ export function createDitheredObject(
     sceneTarget = target(gpu, { size: [1, 1], format: "rgba16float", depth: true, msaa: 4, label: "dithered-object.scene" });
     levelTarget = target(gpu, { size: [1, 1], format: "rgba8unorm", label: "dithered-object.level" });
     ensureMaskTexture(diffusion.targetWidth || 1, diffusion.targetHeight || 1);
-    postFx = effect(gpu, POST_SHADER, { label: "dithered-object.post", set: { uSampler: linearSampler, tDiffuse: sceneTarget, tMask: maskTexture! } });
-    levelFx = effect(gpu, LEVEL_SHADER, { label: "dithered-object.level", set: { uSampler: linearSampler, tDiffuse: sceneTarget } });
+    postFx = gpuEffect(gpu, POST_SHADER, { label: "dithered-object.post", set: { uSampler: linearSampler, tDiffuse: sceneTarget, tMask: maskTexture! } });
+    levelFx = gpuEffect(gpu, LEVEL_SHADER, { label: "dithered-object.level", set: { uSampler: linearSampler, tDiffuse: sceneTarget } });
     resize();
     rebuildRenderMeshes();
     startLoop();
@@ -1748,6 +1745,7 @@ export function createDitheredObject(
 
   return {
     setOptions(next: DitheredObjectOptions) {
+      next = resolveOptions(DEFAULTS, next);
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
         if (typeof value === "function") continue;

@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
 import { ComponentDoc } from "@/components/docs/component-doc";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
 import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { DropletsDemo } from "@/demos/droplets-demo";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Droplets",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const DESCRIPTION =
-  "Rain runs down the screen and refracts the page behind it. It is raining on this page right now.";
+  "Rain runs down the screen and refracts the page behind it.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -151,14 +151,9 @@ export default async function DropletsPage() {
         installItem="droplets"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Raindrops refract the photo beneath them as they slide down the page."
-            alt="Demo photo for the Droplets effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={3} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </DropletsDemo>

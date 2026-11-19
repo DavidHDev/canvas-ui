@@ -8,7 +8,9 @@ import {
   type DropletsOptions,
 } from "./DropletsVanilla";
 
-const props = defineProps<DropletsOptions>();
+const props = withDefaults(defineProps<DropletsOptions>(), {
+  interactive: undefined,
+});
 
 const sourceEl = ref<HTMLCanvasElement | null>(null);
 const contentEl = ref<HTMLDivElement | null>(null);

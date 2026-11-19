@@ -1,6 +1,6 @@
 "use client";
 
-import { Quote } from "lucide-react";
+import { Quote } from "@/components/icons";
 import Image from "next/image";
 import { useCallback, useSyncExternalStore, type ReactNode } from "react";
 
@@ -196,10 +196,10 @@ function QuoteCard({
       target="_blank"
       rel="noreferrer"
       tabIndex={focusable ? undefined : -1}
-      className="community-quote-card group block h-44 w-72 shrink-0 rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background p-1 text-left sm:w-80"
+      className="community-quote-card group block h-44 w-72 shrink-0 frame text-left sm:w-80"
       aria-label={`${quote.author} on X: ${quote.text}`}
     >
-      <div className="flex h-full flex-col rounded-lg border border-dashed border-border/70 bg-background p-4">
+      <div className="flex h-full flex-col frame-inset bg-background p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <Image
@@ -208,7 +208,7 @@ function QuoteCard({
               width={40}
               height={40}
               loading="eager"
-              className="community-quote-avatar size-10 shrink-0 rounded-full border border-border/60 object-cover"
+              className="community-quote-avatar size-10 shrink-0 rounded-full border border-border-subtle object-cover"
             />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium tracking-tight">

@@ -1,7 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import {
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   init,
   sampler,
@@ -11,6 +11,7 @@ import {
   type Surface,
 } from "vgpu";
 import type { Texture } from "vgpu";
+import { resolveOptions } from "../options";
 
 export interface ParticleRevealOptions {
   /** Reveal radius around the cursor in CSS pixels. */
@@ -38,20 +39,14 @@ export interface ParticleRevealOptions {
 }
 
 export interface ParticleRevealElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGPU effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface ParticleRevealInstance {
-  /** Update effect options live. */
   setOptions: (options: ParticleRevealOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -105,7 +100,7 @@ function createRectCache(element: Element) {
   };
 }
 
-const SHADER = /* wgsl */ `
+const SHADER = `
 struct Params {
   bg: vec4f,
   res: vec2f,
@@ -154,7 +149,6 @@ fn premul(c: vec4f) -> vec4f {
   @location(0) uv: vec2f,
   @builtin(position) position: vec4f,
 ) -> @location(0) vec4f {
-  // vgpu's uv is top-origin, matching the page texture and the WebGL pUv.
   let pc = uv * params.res;
   if (pc.x > params.maxX * params.res.x) {
     return vec4f(0.0);
@@ -253,14 +247,12 @@ export function supportsHtmlInCanvas(): boolean {
   );
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every ParticleReveal instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -276,7 +268,7 @@ export function createParticleReveal(
   options: ParticleRevealOptions = {},
 ): ParticleRevealInstance | null {
   if (!supportsWebGPU()) return null;
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
@@ -366,7 +358,6 @@ export function createParticleReveal(
       contentTexture.size[0] !== w ||
       contentTexture.size[1] !== h
     ) {
-      // A new wrapper invalidates vgpu's cached bindings to the old texture.
       contentTexture?.destroy();
       contentTexture = gpu!.device.createTexture({
         size: [w, h],
@@ -425,7 +416,6 @@ export function createParticleReveal(
     gpuFrame(gpu, (f) => f.pass(screen!, fx!));
   }
 
-  /** Without a GPU device the page still has to show: blit the capture as-is. */
   function renderFallback() {
     if (!fallback2d || !htmlInCanvas || !contentDirty) return;
     contentDirty = false;
@@ -505,7 +495,7 @@ export function createParticleReveal(
         addressModeU: "clamp-to-edge",
         addressModeV: "clamp-to-edge",
       });
-      fx = effect(gpu, SHADER, {
+      fx = gpuEffect(gpu, SHADER, {
         label: "particle-reveal",
         set: { uSampler: linear, uContent: ensureContentTexture() },
       });
@@ -536,10 +526,21 @@ export function createParticleReveal(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   const listenTarget = output.parentElement ?? output;
@@ -570,6 +571,7 @@ export function createParticleReveal(
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) =>
@@ -590,6 +592,7 @@ export function createParticleReveal(
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       motionQuery.removeEventListener("change", onMotionChange);
       listenTarget.removeEventListener("pointermove", onPointerMove);
       listenTarget.removeEventListener("pointerleave", onPointerLeave);

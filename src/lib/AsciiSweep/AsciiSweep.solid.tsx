@@ -66,9 +66,6 @@ export function AsciiSweep(props: AsciiSweepProps) {
   const [ready, setReady] = createSignal(false);
   const native = () => supported() && !failed();
 
-  // Before the engine runs, the panels would paint stacked on top of each
-  // other. Hide all but the starting one so the first frame is clean. Once the
-  // engine is ready it owns stacking, and this stops being rendered.
   const layerStyle = (slot: 0 | 1): JSX.CSSProperties =>
     ready() || slot === ((local.index ?? 0) >= 1 ? 1 : 0)
       ? panelStyle
@@ -106,8 +103,6 @@ export function AsciiSweep(props: AsciiSweepProps) {
     if (useNative && !next) setFailed(true);
     if (next) {
       setReady(true);
-      // Re-capture once every panel is visible, so the panel that started
-      // hidden is not baked into the textures as blank.
       queueMicrotask(() => next.capture());
     }
     onCleanup(() => {

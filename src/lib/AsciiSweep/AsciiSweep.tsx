@@ -98,9 +98,6 @@ export function AsciiSweep({
     };
   }, [initialOptions, native]);
 
-  // Both panels are hidden apart from the first until the engine has taken
-  // over stacking. Re-capture once they are all visible, so the panel that
-  // started hidden is not baked into the textures as blank.
   useEffect(() => {
     if (ready) instanceRef.current?.capture();
   }, [ready]);
@@ -122,9 +119,6 @@ export function AsciiSweep({
   const panels = [children, alternate];
   const initialSlot = index >= 1 ? 1 : 0;
 
-  // Before the engine runs, the panels would paint stacked on top of each
-  // other. Hide all but the starting one so the first frame is clean. Once the
-  // engine is ready it owns stacking, and this stops being rendered.
   const initialHidden = (slot: 0 | 1): CSSProperties =>
     ready || slot === initialSlot ? panelStyle : { ...panelStyle, visibility: "hidden" };
 

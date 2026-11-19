@@ -6,7 +6,7 @@ import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { ClothDemo } from "@/demos/cloth-demo";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Cloth",
@@ -134,14 +134,9 @@ export default async function ClothPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="This whole page is hanging on the fabric. Brush it with your cursor, and open the controls to change the wind."
-            alt="Demo photo for the Cloth effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={1} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </ClothDemo>

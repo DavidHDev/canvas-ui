@@ -150,7 +150,7 @@ const API_REFERENCE: ApiProp[] = [
     description:
       "Contrast against the background above which a cell counts as UI and gets a glyph. Cells close to the background color stay empty.",
     type: "number",
-    defaultValue: "0.025",
+    defaultValue: "0.005",
   },
   {
     name: "background",
@@ -194,9 +194,9 @@ export default async function DecryptRevealPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
-        beforeInstall={<DecryptRevealDemo />}
+        preview={<DecryptRevealDemo />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </div>

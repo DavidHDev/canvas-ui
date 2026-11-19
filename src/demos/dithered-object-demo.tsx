@@ -1,228 +1,138 @@
 "use client";
 
-import { FileUp } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { useTheme } from "next-themes";
-
 import {
   color,
   custom,
+  presets,
   radio,
   scrub,
   toggle,
 } from "@/components/demos/control-schema";
 import { ColorRow, DemoControls } from "@/components/demos/demo-controls";
+import { StageHint } from "@/components/demos/demo-stage";
 import { useDemoControls } from "@/hooks/use-demo-controls";
 import { DitheredObject } from "@/components/docs/live/DitheredObject";
+import {
+  DUCK_MODEL,
+  ModelStatus,
+  backgroundControl,
+  stagingControls,
+  useModelSource,
+  useThemeBackground,
+} from "@/demos/object-kit";
 
-const DEFAULT_MODEL = "/assets/models/duck.glb";
-const DEFAULT_HIGHLIGHT = "#066aff";
-const LIGHT_BACKGROUND = "#ffffff";
-const DARK_BACKGROUND = "#0a0a0a";
+const DEFAULT_MODEL = DUCK_MODEL;
+
+const whenDither = (values: Record<string, unknown>) => values.dither === true;
 
 const CONTROLS = {
-  src: custom(DEFAULT_MODEL),
-  dither: toggle("Dither", true),
+  src: custom(DEFAULT_MODEL, { group: "Object" }),
+  scale: scrub("Size", 3, { min: 0.5, max: 6, step: 0.1, decimals: 1, group: "Object" }),
+  autoRotate: toggle("Auto rotate", false, { group: "Object" }),
+  dither: toggle("Dither", true, { group: "Dither" }),
   method: radio(
     "Pattern",
     "bayer",
     [
       { value: "bayer", label: "Bayer" },
       { value: "halftone", label: "Halftone" },
-      { value: "floyd", label: "Floyd" },
+      { value: "floyd", label: "Diffusion" },
     ],
-    { when: (values) => values.dither === true },
+    { group: "Dither", when: whenDither },
   ),
-  grayscale: toggle("Grayscale", true),
-  invert: toggle("Invert", false),
-  autoRotate: toggle("Auto rotate", false),
-  zoom: toggle("Scroll zoom", false),
-  gridSize: scrub("Grid size", 4, { min: 1, max: 20, step: 1, decimals: 0 }),
+  gridSize: scrub("Dot size", 4, {
+    min: 1,
+    max: 20,
+    step: 1,
+    decimals: 0,
+    group: "Dither",
+    when: whenDither,
+  }),
   pixelSizeRatio: scrub("Pixelation", 1, {
     min: 1,
     max: 10,
     step: 1,
     decimals: 0,
+    group: "Dither",
   }),
+  grayscale: toggle("Grayscale", true, { group: "Dither" }),
+  highlight: color("Highlight", "#066aff", { group: "Light" }),
   environmentIntensity: scrub("Environment", 0.1, {
     min: 0,
     max: 5,
     step: 0.1,
     decimals: 1,
+    group: "Light",
   }),
-  roughness: scrub("Roughness", 0.15, { min: 0, max: 1, step: 0.01 }),
-  scale: scrub("Scale", 3, { min: 0.5, max: 6, step: 0.1, decimals: 1 }),
-  xOffset: scrub("X offset", 0, { min: -3, max: 3, step: 0.1, decimals: 1 }),
-  yOffset: scrub("Y offset", 0, { min: -3, max: 3, step: 0.1, decimals: 1 }),
-  floatIntensity: scrub("Float", 2, { min: 0, max: 6, step: 0.1, decimals: 1 }),
-  rotationIntensity: scrub("Rocking", 1, {
-    min: 0,
-    max: 4,
-    step: 0.1,
-    decimals: 1,
+  background: backgroundControl("Light"),
+  invert: toggle("Invert", false, { group: "Dither", advanced: true }),
+  roughness: scrub("Roughness (−1 keeps model's)", -1, {
+    min: -1,
+    max: 1,
+    step: 0.01,
+    group: "Light",
+    advanced: true,
   }),
-  floatSpeed: scrub("Float speed", 2, {
-    min: 0,
-    max: 8,
-    step: 0.1,
-    decimals: 1,
+  ...stagingControls({
+    floatIntensity: 2,
+    rotationIntensity: 1,
+    floatSpeed: 2,
+    fov: 65,
+    cameraDistance: 4.2,
+    xOffset: 0,
+    yOffset: 0,
   }),
-  fov: scrub("Field of view", 65, { min: 20, max: 100, step: 1, decimals: 0 }),
-  cameraDistance: scrub("Camera distance", 4.2, {
-    min: 2,
-    max: 10,
-    step: 0.1,
-    decimals: 1,
-  }),
-  background: custom(""),
-  highlight: color("Highlight", DEFAULT_HIGHLIGHT),
 };
 
+const PRESETS = presets(CONTROLS, [
+  { label: "Newsprint", values: { method: "halftone", gridSize: 6 } },
+  { label: "Diffusion", values: { method: "floyd", gridSize: 2 } },
+  { label: "Color", values: { grayscale: false, environmentIntensity: 1 } },
+]);
+
 export function DitheredObjectDemo() {
-  const { resolvedTheme } = useTheme();
   const controls = useDemoControls(CONTROLS);
   const { setValue } = controls;
-  const {
-    background: backgroundValue,
-    highlight,
-    src,
-    grayscale,
-    invert,
-    dither,
-    autoRotate,
-    zoom,
-    ...values
-  } = controls.values;
+  const themeBackground = useThemeBackground();
+  const { background: backgroundValue, src, ...values } = controls.values;
   const background = backgroundValue === "" ? null : backgroundValue;
-  const toggles = { grayscale, invert, dither, autoRotate, zoom };
-  const [urlDraft, setUrlDraft] = useState(src);
-  const [status, setStatus] = useState<"loading" | "ready" | "error">(
-    "loading",
-  );
-  const objectUrlRef = useRef<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    return () => {
-      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
-    };
-  }, []);
-
-  const applySrc = (next: string) => {
-    if (!next || next === src) return;
-    setStatus("loading");
-    setValue("src", next);
-  };
-
-  const applyUrl = () => {
-    const next = urlDraft.trim();
-    if (objectUrlRef.current && next !== objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current);
-      objectUrlRef.current = null;
-    }
-    applySrc(next);
-  };
-
-  const applyFile = (file: File) => {
-    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
-    const url = URL.createObjectURL(file);
-    objectUrlRef.current = url;
-    setUrlDraft(file.name);
-    applySrc(url);
-  };
-
-  const swatchBackground =
-    background ??
-    (resolvedTheme === "dark" ? DARK_BACKGROUND : LIGHT_BACKGROUND);
+  const model = useModelSource({
+    src,
+    setSrc: (next) => setValue("src", next),
+    defaultSrc: DEFAULT_MODEL,
+  });
+  const props = { src, ...values };
 
   return (
     <>
-      <div className="relative h-[420px] overflow-hidden rounded-xl border border-border/60 sm:h-[520px]">
-        <DitheredObject
-          src={src}
-          {...values}
-          {...toggles}
-          background={background ?? ""}
-          highlight={highlight}
-          onLoad={() => setStatus("ready")}
-          onError={() => setStatus("error")}
-          className="h-full w-full"
-        />
-        {status !== "ready" ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
-            <span className="rounded-full border border-border/60 bg-background/80 px-3 py-1 text-[12px] font-medium text-muted-foreground backdrop-blur-sm">
-              {status === "loading"
-                ? "Loading asset…"
-                : "Could not load that asset. Check the URL or try another file."}
-            </span>
-          </div>
-        ) : null}
-      </div>
-
+      <DitheredObject
+        {...props}
+        background={background ?? ""}
+        onLoad={model.onLoad}
+        onError={model.onError}
+        className="absolute inset-0"
+        style={{ position: "absolute" }}
+      />
+      <ModelStatus status={model.status} />
+      {model.status === "ready" ? <StageHint gesture="drag" /> : null}
       <DemoControls
         title="Dithered Object controls"
+        controls={controls}
+        presets={PRESETS}
         snippet={{
           component: "DitheredObject",
-          props: { src, ...values, ...toggles, highlight },
+          props: background ? { ...props, background } : props,
         }}
-        controls={controls}
-        portal
-        onReset={() => {
-          setUrlDraft(DEFAULT_MODEL);
-          if (objectUrlRef.current) {
-            URL.revokeObjectURL(objectUrlRef.current);
-            objectUrlRef.current = null;
-          }
-          if (src !== DEFAULT_MODEL) setStatus("loading");
-        }}
+        onReset={model.onReset}
         rows={{
-          src: (
-            <div className="flex w-full shrink-0 items-center gap-1.5">
-              <input
-                type="text"
-                value={urlDraft}
-                onChange={(e) => setUrlDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") applyUrl();
-                }}
-                onBlur={applyUrl}
-                placeholder="Asset URL (.glb / .gltf / .svg / .png)"
-                aria-label="Asset URL"
-                spellCheck={false}
-                className="h-8 w-full min-w-0 rounded-lg bg-muted/60 px-3 text-[12.5px] font-medium text-foreground/90 outline-none transition-colors placeholder:text-muted-foreground hover:bg-muted/80 focus:bg-muted/80"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                aria-label="Open an asset file"
-                title="Open an asset file"
-                className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-muted/60 text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
-              >
-                <FileUp aria-hidden className="size-3.5" />
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".glb,.gltf,.svg,.png,.jpg,.jpeg,.webp,.gif,model/gltf-binary,model/gltf+json,image/svg+xml,image/png,image/jpeg,image/webp,image/gif"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) applyFile(file);
-                  e.target.value = "";
-                }}
-              />
-            </div>
-          ),
+          src: model.row,
           background: (
             <ColorRow
               label="Background"
-              value={swatchBackground}
+              value={background ?? themeBackground}
+              displayValue={background ? undefined : "Page"}
               onValueChange={(next) => setValue("background", next)}
-              onReset={
-                background !== null
-                  ? () => setValue("background", "")
-                  : undefined
-              }
+              onReset={background !== null ? () => setValue("background", "") : undefined}
             />
           ),
         }}
@@ -230,3 +140,5 @@ export function DitheredObjectDemo() {
     </>
   );
 }
+
+export { CONTROLS as DITHERED_OBJECT_CONTROLS, PRESETS as DITHERED_OBJECT_PRESETS };

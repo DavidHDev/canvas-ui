@@ -277,21 +277,9 @@ export default async function LiquidObjectPage() {
         installItem="liquid-object"
         tags={["webgl", "three.js", "3D"]}
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <section className="mt-8" aria-label="Demo">
-            <h2 className="text-lg font-semibold tracking-[-0.01em]">Demo</h2>
-            <p className="mt-2 text-[13px] text-muted-foreground">
-              Sweep the cursor across the object to stir the liquid, drag to
-              orbit, then open the controls to swap in your own model, SVG, or
-              image by URL or from disk.
-            </p>
-            <div className="mt-3">
-              <LiquidObjectDemo />
-            </div>
-          </section>
-        }
+        preview={<LiquidObjectDemo />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </div>

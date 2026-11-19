@@ -6,7 +6,7 @@ import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { ShatterDemo } from "@/demos/shatter-demo";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Shatter",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const DESCRIPTION =
-  "The page breaks into 3D glass shards around your cursor. Each shard lifts, tips, and floats above the void, bending the content beneath it and casting soft shadows. Move around, this page is the demo.";
+  "The page breaks into 3D glass shards around your cursor. Each shard lifts, tips, and floats above the void, bending the content beneath it and casting soft shadows.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -79,9 +79,9 @@ const API_REFERENCE: ApiProp[] = [
   {
     name: "gapColor",
     description:
-      "Color of the void behind lifted tiles as [r, g, b] in 0-1 range.",
-    type: "[number, number, number]",
-    defaultValue: "[0, 0, 0]",
+      'Color of the void behind lifted tiles as [r, g, b] in 0-1 range, or "auto" to match the page background.',
+    type: '[number, number, number] | "auto"',
+    defaultValue: '"auto"',
   },
   {
     name: "shadow",
@@ -158,14 +158,9 @@ export default async function ShatterPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Move your cursor over the photo to break it into floating glass shards."
-            alt="Demo photo for the Shatter effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={0} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </ShatterDemo>

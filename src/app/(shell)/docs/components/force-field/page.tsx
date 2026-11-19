@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
 import { ComponentDoc } from "@/components/docs/component-doc";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
 import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { ForceFieldDemo } from "@/demos/force-field-demo";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Force Field",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const DESCRIPTION =
-  "An energy shield stretched over your page. The cursor charges cells as it crosses the lattice, and every click sends a shockwave bending the content behind it. This page is the demo.";
+  "An energy shield stretched over your page. The cursor charges cells as it crosses the lattice, and every click sends a shockwave bending the content behind it.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -292,7 +292,7 @@ const API_REFERENCE: ApiProp[] = [
     name: "onHit",
     description:
       "Called with the impact position in CSS pixels after each click.",
-    type: "(x: number, y: number) => void",
+    type: "((x: number, y: number) => void) | null",
   },
   {
     name: "className",
@@ -321,14 +321,9 @@ export default async function ForceFieldPage() {
         installItem="force-field"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Click anywhere to send a shockwave through the photo."
-            alt="Demo photo for the Force Field effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={3} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </ForceFieldDemo>

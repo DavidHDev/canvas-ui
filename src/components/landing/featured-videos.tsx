@@ -1,13 +1,12 @@
 "use client";
 
 import { Dialog } from "@base-ui/react/dialog";
-import { Play, X } from "lucide-react";
+import { Play, X } from "@/components/icons";
 import Image from "next/image";
 import { useState } from "react";
 
 import { CommunityQuotes } from "@/components/landing/community-quotes";
 import { Reveal } from "@/components/landing/reveal";
-import { Stitches } from "@/components/landing/stitches";
 
 const VIDEOS = [
   {
@@ -57,9 +56,8 @@ export function FeaturedVideos() {
     >
       <section
         aria-labelledby="featured-videos-heading"
-        className="relative border-t border-dashed border-border/60"
+        className="relative"
       >
-        <Stitches />
         <div className="w-full px-5 py-24 sm:px-8 sm:py-32">
           <Reveal>
             <h2
@@ -79,10 +77,10 @@ export function FeaturedVideos() {
                 <Dialog.Trigger
                   type="button"
                   onClick={() => setActiveVideo(video)}
-                  className="featured-video-card group grid w-full cursor-pointer rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 p-1 text-left md:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] md:items-center"
+                  className="featured-video-card group grid w-full cursor-pointer rounded-frame p-[var(--frame-gap)] text-left md:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] md:items-center"
                   aria-label={`Play ${video.title} by ${video.creator}`}
                 >
-                  <span className="relative aspect-2/1 overflow-hidden rounded-lg border border-border/60 bg-muted/30">
+                  <span className="relative aspect-2/1 overflow-hidden rounded-control bg-muted/30">
                     <Image
                       src={`https://i.ytimg.com/vi/${video.id}/maxresdefault.jpg`}
                       alt=""
@@ -91,7 +89,7 @@ export function FeaturedVideos() {
                       className="featured-video-thumbnail size-full object-cover"
                     />
                     <span className="absolute inset-0 grid place-items-center">
-                      <span className="grid size-11 place-items-center rounded-full border border-white/20 bg-black/65 text-white backdrop-blur-sm transition-transform duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:scale-110 group-focus-visible:scale-110 motion-reduce:transition-none">
+                      <span className="grid size-11 place-items-center rounded-control bg-black/65 text-white backdrop-blur-sm transition-transform duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:scale-110 group-focus-visible:scale-110 motion-reduce:transition-none">
                         <Play
                           aria-hidden
                           className="ml-0.5 size-4 fill-current"
@@ -124,7 +122,7 @@ export function FeaturedVideos() {
             </Dialog.Title>
             <Dialog.Close
               aria-label="Close video"
-              className="absolute top-3 right-3 z-10 grid size-9 cursor-pointer place-items-center rounded-full border border-white/20 bg-black/65 text-white backdrop-blur-md transition-[background-color,transform] duration-200 hover:scale-105 hover:bg-black/85 focus-visible:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transform-none md:hidden"
+              className="absolute top-3 right-3 z-10 grid size-9 cursor-pointer place-items-center rounded-control bg-black/65 text-white backdrop-blur-md transition-[background-color,transform] duration-200 hover:scale-105 hover:bg-black/85 focus-visible:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transform-none md:hidden"
             >
               <X aria-hidden className="size-4" strokeWidth={2} />
             </Dialog.Close>

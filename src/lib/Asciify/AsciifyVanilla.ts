@@ -1,5 +1,6 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
+import { resolveOptions } from "../options";
 export type AsciifyCharset = "ascii" | "blocks" | "binary";
 
 export interface AsciifyOptions {
@@ -38,20 +39,14 @@ export interface AsciifyOptions {
 }
 
 export interface AsciifyElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGL effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface AsciifyInstance {
-  /** Update effect options live. */
   setOptions: (options: AsciifyOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -677,7 +672,7 @@ function initializeAsciify(
   elements: AsciifyElements,
   options: AsciifyOptions,
 ): AsciifyInstance | null {
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const gl = output.getContext("webgl2", {
@@ -1184,10 +1179,21 @@ function initializeAsciify(
     passive: true,
   });
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   const listenTarget = output.parentElement ?? output;
@@ -1257,6 +1263,7 @@ function initializeAsciify(
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
         const prev = config[key as keyof typeof config];
@@ -1300,6 +1307,7 @@ function initializeAsciify(
       window.removeEventListener("resize", refreshOutputRect);
       window.removeEventListener("scroll", refreshOutputRect, true);
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       themeObserver.disconnect();
       contentObserver?.disconnect();
       schemeQuery.removeEventListener("change", onThemeShift);

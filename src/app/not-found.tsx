@@ -1,31 +1,40 @@
 import Link from "next/link";
+import { ArrowRight } from "@/components/icons";
+
+import { Navbar } from "@/components/landing/navbar";
 
 export default function NotFound() {
   return (
-    <main className="flex min-h-svh flex-col items-center justify-center px-6 text-center">
-      <p className="font-mono text-xs tracking-[0.2em] text-muted-foreground uppercase">
-        404
-      </p>
-      <h1 className="mt-4 text-4xl font-semibold tracking-[-0.02em] sm:text-5xl">
-        Nothing here yet.
-      </h1>
-      <p className="mt-4 max-w-md text-base leading-7 text-balance text-muted-foreground">
-        The page you are looking for does not exist or has moved.
-      </p>
-      <div className="mt-8 flex items-center gap-3">
-        <Link
-          href="/"
-          className="inline-flex h-10 items-center rounded-full bg-foreground px-5 text-sm font-medium text-background transition-opacity hover:opacity-90"
-        >
-          Back home
-        </Link>
-        <Link
-          href="/components"
-          className="inline-flex h-10 items-center rounded-full border border-border/60 px-5 text-sm font-medium transition-colors hover:bg-muted/50"
-        >
-          Browse components
-        </Link>
-      </div>
-    </main>
+    <>
+      <Navbar />
+      <main className="page-enter flex min-h-svh flex-col items-center justify-center px-5 pt-14 text-center sm:px-8">
+        <p className="chip font-mono tabular-nums">404</p>
+        <h1 className="mt-5 text-[clamp(2.25rem,5.5vw,3.25rem)] leading-[1.04] font-medium tracking-tighter text-balance">
+          Nothing here yet.
+        </h1>
+        <p className="mt-4 max-w-md text-base leading-7 text-balance text-muted-foreground">
+          The page you are looking for does not exist or has moved.
+        </p>
+        <div className="mt-8 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center">
+          <Link
+            href="/"
+            className="group inline-flex h-11 items-center justify-center gap-2 rounded-control bg-foreground px-6 text-[15px] font-medium tracking-[-0.01em] text-background transition-[opacity,transform] duration-150 ease-out hover:opacity-85 active:scale-[0.98]"
+          >
+            Back home
+            <ArrowRight
+              aria-hidden
+              strokeWidth={2.25}
+              className="-mr-1.5 size-[15px] transition-transform duration-200 ease-out group-hover:translate-x-0.5 motion-reduce:transition-none"
+            />
+          </Link>
+          <Link
+            href="/components"
+            className="inline-flex h-11 items-center justify-center rounded-control bg-muted/60 px-6 text-[15px] font-medium text-foreground transition-[border-color,background-color,transform] duration-150 ease-out hover:border-border-strong hover:bg-[var(--surface-hover)] active:scale-[0.98]"
+          >
+            Browse components
+          </Link>
+        </div>
+      </main>
+    </>
   );
 }

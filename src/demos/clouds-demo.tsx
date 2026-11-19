@@ -1,92 +1,110 @@
 "use client";
 
-import { type ReactNode } from "react";
-
-import { color, scrub } from "@/components/demos/control-schema";
-import {
-  DemoControls,
-  useDemoScrollbarGutter,
-} from "@/components/demos/demo-controls";
+import { color, hexToRgb, presets, scrub } from "@/components/demos/control-schema";
+import { DemoControls } from "@/components/demos/demo-controls";
+import { StageHint } from "@/components/demos/demo-stage";
+import { useDemoSurface, type DemoProps } from "@/components/demos/demo-surface";
 import { useDemoControls } from "@/hooks/use-demo-controls";
 import { Clouds } from "@/components/docs/live/Clouds";
+import { PhotoScene } from "@/demos/scenes";
 
 const AUTO_COLOR = "auto";
 
 const CONTROLS = {
-  color: color("Color", AUTO_COLOR, { auto: { label: "Auto" } }),
-  scale: scrub("Scale", 1, { min: 0.3, max: 3, step: 0.05 }),
-  speed: scrub("Speed", 0.6, { min: 0, max: 5, step: 0.1, decimals: 1 }),
-  cover: scrub("Cover", 0.1, { min: 0, max: 1, step: 0.02 }),
-  density: scrub("Density", 2.5, { min: 0, max: 16, step: 0.5, decimals: 1 }),
-  shading: scrub("Shading", 0.1, { min: 0, max: 1, step: 0.02 }),
-  opacity: scrub("Opacity", 0.64, { min: 0, max: 1, step: 0.02 }),
-  shadow: scrub("Shadow", 0.06, { min: 0, max: 1, step: 0.02 }),
+  cover: scrub("Coverage", 0.4, { min: 0, max: 1, step: 0.02, group: "Clouds" }),
+  opacity: scrub("Thickness", 0.64, { min: 0, max: 1, step: 0.02, group: "Clouds" }),
+  density: scrub("Definition", 2.5, {
+    min: 0,
+    max: 16,
+    step: 0.5,
+    decimals: 1,
+    group: "Clouds",
+  }),
+  scale: scrub("Pattern scale", 1, { min: 0.3, max: 3, step: 0.05, group: "Clouds" }),
+  color: color("Color", AUTO_COLOR, { auto: { label: "Auto" }, group: "Clouds" }),
+  speed: scrub("Drift speed", 0.6, {
+    min: 0,
+    max: 5,
+    step: 0.1,
+    decimals: 1,
+    group: "Wind",
+  }),
+  wind: scrub("Cursor wind", 0.6, { min: 0, max: 1, step: 0.02, group: "Wind" }),
+  windRadius: scrub("Wind radius", 350, {
+    min: 40,
+    max: 400,
+    step: 10,
+    decimals: 0,
+    group: "Wind",
+  }),
+  shading: scrub("Shading", 0.1, { min: 0, max: 1, step: 0.02, group: "Light", advanced: true }),
+  shadow: scrub("Shadow", 0.06, { min: 0, max: 1, step: 0.02, group: "Light", advanced: true }),
   shadowOffsetX: scrub("Shadow X", 200, {
     min: -300,
     max: 300,
     step: 10,
     decimals: 0,
+    group: "Light",
+    advanced: true,
   }),
   shadowOffsetY: scrub("Shadow Y", -10, {
     min: -300,
     max: 300,
     step: 10,
     decimals: 0,
+    group: "Light",
+    advanced: true,
   }),
-  shadowSoftness: scrub("Softness", 1, { min: 0, max: 1, step: 0.02 }),
-  wind: scrub("Wind", 0.6, { min: 0, max: 1, step: 0.02 }),
-  windRadius: scrub("Wind radius", 350, {
-    min: 40,
-    max: 400,
-    step: 10,
+  shadowSoftness: scrub("Shadow softness", 1, {
+    min: 0,
+    max: 1,
+    step: 0.02,
+    group: "Light",
+    advanced: true,
+  }),
+  refraction: scrub("Refraction", 0, {
+    min: 0,
+    max: 80,
+    step: 1,
     decimals: 0,
+    group: "Fog",
+    advanced: true,
   }),
-  refraction: scrub("Refraction", 0, { min: 0, max: 80, step: 1, decimals: 0 }),
-  fogBlur: scrub("Fog blur", 0, { min: 0, max: 1, step: 0.02 }),
-  quality: scrub("Quality", 1, { min: 0.2, max: 1, step: 0.05 }),
+  fogBlur: scrub("Fog blur", 0, { min: 0, max: 1, step: 0.02, group: "Fog", advanced: true }),
+  quality: scrub("Render scale", 1, { min: 0.2, max: 1, step: 0.05, group: "Fog", advanced: true }),
 };
 
-function hexToRgb(hex: string): [number, number, number] {
-  const value = parseInt(hex.slice(1), 16);
-  return [
-    ((value >> 16) & 255) / 255,
-    ((value >> 8) & 255) / 255,
-    (value & 255) / 255,
-  ];
-}
+const PRESETS = presets(CONTROLS, [
+  { label: "Overcast", values: { cover: 0.5, opacity: 0.85, shading: 0.3 } },
+  { label: "Wisps", values: { cover: 0, density: 6, opacity: 0.55, scale: 1.6 } },
+  { label: "Fog", values: { cover: 0.4, opacity: 0.8, fogBlur: 0.6, refraction: 24 } },
+]);
 
-export function CloudsDemo({ children }: { children: ReactNode }) {
+export function CloudsDemo({ children }: DemoProps) {
   const controls = useDemoControls(CONTROLS);
-  const setContentEl = useDemoScrollbarGutter();
+  const surface = useDemoSurface(
+    children,
+    <PhotoScene slug="clouds" photo={2} />,
+  );
 
-  const { color, ...values } = controls.values;
+  const { color: tone, ...values } = controls.values;
+  const props = {
+    ...values,
+    color: tone === AUTO_COLOR ? ("auto" as const) : hexToRgb(tone),
+  };
 
   return (
     <>
-      <Clouds
-        {...values}
-        color={color === AUTO_COLOR ? "auto" : hexToRgb(color)}
-        className="page-enter inset-0 z-30"
-        style={{ position: "fixed" }}
-      >
-        <div
-          ref={setContentEl}
-          className="min-h-full bg-background px-5 pt-24 pb-10 sm:px-8 lg:pt-16 lg:pr-8 lg:pl-72"
-        >
-          {children}
-        </div>
-      </Clouds>
-
+      <Clouds {...props} {...surface.props} />
+      <StageHint
+        label="Move your cursor to part the clouds"
+        touchLabel="Drag to part the clouds"
+      />
       <DemoControls
         title="Clouds controls"
-        snippet={{
-          component: "Clouds",
-          props: {
-            ...values,
-            color: color === AUTO_COLOR ? "auto" : hexToRgb(color),
-          },
-        }}
         controls={controls}
+        presets={PRESETS}
+        snippet={{ component: "Clouds", props }}
       />
     </>
   );

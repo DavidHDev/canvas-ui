@@ -8,60 +8,114 @@ import {
   Home,
   Settings,
   Users,
-} from "lucide-react";
+} from "@/components/icons";
 
-import { color, radio, scrub } from "@/components/demos/control-schema";
+import { color, hexToRgb, presets, radio, scrub } from "@/components/demos/control-schema";
 import { DemoControls } from "@/components/demos/demo-controls";
+import { StageHint, type GhostPath } from "@/components/demos/demo-stage";
 import { useDemoControls } from "@/hooks/use-demo-controls";
 import { Peel } from "@/components/docs/live/Peel";
-import type { PeelMode, PeelSide } from "@/lib/Peel/PeelVanilla";
+import type { PeelSide } from "@/lib/Peel/PeelVanilla";
 
-const DEFAULT_SIDE: PeelSide = "left";
-const DEFAULT_MODE: PeelMode = "cursor";
 const AUTO_COLOR = "auto";
 
-function hexToRgb(hex: string): [number, number, number] {
-  const value = parseInt(hex.slice(1), 16);
-  return [
-    ((value >> 16) & 255) / 255,
-    ((value >> 8) & 255) / 255,
-    (value & 255) / 255,
-  ];
-}
-
 const CONTROLS = {
-  side: radio("Peel side", DEFAULT_SIDE, [
-    { value: "left", label: "Left" },
-    { value: "right", label: "Right" },
-    { value: "top", label: "Top" },
-    { value: "bottom", label: "Bottom" },
-  ]),
-  mode: radio("Peel mode", DEFAULT_MODE, [
-    { value: "cursor", label: "Cursor" },
-    { value: "hover", label: "Hover" },
-  ]),
-  shineColor: color("Shine color", AUTO_COLOR, { auto: { label: "Auto" } }),
-  reveal: scrub("Reveal", 250, { min: 80, max: 480, step: 10, decimals: 0 }),
-  zone: scrub("Zone", 200, { min: 40, max: 400, step: 10, decimals: 0 }),
-  curl: scrub("Curl", 300, { min: 40, max: 400, step: 10, decimals: 0 }),
-  bow: scrub("Bow", 75, { min: -150, max: 150, step: 5, decimals: 0 }),
-  shade: scrub("Shade", 0.25, { min: 0, max: 1, step: 0.05 }),
-  shine: scrub("Shine", 1, { min: 0, max: 1, step: 0.05 }),
+  side: radio(
+    "Edge",
+    "left",
+    [
+      { value: "left", label: "Left" },
+      { value: "right", label: "Right" },
+      { value: "top", label: "Top" },
+      { value: "bottom", label: "Bottom" },
+    ],
+    { group: "Peel" },
+  ),
+  mode: radio(
+    "Trigger",
+    "cursor",
+    [
+      { value: "cursor", label: "Follow cursor" },
+      { value: "hover", label: "Hover" },
+    ],
+    { group: "Peel" },
+  ),
+  reveal: scrub("Peel distance", 250, {
+    min: 80,
+    max: 480,
+    step: 10,
+    decimals: 0,
+    group: "Peel",
+  }),
+  zone: scrub("Trigger zone", 200, { min: 40, max: 400, step: 10, decimals: 0, group: "Peel" }),
+  curl: scrub("Curl radius", 300, { min: 40, max: 400, step: 10, decimals: 0, group: "Paper" }),
+  shine: scrub("Shine", 1, { min: 0, max: 1, step: 0.05, group: "Paper" }),
+  shade: scrub("Shade", 0.25, { min: 0, max: 1, step: 0.05, group: "Paper" }),
+  shineColor: color("Shine color", AUTO_COLOR, { auto: { label: "Auto" }, group: "Paper" }),
+  bow: scrub("Bow", 75, {
+    min: -150,
+    max: 150,
+    step: 5,
+    decimals: 0,
+    group: "Paper",
+    advanced: true,
+  }),
+  bulge: scrub("Bulge", 50, {
+    min: 0,
+    max: 200,
+    step: 10,
+    decimals: 0,
+    group: "Paper",
+    advanced: true,
+  }),
   shineDistance: scrub("Shine distance", 1200, {
     min: 0,
     max: 1200,
     step: 50,
     decimals: 0,
+    group: "Paper",
+    advanced: true,
   }),
-  bulge: scrub("Bulge", 50, { min: 0, max: 200, step: 10, decimals: 0 }),
   perspective: scrub("Perspective", 2000, {
     min: 400,
     max: 3000,
     step: 50,
     decimals: 0,
+    group: "Peel",
+    advanced: true,
   }),
-  smoothing: scrub("Smoothing", 0.3, { min: 0.05, max: 1, step: 0.05 }),
+  smoothing: scrub("Follow lag", 0.3, {
+    min: 0.05,
+    max: 1,
+    step: 0.05,
+    group: "Peel",
+    advanced: true,
+  }),
 };
+
+const PRESETS = presets(CONTROLS, [
+  { label: "Sticker", values: { curl: 70, reveal: 170, bow: 0, shade: 0.4 } },
+  { label: "Page turn", values: { curl: 400, reveal: 440, perspective: 1200 } },
+  { label: "Hover reveal", values: { mode: "hover", reveal: 300 } },
+]);
+
+function edgePath(side: PeelSide): GhostPath {
+  return (t) => {
+    const reach = 0.5 + 0.5 * Math.sin(t * 0.9 - Math.PI / 2);
+    const depth = 0.42 - 0.39 * reach;
+    const along = 0.5 + 0.22 * Math.sin(t * 0.55);
+    switch (side) {
+      case "left":
+        return [depth, along];
+      case "right":
+        return [1 - depth, along];
+      case "top":
+        return [along, depth];
+      case "bottom":
+        return [along, 1 - depth];
+    }
+  };
+}
 
 const STATS = [
   { label: "Revenue", value: "$48.2k", change: "+12.4%", up: true },
@@ -82,7 +136,7 @@ function DashboardScene() {
     <div className="flex h-full w-full flex-col bg-background px-5 py-4 sm:px-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[15px] font-semibold tracking-[-0.01em]">
+          <p className="text-[15px] font-medium tracking-[-0.01em]">
             Overview
           </p>
           <p className="text-[12px] text-muted-foreground">Last 30 days</p>
@@ -107,12 +161,12 @@ function DashboardScene() {
         {STATS.map((stat) => (
           <div
             key={stat.label}
-            className="rounded-xl border border-border/60 bg-card px-3.5 py-3"
+            className="rounded-xl border border-border bg-card px-3.5 py-3"
           >
             <p className="truncate text-[12px] text-muted-foreground">
               {stat.label}
             </p>
-            <p className="mt-1 text-lg font-semibold tracking-[-0.01em]">
+            <p className="mt-1 text-lg font-medium tracking-[-0.01em]">
               {stat.value}
             </p>
             <p
@@ -131,7 +185,7 @@ function DashboardScene() {
         ))}
       </div>
 
-      <div className="mt-3 flex-1 rounded-xl border border-border/60 bg-card px-3.5 py-3">
+      <div className="mt-3 flex-1 rounded-xl border border-border bg-card px-3.5 py-3">
         <p className="text-[12px] font-medium text-muted-foreground">
           Weekly sessions
         </p>
@@ -146,17 +200,17 @@ function DashboardScene() {
         </div>
       </div>
 
-      <div className="mt-3 rounded-xl border border-border/60 bg-card px-3.5 py-2">
+      <div className="mt-3 rounded-xl border border-border bg-card px-3.5 py-2">
         {ROWS.map((row, index) => (
           <div
             key={row.name}
             className={`flex items-center justify-between py-2 ${
-              index > 0 ? "border-t border-border/50" : ""
+              index > 0 ? "border-t border-border" : ""
             }`}
           >
             <p className="truncate text-[12.5px] font-medium">{row.name}</p>
             <div className="flex shrink-0 items-center gap-3">
-              <span className="rounded-full border border-border/60 px-2 py-0.5 text-[11px] text-muted-foreground">
+              <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
                 {row.status}
               </span>
               <span className="hidden text-[11.5px] text-muted-foreground sm:block">
@@ -213,10 +267,10 @@ function UnderPanel({ side }: { side: PeelSide }) {
       >
         <div className="flex w-full items-center justify-between px-5 py-4">
           <div className="flex items-center gap-2.5">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-foreground text-[12px] font-bold text-background">
+            <span className="flex size-7 items-center justify-center rounded-lg bg-foreground text-[12px] font-medium text-background">
               A
             </span>
-            <span className="text-[14px] font-semibold tracking-[-0.01em]">
+            <span className="text-[14px] font-medium tracking-[-0.01em]">
               Acme
             </span>
           </div>
@@ -234,16 +288,16 @@ function UnderPanel({ side }: { side: PeelSide }) {
     >
       <div className="flex h-full w-66 flex-col px-4 py-5">
         <div className="flex items-center gap-2.5 px-2">
-          <span className="flex size-7 items-center justify-center rounded-lg bg-foreground text-[12px] font-bold text-background">
+          <span className="flex size-7 items-center justify-center rounded-lg bg-foreground text-[12px] font-medium text-background">
             A
           </span>
-          <span className="text-[14px] font-semibold tracking-[-0.01em]">
+          <span className="text-[14px] font-medium tracking-[-0.01em]">
             Acme
           </span>
         </div>
         <div className="mt-5 flex-1">{nav}</div>
         <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
-          <span className="flex size-7 items-center justify-center rounded-full bg-foreground/15 text-[11px] font-semibold">
+          <span className="flex size-7 items-center justify-center rounded-full bg-foreground/15 text-[11px] font-medium">
             AD
           </span>
           <div className="min-w-0 leading-tight">
@@ -260,43 +314,37 @@ function UnderPanel({ side }: { side: PeelSide }) {
 
 export function PeelDemo() {
   const controls = useDemoControls(CONTROLS);
-
-  const { side, mode, shineColor, ...values } = controls.values;
+  const { side, shineColor, ...values } = controls.values;
+  const props = {
+    ...values,
+    side,
+    shineColor: shineColor === AUTO_COLOR ? ("auto" as const) : hexToRgb(shineColor),
+  };
 
   return (
-    <section className="mt-8" aria-label="Demo">
-      <div className="relative h-130 touch-none overflow-hidden rounded-xl border border-border/60 bg-background">
-        <Peel
-          {...values}
-          side={side}
-          mode={mode}
-          shineColor={shineColor === AUTO_COLOR ? "auto" : hexToRgb(shineColor)}
-          className="inset-0"
-          style={{ position: "absolute" }}
-          under={<UnderPanel side={side} />}
-        >
-          <DashboardScene />
-        </Peel>
-      </div>
-      <p className="mt-2 text-[13px] text-muted-foreground">
-        Move your cursor to the {side} edge to peel the dashboard.
-      </p>
-
+    <>
+      <Peel
+        {...props}
+        className="absolute inset-0"
+        style={{ position: "absolute" }}
+        under={<UnderPanel side={side} />}
+      >
+        <DashboardScene />
+      </Peel>
+      <StageHint
+        key={side}
+        path={edgePath(side)}
+        label={`Move your cursor to the ${side} edge`}
+        touchLabel={`Drag toward the ${side} edge`}
+      />
       <DemoControls
         title="Peel controls"
-        snippet={{
-          component: "Peel",
-          props: {
-            ...values,
-            side,
-            mode,
-            shineColor:
-              shineColor === AUTO_COLOR ? "auto" : hexToRgb(shineColor),
-          },
-        }}
         controls={controls}
-        portal
+        presets={PRESETS}
+        snippet={{ component: "Peel", props }}
       />
-    </section>
+    </>
   );
 }
+
+export { CONTROLS as PEEL_CONTROLS, PRESETS as PEEL_PRESETS };

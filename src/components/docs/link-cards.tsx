@@ -1,12 +1,9 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight } from "@/components/icons";
 
 export interface LinkCard {
-  /** Destination route. */
   href: string;
-  /** Card title. */
   title: string;
-  /** Short muted description shown under the title. */
   description: string;
 }
 
@@ -17,20 +14,20 @@ export function LinkCards({ items }: { items: LinkCard[] }) {
         <Link
           key={item.href}
           href={item.href}
-          className="group flex min-w-0 items-center gap-3 rounded-xl border border-border/60 px-4 py-3.5 transition-colors duration-150 hover:border-border hover:bg-muted/30"
+          className="group frame block min-w-0 transition-[background-color,transform] duration-150 ease-out hover:bg-muted/70 active:scale-[0.99]"
         >
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium text-foreground">
-              {item.title}
+          <span className="frame-inset flex min-w-0 items-center gap-3 px-4 py-3.5 transition-colors duration-150 ease-out group-hover:bg-muted/70">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[15px] font-medium tracking-tight text-foreground">
+                {item.title}
+              </span>
+              <span className="mt-0.5 block truncate text-[13px] text-muted-foreground">
+                {item.description}
+              </span>
             </span>
-            <span className="mt-0.5 block truncate text-[13px] text-muted-foreground">
-              {item.description}
-            </span>
-          </span>
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors duration-150 group-hover:border-foreground/20 group-hover:text-foreground">
             <ArrowRight
               aria-hidden
-              className="size-4 transition-transform duration-200 ease-out group-hover:translate-x-0.5"
+              className="size-4 shrink-0 text-muted-foreground transition-[color,transform] duration-200 ease-out group-hover:translate-x-0.5 group-hover:text-foreground motion-reduce:transition-none"
             />
           </span>
         </Link>

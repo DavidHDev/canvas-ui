@@ -1,7 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import {
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   init,
   sampler,
@@ -13,6 +13,7 @@ import {
   type Target,
 } from "vgpu";
 import type { Texture } from "vgpu";
+import { resolveOptions } from "../options";
 
 export interface CloudsOptions {
   scale?: number;
@@ -57,7 +58,7 @@ type ElementImageContext = CanvasRenderingContext2D & {
 const DEFAULTS: Required<CloudsOptions> = {
   scale: 1,
   speed: 0.6,
-  cover: 0.1,
+  cover: 0.4,
   density: 2.5,
   shading: 0.1,
   color: "auto",
@@ -94,7 +95,7 @@ function createRectCache(element: Element) {
   };
 }
 
-const MIPMAP_SHADER = /* wgsl */ `
+const MIPMAP_SHADER = `
 struct VSOut {
   @builtin(position) pos: vec4f,
   @location(0) uv: vec2f,
@@ -120,7 +121,7 @@ struct VSOut {
   return textureSampleLevel(uSrc, uSampler, uv, 0.0);
 }`;
 
-const FIELD_SHADER = /* wgsl */ `
+const FIELD_SHADER = `
 struct Params {
   resolution: vec2f,
   offset: vec2f,
@@ -218,7 +219,7 @@ fn fbm(nIn: vec2f) -> f32 {
   return vec4f(coverage, clamp(c, 0.0, 1.0), 0.0, 1.0);
 }`;
 
-const WIND_SHADER = /* wgsl */ `
+const WIND_SHADER = `
 struct Params {
   resolution: vec2f,
   a: vec2f,
@@ -247,7 +248,7 @@ struct Params {
   return vec4f(clamp(prev + stamp, 0.0, 1.0), 0.0, 0.0, 1.0);
 }`;
 
-const COMPOSITE_SHADER = /* wgsl */ `
+const COMPOSITE_SHADER = `
 struct Params {
   base: vec4f,
   resolution: vec2f,
@@ -336,7 +337,6 @@ export function supportsHtmlInCanvas(): boolean {
   );
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
@@ -366,7 +366,7 @@ export function createClouds(
   options: CloudsOptions = {},
 ): CloudsInstance | null {
   if (!supportsWebGPU()) return null;
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
@@ -388,7 +388,7 @@ export function createClouds(
     paintable.onpaint = () => {
       try {
         sourceCtx!.reset();
-        drawHtmlInCanvas(source, sourceCtx!, content);
+        drawHtmlInCanvas(source, sourceCtx!, content, true);
         contentDirty = true;
         wake();
       } catch {}
@@ -801,12 +801,12 @@ export function createClouds(
         addressModeU: "clamp-to-edge",
         addressModeV: "clamp-to-edge",
       });
-      fieldFx = effect(gpu, FIELD_SHADER, { label: "clouds.field" });
-      windFx = effect(gpu, WIND_SHADER, {
+      fieldFx = gpuEffect(gpu, FIELD_SHADER, { label: "clouds.field" });
+      windFx = gpuEffect(gpu, WIND_SHADER, {
         label: "clouds.wind",
         set: { uSampler: linearSampler },
       });
-      compositeFx = effect(gpu, COMPOSITE_SHADER, {
+      compositeFx = gpuEffect(gpu, COMPOSITE_SHADER, {
         label: "clouds.composite",
         set: { uSampler: linearSampler, uContent: ensureContentTexture() },
       });
@@ -835,10 +835,21 @@ export function createClouds(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   const rectCache = createRectCache(output);
@@ -887,6 +898,7 @@ export function createClouds(
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) => config[key as keyof CloudsOptions] !== value,
@@ -908,6 +920,7 @@ export function createClouds(
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       themeObserver.disconnect();
       schemeQuery.removeEventListener("change", onThemeShift);
       window.clearTimeout(themeTimer);

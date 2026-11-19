@@ -10,7 +10,6 @@ export interface FrameworkVariant {
   label: string;
   fileName: string;
   source: string;
-  /** Pre-highlighted HTML produced on the server. */
   html: string;
 }
 
@@ -19,7 +18,7 @@ export function FrameworkTabs({ variants }: { variants: FrameworkVariant[] }) {
   const active = variants.find((v) => v.id === activeId) ?? variants[0];
 
   return (
-    <div className="rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background p-1">
+    <div className="frame">
       <div className="flex h-8 items-center justify-between gap-2">
         <ChoiceSelect
           label="Framework"
@@ -37,7 +36,7 @@ export function FrameworkTabs({ variants }: { variants: FrameworkVariant[] }) {
       </div>
       <div
         key={active.id}
-        className="docs-code framework-snippet-enter mt-1 min-h-56 overflow-x-auto rounded-lg border border-dashed border-border/70 bg-background text-[13px] leading-6"
+        className="docs-code framework-snippet-enter mt-[var(--frame-gap)] min-h-56 overflow-x-auto frame-inset bg-background text-[13px] leading-6"
         dangerouslySetInnerHTML={{ __html: active.html }}
       />
     </div>

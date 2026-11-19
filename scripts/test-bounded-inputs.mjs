@@ -1,6 +1,3 @@
-// Run with `node scripts/test-bounded-inputs.mjs`.
-// Prerequisite: npm install --no-save --package-lock=false playwright esbuild
-// SOURCE_REF=HEAD tests a committed version without changing the checkout.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -27,12 +24,10 @@ try {
       const queue = liquid ? "queued" : "queuedMelts";
       const method = liquid ? "splat" : "melt";
       const limit = liquid ? 64 : 32;
-      const perFrame = liquid ? 8 : 4;
+      const perFrame = liquid ? limit : 4;
       const ready = renderer === "Vanilla" ? "true"
         : liquid ? "Boolean(gpu && effects && fluidTargets)"
           : "Boolean(gpu && targetsReady && pointerFx)";
-      // Observe the real engine's private queue and GPU work, only in this test
-      // bundle. No diagnostic API is included in installed components.
       source = source.replace("  function frame(now: number) {", "  function frame(now: number) { globalThis.testFrame++;");
       if (liquid) {
         source = source.replace(
@@ -102,8 +97,6 @@ try {
         }, component);
         await page.waitForFunction(() => window.instance?.inspect().ready, null, { polling: 50 });
 
-        // Ten thousand explicit calls made offscreen stay bounded, survive
-        // suspension, and resume in FIFO order over multiple capped frames.
         const offscreen = await page.evaluate(({ method }) => {
           setVisible(false);
           for (let i = 0; i < 10000; i++) instance[method](i / 10000, 0.5, 1, 1);
@@ -125,8 +118,6 @@ try {
         assert.deepEqual(await page.evaluate(() => applied.map(item => item.input[0])),
           Array.from({ length: limit }, (_, i) => (10000 - limit + i) / 10000));
 
-        // A background tab cancels existing work immediately but retains
-        // explicitly requested API input. Unhiding cannot override offscreen.
         const hidden = await page.evaluate(({ method }) => {
           setHidden(true);
           for (let i = 0; i < 10000; i++) instance[method](0.5, 0.5, 1, 1);
@@ -151,25 +142,24 @@ try {
             const pending = instance.inspect();
             const before = applied.length;
             flushFrame();
-            return { pending, applied: applied.slice(before) };
+            return { pending, after: instance.inspect(), applied: applied.slice(before) };
           });
-          assert.equal(drag.pending.pointerCount, 1, "Fast drags must coalesce into one current splat");
-          assert.equal(drag.applied.length, 1);
-          assert.ok(Math.abs(drag.applied[0].input[0] - 109.9 / 200) < 1e-6);
+          assert.equal(drag.pending.queued.length, limit, "Pointer input shares the bounded queue");
+          assert.equal(drag.applied.length, limit, "A frame applies every pending splat");
+          assert.equal(drag.after.queued.length, 0);
+          assert.ok(Math.abs(drag.applied[limit - 1].input[0] - 109.9 / 200) < 1e-6, "Newest moves are kept, in order");
 
           const simultaneous = await page.evaluate(() => {
             for (let i = 0; i < 10; i++) instance.splat(0.5, 0.5, 1, 1);
             for (let id = 10; id < 26; id++) document.querySelector("#host").dispatchEvent(new PointerEvent("pointerdown", {
               bubbles: true, pointerId: id, clientX: 40, clientY: 30,
             }));
-            const pending = instance.inspect();
             const before = applied.length;
             flushFrame();
-            return { pending, after: instance.inspect(), applied: applied.slice(before) };
+            return { after: instance.inspect(), applied: applied.slice(before) };
           });
-          assert.equal(simultaneous.pending.pointerCount, 8, "Pointer input also has a fixed storage bound");
-          assert.equal(simultaneous.applied.length, 8, "API and pointer input share the frame budget");
-          assert.equal(simultaneous.after.queued.length, 9, "Pointer input must leave budget for API input");
+          assert.equal(simultaneous.applied.length, 26, "API and pointer input are applied together");
+          assert.equal(simultaneous.after.queued.length, 0);
         }
 
         const suspendedPointer = await page.evaluate(() => {

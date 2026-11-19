@@ -1,7 +1,3 @@
-// Run with `node scripts/test-html-in-canvas.mjs` after installing Playwright.
-// Prerequisite: `npm install --no-save --package-lock=false playwright`.
-// Uses installed Chrome by default. Set CHROME_EXECUTABLE to test an older
-// Chromium binary, or CHROME_CHANNEL to use a different Playwright channel.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
@@ -34,9 +30,6 @@ const fixture = `<!doctype html>
   </canvas>
 </div>`;
 
-// These synthetic versions cover API generations that are not all available
-// in a single browser: matrix-returning transitional Chrome and void-returning
-// automatic geometry synchronization, plus the drawable attribute rename.
 const helpers = await import(`data:text/javascript,${encodeURIComponent(ts.transpileModule(helperSource, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText)}`);
@@ -150,7 +143,6 @@ for (const mode of [
             const source = document.querySelector('#source');
             return !window.fixture.native || source.width === Math.round(source.clientWidth * devicePixelRatio);
           });
-          // Wait for a paint after changing layout/scroll before hit testing.
           if (native) {
             const painted = await page.evaluate(() => {
               const painted = window.fixture.paints;
