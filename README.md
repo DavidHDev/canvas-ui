@@ -44,7 +44,7 @@
 Effects come in two categories:
 
 - **Live HTML** effects use the [HTML-in-canvas](https://chromestatus.com/feature/5172548013916160) API, on by default in Chrome 157, to draw your real DOM into the canvas. Text stays selectable, links stay clickable, and the page becomes a texture that fire, fluid, and glass distort in real time. Where the API is missing, they fall back to a GPU overlay or plain HTML, so every visitor gets a working page.
-- **Universal** effects draw their whole scene on the GPU instead of capturing the page, so they look and behave the same in every modern browser. Object renderers are the first set, and the category keeps growing.
+- **Universal** effects draw their whole scene on the GPU instead of capturing the page, so they look and behave the same in every modern browser.
 
 <table>
 <tr>
