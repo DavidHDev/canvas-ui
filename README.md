@@ -23,7 +23,6 @@
 
 <p>
   <a href="https://github.com/DavidHDev/canvas-ui/stargazers"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/stars/DavidHDev/canvas-ui.svg?variant=secondary&size=sm&mode=dark" /><img alt="GitHub stars" src="https://shieldcn.dev/github/stars/DavidHDev/canvas-ui.svg?variant=secondary&size=sm&mode=light" /></picture></a>
-  <a href="https://github.com/DavidHDev/canvas-ui/actions/workflows/ci.yml"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/ci/DavidHDev/canvas-ui.svg?variant=secondary&size=sm&mode=dark" /><img alt="CI status" src="https://shieldcn.dev/github/ci/DavidHDev/canvas-ui.svg?variant=secondary&size=sm&mode=light" /></picture></a>
   <a href="https://canvasui.dev/components"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/components-38.svg?variant=secondary&size=sm&logo=shadcnui&mode=dark" /><img alt="38 components" src="https://shieldcn.dev/badge/components-38.svg?variant=secondary&size=sm&logo=shadcnui&mode=light" /></picture></a>
   <a href="LICENSE.md"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/license-MIT_+_Commons_Clause.svg?variant=secondary&size=sm&logo=opensourceinitiative&mode=dark" /><img alt="License: MIT + Commons Clause" src="https://shieldcn.dev/badge/license-MIT_+_Commons_Clause.svg?variant=secondary&size=sm&logo=opensourceinitiative&mode=light" /></picture></a>
 </p>
