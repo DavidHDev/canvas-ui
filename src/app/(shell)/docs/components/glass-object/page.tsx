@@ -226,21 +226,9 @@ export default async function GlassObjectPage() {
         installItem="glass-object"
         tags={["webgl", "three.js", "3D"]}
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <section className="mt-8" aria-label="Demo">
-            <h2 className="text-lg font-semibold tracking-[-0.01em]">Demo</h2>
-            <p className="mt-2 text-[13px] text-muted-foreground">
-              Drag to orbit the glass, then open the controls to tune the
-              refraction or swap in your own model, SVG, or image by URL or from
-              disk.
-            </p>
-            <div className="mt-3">
-              <GlassObjectDemo />
-            </div>
-          </section>
-        }
+        preview={<GlassObjectDemo />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </div>

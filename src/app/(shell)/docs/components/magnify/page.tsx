@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
 import { ComponentDoc } from "@/components/docs/component-doc";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
 import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { MagnifyDemo } from "@/demos/magnify-demo";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Magnify",
@@ -192,14 +192,9 @@ export default async function MagnifyPage() {
         installItem="magnify"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Scan the photo with the lens, then click to send a ripple through it."
-            alt="Demo photo for the Magnify effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={2} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </MagnifyDemo>

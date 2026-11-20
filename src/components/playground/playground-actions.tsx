@@ -11,7 +11,7 @@ import {
   Sparkles,
   SquareCode,
   Terminal,
-} from "lucide-react";
+} from "@/components/icons";
 import {
   useEffect,
   useRef,
@@ -30,6 +30,7 @@ import {
   FRAMEWORK_IDS,
   MANAGER_IDS,
 } from "@/components/docs/install-tabs";
+import { DURATION, EASE_OUT } from "@/components/common/motion-tokens";
 import { usePreference } from "@/hooks/use-preference";
 import { cn } from "@/lib/utils";
 
@@ -58,7 +59,6 @@ interface MenuItem {
   label: string;
   icon: IconComponent;
   action: { copy: () => string } | { open: () => string };
-  /** Evaluated when the menu opens; return true to omit the item. */
   hidden?: () => boolean;
 }
 
@@ -128,14 +128,14 @@ function ActionMenu({
         aria-expanded={open}
         aria-label={ariaLabel}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 text-[12.5px] font-medium whitespace-nowrap text-foreground/90 transition-colors hover:bg-muted/60"
+        className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-control bg-muted/60 px-3 text-[12.5px] font-medium whitespace-nowrap text-foreground/90 transition-[border-color,background-color,transform] duration-150 ease-out hover:border-border-strong hover:bg-[var(--surface-hover)] active:scale-[0.98] aria-expanded:border-border-strong"
       >
         {TriggerIcon && <TriggerIcon aria-hidden className="size-3.5" />}
         {label}
         <ChevronDown
           aria-hidden
           className={cn(
-            "ml-auto size-3 text-muted-foreground transition-transform duration-150 ease-out motion-reduce:transition-none",
+            "ml-auto size-3 text-muted-foreground transition-transform duration-200 ease-out motion-reduce:transition-none",
             open && "rotate-180",
           )}
         />
@@ -149,20 +149,23 @@ function ActionMenu({
             initial={
               shouldReduceMotion
                 ? { opacity: 0 }
-                : { opacity: 0, y: -4, scale: 0.98 }
+                : { opacity: 0, transform: "translateY(-4px) scale(0.97)" }
             }
-            animate={
-              shouldReduceMotion
-                ? { opacity: 1 }
-                : { opacity: 1, y: 0, scale: 1 }
-            }
+            animate={{
+              opacity: 1,
+              transform: "translateY(0px) scale(1)",
+              transition: { duration: DURATION.fast, ease: EASE_OUT },
+            }}
             exit={
               shouldReduceMotion
-                ? { opacity: 0 }
-                : { opacity: 0, y: -4, scale: 0.98 }
+                ? { opacity: 0, transition: { duration: DURATION.exit } }
+                : {
+                    opacity: 0,
+                    transform: "translateY(-4px) scale(0.97)",
+                    transition: { duration: DURATION.exit, ease: EASE_OUT },
+                  }
             }
-            transition={{ duration: 0.15, ease: "easeOut" }}
-            className="absolute inset-x-0 top-full z-50 mt-1.5 origin-top rounded-xl border border-border/70 bg-background p-1 shadow-lg"
+            className="surface-popover absolute inset-x-0 top-full z-50 mt-1.5 origin-top"
           >
             {items.map((item) => {
               if (item.hidden?.()) return null;
@@ -173,8 +176,11 @@ function ActionMenu({
                   key={item.id}
                   role="menuitem"
                   type="button"
-                  onClick={() => { handleSelect(item); play('bloom') }}
-                  className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-muted-foreground transition-colors duration-100 hover:bg-muted/60 hover:text-foreground"
+                  onClick={() => {
+                    handleSelect(item);
+                    play("bloom");
+                  }}
+                  className="menu-item"
                 >
                   <Icon aria-hidden className="size-4 shrink-0" />
                   {copied ? "Copied" : item.label}

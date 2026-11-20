@@ -1,7 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import {
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   init,
   sampler,
@@ -11,6 +11,7 @@ import {
   type Surface,
 } from "vgpu";
 import type { Texture } from "vgpu";
+import { resolveOptions } from "../options";
 
 export type BubbleOptions = {
   size?: number;
@@ -53,8 +54,8 @@ const DEFAULTS: Required<BubbleOptions> = {
   refraction: 80,
   dispersion: 1,
   frost: 0,
-  shine: 0.25,
-  rim: 0.5,
+  shine: 0.5,
+  rim: 1,
   iridescence: 1,
   intensity: 0.9,
   tint: [1, 1, 1],
@@ -96,7 +97,7 @@ function createRectCache(element: Element) {
   };
 }
 
-const MIPMAP_SHADER = /* wgsl */ `
+const MIPMAP_SHADER = `
 struct VSOut {
   @builtin(position) pos: vec4f,
   @location(0) uv: vec2f,
@@ -122,7 +123,7 @@ struct VSOut {
   return textureSampleLevel(uSrc, uSampler, uv, 0.0);
 }`;
 
-const SHADER = /* wgsl */ `
+const SHADER = `
 struct Params {
   trail: array<vec4f, 24>,
   tint: vec4f,
@@ -261,8 +262,8 @@ fn dropletColor(normal: vec3f, rayDir: vec3f) -> vec3f {
       page(frag + offG, lod).g,
       page(frag + offB, lod).b);
     refr *= mix(vec3f(1.0), params.tint.rgb, clamp(params.tintStrength, 0.0, 1.0));
-    let edge = pow(1.0 - clamp(n.z, 0.0, 1.0), 1.5);
-    refr *= 1.0 - 0.35 * params.rim * edge;
+    let edge = pow(1.0 - clamp(n.z, 0.0, 1.0), 3.0);
+    refr *= max(1.0 - 0.9 * params.rim * edge, 0.0);
     var color = pow(max(refr, vec3f(0.0)), vec3f(1.0 / 2.2));
     color += glints * params.iridescence;
     color += vec3f(spec * params.shine * 0.9);
@@ -289,7 +290,6 @@ export function supportsHtmlInCanvas(): boolean {
   );
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
@@ -315,7 +315,7 @@ export function createBubble(
   options: BubbleOptions = {},
 ): BubbleInstance | null {
   if (!supportsWebGPU()) return null;
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
@@ -337,7 +337,7 @@ export function createBubble(
     paintable.onpaint = () => {
       try {
         sourceCtx!.reset();
-        drawHtmlInCanvas(source, sourceCtx!, content);
+        drawHtmlInCanvas(source, sourceCtx!, content, true);
         contentDirty = true;
         wake();
       } catch {}
@@ -700,7 +700,7 @@ export function createBubble(
         addressModeU: "clamp-to-edge",
         addressModeV: "clamp-to-edge",
       });
-      fx = effect(gpu, SHADER, {
+      fx = gpuEffect(gpu, SHADER, {
         label: "bubble",
         set: { uSampler: linearSampler, uContent: ensureContentTexture() },
       });
@@ -759,14 +759,26 @@ export function createBubble(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) => config[key as keyof BubbleOptions] !== value,
@@ -789,6 +801,7 @@ export function createBubble(
       content.removeEventListener("scroll", onScroll);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       motionQuery.removeEventListener("change", onMotionChange);
       contentTexture?.destroy();
       screen?.dispose();

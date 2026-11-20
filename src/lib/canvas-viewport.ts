@@ -1,6 +1,5 @@
 const canvasDimensionLimits = new WeakMap<WebGLRenderingContext | WebGL2RenderingContext, number>();
 
-/** Keep the existing DPR budget, then account for browser pinch zoom. */
 export function getCanvasPixelRatio(
   element: HTMLElement,
   context?: WebGLRenderingContext | WebGL2RenderingContext,
@@ -22,8 +21,6 @@ export function getCanvasPixelRatio(
     }
     maxDimension = limit;
   }
-  // Rendering the full element preserves its CSS position and native input
-  // geometry while panning. Bound allocations when zooming large canvases.
   return Math.min(
     requested,
     maxDimension / Math.max(width, height),
@@ -31,7 +28,6 @@ export function getCanvasPixelRatio(
   );
 }
 
-/** Pinch zoom changes visualViewport without resizing the element's CSS box. */
 export function createCanvasResizeObserver(onResize: () => void) {
   const viewport = window.visualViewport;
   let frame = 0;

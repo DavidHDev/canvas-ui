@@ -1,7 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import {
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   init,
   sampler,
@@ -13,6 +13,7 @@ import {
   type Target,
 } from "vgpu";
 import type { Texture } from "vgpu";
+import { resolveOptions } from "../options";
 
 export interface BlazeOptions {
   /** Height of the blaze zone as a fraction of the screen (0 to 1). */
@@ -42,20 +43,14 @@ export interface BlazeOptions {
 }
 
 export interface BlazeElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGPU effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface BlazeInstance {
-  /** Update effect options live. */
   setOptions: (options: BlazeOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -64,12 +59,12 @@ const DEFAULTS: Required<BlazeOptions> = {
   distortion: 0.6,
   distortionScale: 0.5,
   speed: 1,
-  sparks: 0.5,
+  sparks: 0.7,
   sparkDensity: 1.5,
   sparkSize: 1,
   layers: 4,
-  smoke: 0.5,
-  glow: 1.5,
+  smoke: 0.8,
+  glow: 2.5,
   sparkColor: [1, 0.4, 0.05],
   smokeColor: [1, 0.43, 0.1],
 };
@@ -83,7 +78,7 @@ type ElementImageContext = CanvasRenderingContext2D & {
   drawElementImage?: (element: Element, x: number, y: number) => void;
 };
 
-const FIRE_SHADER = /* wgsl */ `
+const FIRE_SHADER = `
 struct FireParams {
   resolution: vec2f,
   sparkColor: vec3f,
@@ -270,7 +265,7 @@ fn layeredParticles(uv: vec2f, sizeMod: f32, alphaMod: f32, layers: u32, smoke: 
   return vec4f(fire, max(fire.r, max(fire.g, fire.b)));
 }`;
 
-const MAIN_SHADER = /* wgsl */ `
+const MAIN_SHADER = `
 struct MainParams {
   height: f32,
   distortion: f32,
@@ -394,14 +389,12 @@ export function supportsHtmlInCanvas(): boolean {
   );
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every Blaze instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -421,7 +414,7 @@ export function createBlaze(
   options: BlazeOptions = {},
 ): BlazeInstance | null {
   if (!supportsWebGPU()) return null;
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
@@ -496,7 +489,6 @@ export function createBlaze(
       contentTexture.size[0] !== width ||
       contentTexture.size[1] !== height
     ) {
-      // A new wrapper invalidates vgpu's cached bindings to the old texture.
       contentTexture?.destroy();
       contentTexture = gpu!.device.createTexture({
         size: [width, height],
@@ -639,8 +631,8 @@ export function createBlaze(
         addressModeU: "clamp-to-edge",
         addressModeV: "clamp-to-edge",
       });
-      fireFx = effect(gpu, FIRE_SHADER, { label: "blaze.fire" });
-      mainFx = effect(gpu, MAIN_SHADER, {
+      fireFx = gpuEffect(gpu, FIRE_SHADER, { label: "blaze.fire" });
+      mainFx = gpuEffect(gpu, MAIN_SHADER, {
         label: "blaze",
         set: { uSampler: linear, uContent: ensureContentTexture() },
       });
@@ -668,14 +660,26 @@ export function createBlaze(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) => config[key as keyof BlazeOptions] !== value,
@@ -694,6 +698,7 @@ export function createBlaze(
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       motionQuery.removeEventListener("change", onMotionChange);
       contentTexture?.destroy();
       destroyTarget(fireTarget);

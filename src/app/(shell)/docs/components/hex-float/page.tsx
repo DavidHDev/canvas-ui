@@ -6,7 +6,7 @@ import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { HexFloatDemo } from "@/demos/hex-float-demo";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Hex Float",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const DESCRIPTION =
-  "The page becomes a floor of shiny hex tiles that lean back in perspective and float gently. Your cursor injects a fluid that flattens the tiles into a readable window, swirling as you move and healing when you leave. This page is the demo.";
+  "The page becomes a floor of shiny hex tiles that lean back in perspective and float gently. Your cursor injects a fluid that flattens the tiles into a readable window, swirling as you move and healing when you leave.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -159,14 +159,9 @@ export default async function HexFloatPage() {
         installItem="hex-float"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Move your cursor over the photos to open a readable window and watch the ring of tiles glint."
-            alt="Demo photo for the Hex Float effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={3} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </HexFloatDemo>

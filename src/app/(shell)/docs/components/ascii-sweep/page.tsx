@@ -235,21 +235,9 @@ export default async function AsciiSweepPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <section className="mt-8" aria-label="Demo">
-            <h2 className="text-lg font-semibold tracking-[-0.01em]">Demo</h2>
-            <p className="mt-2 text-[13px] text-muted-foreground">
-              Switch tabs to fire the sweep. The tab you move toward sets the
-              direction, and the characters grow on the text lines the band
-              crosses.
-            </p>
-            <div className="mt-3">
-              <AsciiSweepDemo />
-            </div>
-          </section>
-        }
+        preview={<AsciiSweepDemo />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </div>

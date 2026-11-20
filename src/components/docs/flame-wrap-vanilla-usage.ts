@@ -1,4 +1,3 @@
-// Shared with the browser smoke test so it runs the exact copyable example.
 export const FLAME_WRAP_VANILLA_HTML = `<div style="position: relative; width: 300px; height: 336px; margin: 295px 40px 40px;">
   <canvas id="source" style="position: absolute; inset: 0; width: 100%; height: 100%;">
     <!-- #content belongs inside #source, on the element to capture. -->

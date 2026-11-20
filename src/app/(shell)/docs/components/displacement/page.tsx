@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
 import { ComponentDoc } from "@/components/docs/component-doc";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
 import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { DisplacementDemo } from "@/demos/displacement-demo";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Displacement",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const DESCRIPTION =
-  "Your page becomes a grid of cells. Sweep the cursor and they shear apart into offset, color-fringed tiles, then settle back. This page is the demo.";
+  "Your page becomes a grid of cells. Sweep the cursor and they shear apart into offset, color-fringed tiles, then settle back.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -122,14 +122,9 @@ export default async function DisplacementPage() {
         installItem="displacement"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Sweep your cursor across the photo to shear it into cells."
-            alt="Demo photo for the Displacement effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={2} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </DisplacementDemo>

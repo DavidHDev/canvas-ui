@@ -4,6 +4,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { createRectCache } from "../rect-cache";
+import { resolveOptions } from "../options";
 
 export interface ParticleObjectOptions {
   /** URL of the asset to display: GLB/glTF, SVG, PNG, JPEG, WebP, or GIF. Object URLs from a file input work too. The format is sniffed from the bytes, not the extension. */
@@ -63,16 +64,12 @@ export interface ParticleObjectOptions {
 }
 
 export interface ParticleObjectElements {
-  /** Canvas the scene renders to. */
   canvas: HTMLCanvasElement;
 }
 
 export interface ParticleObjectInstance {
-  /** Update options live. Changing src loads the new asset. */
   setOptions: (options: ParticleObjectOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -107,6 +104,13 @@ const DEFAULTS: Required<ParticleObjectOptions> = {
 };
 
 const CAMERA_DIR = new THREE.Vector3(0, -1, 4).normalize();
+
+function fitFov(fov: number, aspect: number): number {
+  if (aspect >= 1) return fov;
+  const half = THREE.MathUtils.degToRad(fov) / 2;
+  const margin = 1 + 0.25 * (1 - aspect);
+  return THREE.MathUtils.radToDeg(2 * Math.atan((Math.tan(half) * margin) / aspect));
+}
 const MODEL_LIFT = 0.3;
 const RASTER_SIZE = 420;
 const ALBEDO_SIZE = 128;
@@ -545,7 +549,7 @@ export function createParticleObject(
   options: ParticleObjectOptions = {},
 ): ParticleObjectInstance | null {
   const { canvas } = elements;
-  const config: Required<ParticleObjectOptions> = { ...DEFAULTS, ...options };
+  const config: Required<ParticleObjectOptions> = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
 
   let renderer: THREE.WebGLRenderer;
   try {
@@ -727,7 +731,7 @@ export function createParticleObject(
     controls.enableZoom = config.zoom;
     controls.autoRotate = config.autoRotate && !reducedMotion;
     controls.autoRotateSpeed = config.autoRotateSpeed;
-    camera.fov = config.fov;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
     floatGroup.position.x = config.xOffset;
     floatGroup.position.y = MODEL_LIFT + config.yOffset;
@@ -758,6 +762,7 @@ export function createParticleObject(
     renderer.setSize(width, height, false);
     material.uniforms.uDpr.value = pr;
     camera.aspect = width / height;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
   }
 
@@ -937,10 +942,12 @@ export function createParticleObject(
   }
 
   let inView = true;
+  let pageVisible =
+    typeof document === "undefined" || document.visibilityState !== "hidden";
   let loopRunning = false;
 
   function tick(time: number) {
-    if (!inView) {
+    if (!inView || !pageVisible) {
       lastTime = 0;
       stopLoop();
       return;
@@ -971,7 +978,7 @@ export function createParticleObject(
   }
 
   function startLoop() {
-    if (loopRunning || !inView || disposed) return;
+    if (loopRunning || !inView || !pageVisible || disposed) return;
     loopRunning = true;
     renderer.setAnimationLoop(tick);
   }
@@ -995,6 +1002,17 @@ export function createParticleObject(
       : null;
   viewObserver?.observe(canvas);
 
+  const onVisibilityChange = () => {
+    pageVisible = document.visibilityState !== "hidden";
+    if (pageVisible) {
+      lastTime = 0;
+      startLoop();
+    } else {
+      stopLoop();
+    }
+  };
+  document.addEventListener("visibilitychange", onVisibilityChange);
+
   let lastTime = 0;
   let elapsed = Math.random() * 100;
 
@@ -1002,6 +1020,7 @@ export function createParticleObject(
 
   return {
     setOptions(next: ParticleObjectOptions) {
+      next = resolveOptions(DEFAULTS, next);
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
         if (typeof value === "function") continue;
@@ -1034,6 +1053,7 @@ export function createParticleObject(
       stopLoop();
       observer.disconnect();
       viewObserver?.disconnect();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       motionQuery.removeEventListener("change", onMotionChange);
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerleave", onPointerLeave);

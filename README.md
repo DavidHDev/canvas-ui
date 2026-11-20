@@ -9,7 +9,7 @@
 
 <p>
   <b>An open source library of creative, framework-agnostic components drawn on canvas.</b><br />
-  Fluid simulations, shader effects, and 3D scenes that run over your live, fully interactive interface. WebGL or WebGPU via vgpu, your choice.
+  Fluid simulations, shader effects, and 3D scenes, running over your live, fully interactive interface or drawn entirely on their own. WebGL or WebGPU via vgpu, your choice.
 </p>
 
 <p>
@@ -23,8 +23,7 @@
 
 <p>
   <a href="https://github.com/DavidHDev/canvas-ui/stargazers"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/stars/DavidHDev/canvas-ui.svg?variant=secondary&size=sm&mode=dark" /><img alt="GitHub stars" src="https://shieldcn.dev/github/stars/DavidHDev/canvas-ui.svg?variant=secondary&size=sm&mode=light" /></picture></a>
-  <a href="https://github.com/DavidHDev/canvas-ui/actions/workflows/ci.yml"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/ci/DavidHDev/canvas-ui.svg?variant=secondary&size=sm&mode=dark" /><img alt="CI status" src="https://shieldcn.dev/github/ci/DavidHDev/canvas-ui.svg?variant=secondary&size=sm&mode=light" /></picture></a>
-  <a href="https://canvasui.dev/components"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/components-35.svg?variant=secondary&size=sm&logo=shadcnui&mode=dark" /><img alt="35 components" src="https://shieldcn.dev/badge/components-35.svg?variant=secondary&size=sm&logo=shadcnui&mode=light" /></picture></a>
+  <a href="https://canvasui.dev/components"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/components-38.svg?variant=secondary&size=sm&logo=shadcnui&mode=dark" /><img alt="38 components" src="https://shieldcn.dev/badge/components-38.svg?variant=secondary&size=sm&logo=shadcnui&mode=light" /></picture></a>
   <a href="LICENSE.md"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/license-MIT_+_Commons_Clause.svg?variant=secondary&size=sm&logo=opensourceinitiative&mode=dark" /><img alt="License: MIT + Commons Clause" src="https://shieldcn.dev/badge/license-MIT_+_Commons_Clause.svg?variant=secondary&size=sm&logo=opensourceinitiative&mode=light" /></picture></a>
 </p>
 
@@ -41,14 +40,15 @@
 
 ## What makes it different
 
-Most components use the experimental [HTML-in-canvas](https://chromestatus.com/feature/5172548013916160) API to read and redraw your live DOM. Text stays selectable, links stay clickable, and the page becomes a texture that fire, fluid, and glass distort in real time.
+Effects come in two categories:
 
-Where it is not supported, components fall back to GPU overlays, so every visitor gets a working page.
+- **Live HTML** effects use the [HTML-in-canvas](https://chromestatus.com/feature/5172548013916160) API, on by default in Chrome 157, to draw your real DOM into the canvas. Text stays selectable, links stay clickable, and the page becomes a texture that fire, fluid, and glass distort in real time. Where the API is missing, they fall back to a GPU overlay or plain HTML, so every visitor gets a working page.
+- **Universal** effects draw their whole scene on the GPU instead of capturing the page, so they look and behave the same in every modern browser.
 
 <table>
 <tr>
 <td align="center">🎨</td>
-<td><b>35 components</b> and counting: Liquid, Glass, Shatter, Force Field, Decrypt Reveal, and more</td>
+<td><b>38 components</b> and counting: Liquid, Glass, Shatter, Force Field, Chrome Object, and more</td>
 </tr>
 <tr>
 <td align="center">🧩</td>
@@ -94,7 +94,11 @@ export default function Page() {
 }
 ```
 
-Most components wrap your content. The subtree stays live and interactive; the effect runs on top.
+Live HTML components wrap your content. The subtree stays live and interactive; the effect runs on top. Universal components draw their own scene, so there is nothing to wrap. The object renderers, for example, take a `src`:
+
+```tsx
+<ChromeObject src="/logo.svg" className="h-96" />
+```
 
 See the [installation guide](https://canvasui.dev/docs/installation) for manual setup.
 
@@ -111,6 +115,10 @@ WebGPU builds ship for all six frameworks. They need a browser with WebGPU, Chro
 ## Components
 
 Every component ships for all six frameworks in both renderer builds. Compare them in the [playground](https://canvasui.dev/playground).
+
+### Live HTML
+
+These draw your real, interactive HTML into the canvas. The full effect needs HTML-in-canvas (Chrome 157 and later); other browsers get a working fallback.
 
 <details open>
 <summary><b>🌊 Fluid &amp; motion</b></summary>
@@ -163,28 +171,35 @@ Every component ships for all six frameworks in both renderer builds. Compare th
 | [**Particle Reveal**](https://canvasui.dev/docs/components/particle-reveal) | Particles merging into crisp UI       | [**Particle Scroll**](https://canvasui.dev/docs/components/particle-scroll) | Sand that reassembles on scroll        |
 | [**Shatter**](https://canvasui.dev/docs/components/shatter)                 | 3D glass shards that lift and refract | [**Grid**](https://canvasui.dev/docs/components/grid)                       | 3D tiles rippling around the cursor    |
 | [**Hex Float**](https://canvasui.dev/docs/components/hex-float)             | Floating hex tiles with cursor lift   | [**Canvas**](https://canvasui.dev/docs/components/canvas)                   | Woven canvas you drag wet paint across |
+| [**ASCII Sweep**](https://canvasui.dev/docs/components/ascii-sweep)         | Glowing ASCII band that swaps panels  |                                                                             |                                        |
 
 </details>
 
+### Universal
+
+These draw their whole scene on the GPU, with no HTML-in-canvas needed, so they look the same in every modern browser. Object renderers are the first group, with more kinds of Universal effects on the way.
+
 <details open>
-<summary><b>🧊 3D effects</b>: no flag needed, these work everywhere</summary>
+<summary><b>🧊 Object renderers</b></summary>
 
-Point these at a GLB/glTF model, SVG, or image to render it as a 3D scene.
+Point any of them at a GLB/glTF model, SVG, or image.
 
-| Component                                                                   | What it does                           | Component                                                                   | What it does                      |
-| --------------------------------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------- | --------------------------------- |
-| [**ASCII Object**](https://canvasui.dev/docs/components/ascii-object)       | Redrawn as shape-matched ASCII         | [**Glass Object**](https://canvasui.dev/docs/components/glass-object)       | Liquid glass with real dispersion |
-| [**Particle Object**](https://canvasui.dev/docs/components/particle-object) | Particles that scatter and spring back | [**Dithered Object**](https://canvasui.dev/docs/components/dithered-object) | Rendered through a 1-bit dither   |
-| [**Liquid Object**](https://canvasui.dev/docs/components/liquid-object)     | Dragged through swirling liquid        |                                                                             |                                   |
+| Component                                                                         | What it does                           | Component                                                                   | What it does                           |
+| --------------------------------------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------- |
+| [**Glass Object**](https://canvasui.dev/docs/components/glass-object)             | Solid glass with real dispersion       | [**Chrome Object**](https://canvasui.dev/docs/components/chrome-object)     | Liquid chrome with flowing reflections |
+| [**Liquid Object**](https://canvasui.dev/docs/components/liquid-object)           | Dragged through swirling liquid        | [**Particle Object**](https://canvasui.dev/docs/components/particle-object) | Particles that scatter and spring back |
+| [**ASCII Object**](https://canvasui.dev/docs/components/ascii-object)             | Redrawn as shape-matched ASCII         | [**Dithered Object**](https://canvasui.dev/docs/components/dithered-object) | Rendered through a 1-bit dither        |
+| [**Ink Object**](https://canvasui.dev/docs/components/ink-object)                 | Printed in rough ink strokes           | [**Wireframe Object**](https://canvasui.dev/docs/components/wireframe-object) | Edge lines with hidden-line removal  |
+| [**Topographic Object**](https://canvasui.dev/docs/components/topographic-object) | Contour lines like a survey map        |                                                                             |                                        |
 
 </details>
 
 ## Browser support
 
-| Browser              | HTML-in-canvas components | 3D effect components |
-| -------------------- | :-----------------------: | :------------------: |
-| Chrome 157 and later |      ✅ Full effect       |    ✅ Full effect    |
-| Everything else      |  ⚠️ GPU overlay fallback  |    ✅ Full effect    |
+| Browser              |                Live HTML                | Universal      |
+| -------------------- | :-------------------------------------: | :------------: |
+| Chrome 157 and later |             ✅ Full effect              | ✅ Full effect |
+| Everything else      | ⚠️ Fallback: GPU overlay or plain HTML  | ✅ Full effect |
 
 HTML-in-Canvas ships in Chrome 157. Older Chrome versions can turn it on with the `chrome://flags/#canvas-draw-element` flag, or with an [origin trial](https://canvasui.dev/docs/installation#requirements) token on your site. Android stays on the fallback for now. Details in the [docs](https://canvasui.dev/docs).
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Search } from "lucide-react";
+import { Search } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import {
   useEffect,
@@ -12,15 +12,20 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { ORDERED_COMPONENTS } from "@/components/common/component-groups";
+import { DURATION, EASE_OUT } from "@/components/common/motion-tokens";
+import { CATEGORY_META } from "@/data/components";
 import { cn } from "@/lib/utils";
 
-const EASE = [0.23, 1, 0.32, 1] as const;
+type Source = "keyboard" | "pointer";
 
 let searchOpen = false;
+let lastSource: Source = "pointer";
 const listeners = new Set<() => void>();
 
-function setSearchOpen(next: boolean) {
+function setSearchOpen(next: boolean, source: Source) {
   searchOpen = next;
+  lastSource = source;
   listeners.forEach((listener) => listener());
 }
 
@@ -38,11 +43,11 @@ interface SearchEntry {
   label: string;
   section: string;
   hint?: string;
-  /** Shown as a quick link before the user types anything. */
   suggested?: boolean;
+  isNew?: boolean;
 }
 
-const ENTRIES: SearchEntry[] = [
+const DOC_ENTRIES: SearchEntry[] = [
   {
     href: "/docs",
     label: "Introduction",
@@ -66,219 +71,85 @@ const ENTRIES: SearchEntry[] = [
     href: "/components",
     label: "Browse All",
     section: "Components",
+    hint: "catalogue gallery live html universal",
     suggested: true,
   },
-  {
-    href: "/docs/components/ascii-object",
-    label: "ASCII Object",
-    section: "Components",
-    hint: "ascii 3d model glb gltf svg image studio three.js characters glyph shape terminal",
-  },
-  {
-    href: "/docs/components/ascii-sweep",
-    label: "ASCII Sweep",
-    section: "Components",
-    hint: "ascii sweep swap transition tabs text swap band glow terminal glyph scan",
-  },
-  {
-    href: "/docs/components/asciify",
-    label: "Asciify",
-    section: "Components",
-    hint: "ascii text characters filter cursor lens terminal glyph matrix",
-  },
-  {
-    href: "/docs/components/bend",
-    label: "Bend",
-    section: "Components",
-    hint: "scroll cube fold",
-  },
-  {
-    href: "/docs/components/blaze",
-    label: "Blaze",
-    section: "Components",
-    hint: "fire sparks smoke heat",
-  },
-  {
-    href: "/docs/components/bubble",
-    label: "Bubble",
-    section: "Components",
-    hint: "droplet metaball glass refraction cursor trail liquid blob",
-  },
-  {
-    href: "/docs/components/canvas",
-    label: "Canvas",
-    section: "Components",
-    hint: "painting woven fabric texture paper halftone grain screen print",
-  },
-  {
-    href: "/docs/components/cloth",
-    label: "Cloth",
-    section: "Components",
-    hint: "fabric flag wind wave textile banner ripple",
-  },
-  {
-    href: "/docs/components/clouds",
-    label: "Clouds",
-    section: "Components",
-    hint: "fog mist wind",
-  },
-  {
-    href: "/docs/components/decrypt-reveal",
-    label: "Decrypt Reveal",
-    section: "Components",
-    hint: "ascii cipher hover matrix hacker encrypt decode text",
-  },
-  {
-    href: "/docs/components/dithered-object",
-    label: "Dithered Object",
-    section: "Components",
-    hint: "3d model gltf glb svg png bayer halftone floyd steinberg",
-  },
-  {
-    href: "/docs/components/displacement",
-    label: "Displacement",
-    section: "Components",
-    hint: "grid distortion warp ripple chromatic aberration grain",
-  },
-  {
-    href: "/docs/components/droplets",
-    label: "Droplets",
-    section: "Components",
-    hint: "rain water refraction",
-  },
-  {
-    href: "/docs/components/flame-wrap",
-    label: "Flame Wrap",
-    section: "Components",
-    hint: "fire flame border burning hot sparks heat molten edge card",
-  },
-  {
-    href: "/docs/components/force-field",
-    label: "Force Field",
-    section: "Components",
-    hint: "shield energy hexagon hex grid lattice ripple shockwave impact refraction plasma sci-fi",
-  },
-  {
-    href: "/docs/components/frost",
-    label: "Frost",
-    section: "Components",
-    hint: "ice frozen frost melt refraction winter freeze snow blur glass pane",
-  },
-  {
-    href: "/docs/components/glass",
-    label: "Glass",
-    section: "Components",
-    hint: "lens refraction magnify zoom",
-  },
-  {
-    href: "/docs/components/glass-object",
-    label: "Glass Object",
-    section: "Components",
-    hint: "liquid glass 3d model svg png refraction dispersion transmission three.js",
-  },
-  {
-    href: "/docs/components/glitch",
-    label: "Glitch",
-    section: "Components",
-    hint: "glitch burst rgb split slices corruption datamosh broadcast tear noise",
-  },
-  {
-    href: "/docs/components/glyph-rain",
-    label: "Glyph Rain",
-    section: "Components",
-    hint: "matrix rain code falling glyphs katakana light glow digital",
-  },
-  {
-    href: "/docs/components/grid",
-    label: "Grid",
-    section: "Components",
-    hint: "3d tiles ripple waves",
-  },
-  {
-    href: "/docs/components/hex-float",
-    label: "Hex Float",
-    section: "Components",
-    hint: "hexagon tiles shiny perspective tilt cursor lift",
-  },
-  {
-    href: "/docs/components/ink-object",
-    label: "Ink Object",
-    section: "Components",
-    hint: "3d model gltf glb svg png ink hatching strokes dashes print linocut woodcut",
-  },
-  {
-    href: "/docs/components/laser",
-    label: "Laser",
-    section: "Components",
-    hint: "beam scroll reveal glow",
-  },
-  {
-    href: "/docs/components/liquid",
-    label: "Liquid",
-    section: "Components",
-    hint: "fluid simulation water",
-  },
-  {
-    href: "/docs/components/magnify",
-    label: "Magnify",
-    section: "Components",
-    hint: "zoom lens hud reticle scanner sci-fi ripple magnifier",
-  },
-  {
-    href: "/docs/components/particle-object",
-    label: "Particle Object",
-    section: "Components",
-    hint: "particles 3d model svg png image push physics point cloud three.js",
-  },
-  {
-    href: "/docs/components/particle-reveal",
-    label: "Particle Reveal",
-    section: "Components",
-    hint: "dust grains cursor",
-  },
-  {
-    href: "/docs/components/particle-scroll",
-    label: "Particle Scroll",
-    section: "Components",
-    hint: "sand dissolve scroll",
-  },
-  {
-    href: "/docs/components/peel",
-    label: "Peel",
-    section: "Components",
-    hint: "page curl sticker corner",
-  },
-  {
-    href: "/docs/components/retro-dither",
-    label: "Retro Dither",
-    section: "Components",
-    hint: "pixel lens gameboy",
-  },
-  {
-    href: "/docs/components/ripple",
-    label: "Ripple",
-    section: "Components",
-    hint: "water rings waves click pond splash refraction",
-  },
-  {
-    href: "/docs/components/shatter",
-    label: "Shatter",
-    section: "Components",
-    hint: "3d glass shards break lift float refraction pieces fragments cursor lens broken tiles",
-  },
-  {
-    href: "/docs/components/liquid-object",
-    label: "Liquid Object",
-    section: "Components",
-    hint: "liquid fluid water ripple warp distort chromatic aberration rainbow fringe swirl eddy melt 3d model glb svg png image logo cursor three.js",
-  },
-  {
-    href: "/docs/components/vhs",
-    label: "VHS",
-    section: "Components",
-    hint: "tape scanlines noise grain",
-  },
 ];
+
+const HINTS: Record<string, string> = {
+  "ascii-object":
+    "ascii 3d model glb gltf svg image studio three.js characters glyph shape terminal",
+  "ascii-sweep":
+    "ascii sweep swap transition tabs text swap band glow terminal glyph scan",
+  "asciify":
+    "ascii text characters filter cursor lens terminal glyph matrix",
+  "bend": "scroll cube fold",
+  "blaze": "fire sparks smoke heat",
+  "bubble":
+    "droplet metaball glass refraction cursor trail liquid blob",
+  "canvas":
+    "painting woven fabric texture paper halftone grain screen print",
+  "cloth": "fabric flag wind wave textile banner ripple",
+  "clouds": "fog mist wind",
+  "decrypt-reveal":
+    "ascii cipher hover matrix hacker encrypt decode text",
+  "dithered-object":
+    "3d model gltf glb svg png bayer halftone floyd steinberg",
+  "displacement":
+    "grid distortion warp ripple chromatic aberration grain",
+  "droplets": "rain water refraction",
+  "flame-wrap":
+    "fire flame border burning hot sparks heat molten edge card",
+  "force-field":
+    "shield energy hexagon hex grid lattice ripple shockwave impact refraction plasma sci-fi",
+  "frost":
+    "ice frozen frost melt refraction winter freeze snow blur glass pane",
+  "glass": "lens refraction magnify zoom",
+  "glass-object":
+    "liquid glass 3d model svg png refraction dispersion transmission three.js",
+  "glitch":
+    "glitch burst rgb split slices corruption datamosh broadcast tear noise",
+  "glyph-rain":
+    "matrix rain code falling glyphs katakana light glow digital",
+  "grid": "3d tiles ripple waves",
+  "hex-float": "hexagon tiles shiny perspective tilt cursor lift",
+  "ink-object":
+    "3d model gltf glb svg png ink hatching strokes dashes print linocut woodcut",
+  "laser": "beam scroll reveal glow",
+  "liquid": "fluid simulation water",
+  "magnify": "zoom lens hud reticle scanner sci-fi ripple magnifier",
+  "particle-object":
+    "particles 3d model svg png image push physics point cloud three.js",
+  "particle-reveal": "dust grains cursor",
+  "particle-scroll": "sand dissolve scroll",
+  "peel": "page curl sticker corner",
+  "retro-dither": "pixel lens gameboy",
+  "ripple": "water rings waves click pond splash refraction",
+  "shatter":
+    "3d glass shards break lift float refraction pieces fragments cursor lens broken tiles",
+  "liquid-object":
+    "liquid fluid water ripple warp distort chromatic aberration rainbow fringe swirl eddy melt 3d model glb svg png image logo cursor three.js",
+  "vhs": "tape scanlines noise grain",
+  "chrome-object":
+    "liquid metal chrome mirror reflection silver 3d model svg png environment three.js",
+  "topographic-object":
+    "contour lines map terrain elevation survey topo 3d model svg png three.js",
+  "wireframe-object":
+    "wireframe edges lines mesh blueprint technical hidden line nodes 3d model svg png three.js",
+};
+
+const COMPONENT_ENTRIES: SearchEntry[] = ORDERED_COMPONENTS.map((entry) => {
+  const slug = entry.href.split("/").pop() ?? "";
+  return {
+    href: entry.href,
+    label: entry.name,
+    section: CATEGORY_META[entry.category].label,
+    hint: `${HINTS[slug] ?? ""} ${entry.description}`,
+    isNew: entry.isNew,
+  };
+});
+
+const ENTRIES = [...DOC_ENTRIES, ...COMPONENT_ENTRIES];
 
 function matches(entry: SearchEntry, query: string) {
   const haystack =
@@ -290,18 +161,79 @@ function matches(entry: SearchEntry, query: string) {
     .every((word) => haystack.includes(word));
 }
 
+const SECTION_ORDER = Array.from(new Set(ENTRIES.map((entry) => entry.section)));
+
+function rank(entries: SearchEntry[], query: string) {
+  const q = query.trim().toLowerCase();
+  const score = (entry: SearchEntry) => {
+    const label = entry.label.toLowerCase();
+    if (label.startsWith(q)) return 0;
+    if (label.includes(q)) return 1;
+    return 2;
+  };
+  return entries
+    .map((entry, index) => ({ entry, index, score: score(entry) }))
+    .sort(
+      (a, b) =>
+        SECTION_ORDER.indexOf(a.entry.section) -
+          SECTION_ORDER.indexOf(b.entry.section) ||
+        a.score - b.score ||
+        a.index - b.index,
+    )
+    .map(({ entry }) => entry);
+}
+
 export function SearchButton() {
   return (
     <button
       type="button"
       aria-label="Search"
-      onClick={() => setSearchOpen(true)}
-      className="grid size-8 place-items-center rounded-full border border-border/70 text-muted-foreground transition-[color,transform] duration-150 ease-out hover:text-foreground active:scale-95 motion-reduce:transition-none sm:border-transparent"
+      aria-keyshortcuts="Meta+K /"
+      onClick={() => setSearchOpen(true, "pointer")}
+      className="btn-icon btn-icon-quiet"
     >
       <Search aria-hidden className="size-[16px]" />
     </button>
   );
 }
+
+type Mode = "instant" | "reduced" | "full";
+
+const backdropVariants = {
+  hidden: (mode: Mode) => ({
+    opacity: 0,
+    transition: { duration: mode === "instant" ? 0 : DURATION.exit },
+  }),
+  shown: (mode: Mode) => ({
+    opacity: 1,
+    transition: {
+      duration: mode === "instant" ? 0 : DURATION.base,
+      ease: EASE_OUT,
+    },
+  }),
+};
+
+const panelVariants = {
+  hidden: (mode: Mode) =>
+    mode === "full"
+      ? {
+          opacity: 0,
+          transform: "translateY(6px) scale(0.98)",
+          transition: { duration: DURATION.exit, ease: EASE_OUT },
+        }
+      : {
+          opacity: 0,
+          transition: { duration: mode === "instant" ? 0 : DURATION.exit },
+        },
+  shown: (mode: Mode) => ({
+    opacity: 1,
+    transform: "translateY(0px) scale(1)",
+    transition: {
+      duration: mode === "instant" ? 0 : DURATION.base,
+      ease: EASE_OUT,
+    },
+  }),
+};
 
 export function SearchDialog() {
   const router = useRouter();
@@ -311,16 +243,24 @@ export function SearchDialog() {
     () => searchOpen,
     () => false,
   );
+  const source = useSyncExternalStore(
+    subscribe,
+    () => lastSource,
+    () => "pointer" as Source,
+  );
   const mounted = useSyncExternalStore(
     emptySubscribe,
     () => true,
     () => false,
   );
+  const mode: Mode =
+    source === "keyboard" ? "instant" : shouldReduceMotion ? "reduced" : "full";
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setSearchOpen(!searchOpen);
+        setSearchOpen(!searchOpen, "keyboard");
       } else if (event.key === "/" && !searchOpen) {
         const target = event.target as HTMLElement | null;
         if (
@@ -333,9 +273,9 @@ export function SearchDialog() {
           return;
         }
         event.preventDefault();
-        setSearchOpen(true);
+        setSearchOpen(true, "keyboard");
       } else if (event.key === "Escape" && searchOpen) {
-        setSearchOpen(false);
+        setSearchOpen(false, "keyboard");
       }
     };
     document.addEventListener("keydown", onKeyDown);
@@ -351,51 +291,40 @@ export function SearchDialog() {
     };
   }, [open]);
 
-  const go = (href: string) => {
-    setSearchOpen(false);
+  const go = (href: string, via: Source) => {
+    setSearchOpen(false, via);
     router.push(href);
   };
 
   if (!mounted) return null;
 
   return createPortal(
-    <AnimatePresence>
+    <AnimatePresence custom={mode}>
       {open && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0, transition: { duration: 0.12 } }}
-          transition={{ duration: 0.2, ease: EASE }}
-          className="fixed inset-0 z-100 flex items-start justify-center bg-background/40 px-5 pt-[18vh] backdrop-blur-md"
+          key="search"
+          custom={mode}
+          variants={backdropVariants}
+          initial="hidden"
+          animate="shown"
+          exit="hidden"
+          className="fixed inset-0 z-100 flex items-start justify-center bg-background/50 px-4 pt-[16vh] backdrop-blur-sm sm:px-5"
           onPointerDown={(event) => {
-            if (event.target === event.currentTarget) setSearchOpen(false);
+            if (event.target === event.currentTarget) {
+              setSearchOpen(false, "pointer");
+            }
           }}
         >
           <motion.div
             role="dialog"
             aria-modal="true"
             aria-label="Search"
-            initial={
-              shouldReduceMotion
-                ? { opacity: 0 }
-                : { opacity: 0, scale: 0.97, y: 8 }
-            }
-            animate={
-              shouldReduceMotion
-                ? { opacity: 1 }
-                : { opacity: 1, scale: 1, y: 0 }
-            }
-            exit={
-              shouldReduceMotion
-                ? { opacity: 0, transition: { duration: 0.12 } }
-                : {
-                    opacity: 0,
-                    scale: 0.98,
-                    transition: { duration: 0.12, ease: EASE },
-                  }
-            }
-            transition={{ duration: 0.2, ease: EASE }}
-            className="w-full max-w-md overflow-hidden rounded-2xl border border-border/60 bg-background/85 shadow-xl shadow-black/10 backdrop-blur-xl backdrop-saturate-150"
+            custom={mode}
+            variants={panelVariants}
+            initial="hidden"
+            animate="shown"
+            exit="hidden"
+            className="surface-popover w-full max-w-md overflow-hidden rounded-panel p-0"
           >
             <SearchPanel go={go} />
           </motion.div>
@@ -406,7 +335,7 @@ export function SearchDialog() {
   );
 }
 
-function SearchPanel({ go }: { go: (href: string) => void }) {
+function SearchPanel({ go }: { go: (href: string, via: Source) => void }) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -415,7 +344,7 @@ function SearchPanel({ go }: { go: (href: string) => void }) {
   const results = useMemo(
     () =>
       searching
-        ? ENTRIES.filter((entry) => matches(entry, query))
+        ? rank(ENTRIES.filter((entry) => matches(entry, query)), query)
         : ENTRIES.filter((entry) => entry.suggested),
     [query, searching],
   );
@@ -438,7 +367,7 @@ function SearchPanel({ go }: { go: (href: string) => void }) {
       moveActive(Math.max(activeIndex - 1, 0));
     } else if (event.key === "Enter" && results[activeIndex]) {
       event.preventDefault();
-      go(results[activeIndex].href);
+      go(results[activeIndex].href, "keyboard");
     }
   };
 
@@ -446,7 +375,7 @@ function SearchPanel({ go }: { go: (href: string) => void }) {
 
   return (
     <>
-      <div className="flex items-center gap-2.5 border-b border-border/60 px-4">
+      <div className="flex items-center gap-2.5 border-b border-border-subtle px-4">
         <Search aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         <input
           autoFocus
@@ -458,14 +387,12 @@ function SearchPanel({ go }: { go: (href: string) => void }) {
           onKeyDown={onInputKeyDown}
           placeholder="Search components and docs"
           aria-label="Search components and docs"
-          className="h-12 w-full bg-transparent text-[14px] outline-none placeholder:text-muted-foreground/70"
+          className="h-12 w-full bg-transparent text-[16px] outline-none placeholder:text-muted-foreground/70 sm:text-[14px]"
         />
-        <kbd className="shrink-0 rounded-md border border-border/60 px-1.5 py-0.5 text-[11px] text-muted-foreground/70">
-          esc
-        </kbd>
+        <kbd className="kbd shrink-0">esc</kbd>
       </div>
 
-      <div ref={listRef} className="max-h-[46vh] overflow-y-auto p-2">
+      <div ref={listRef} className="max-h-[46vh] overflow-y-auto overscroll-contain p-2">
         {results.length === 0 ? (
           <p className="px-2.5 py-6 text-center text-[13px] text-muted-foreground">
             No results for &ldquo;{query}&rdquo;
@@ -479,23 +406,37 @@ function SearchPanel({ go }: { go: (href: string) => void }) {
             return (
               <div key={entry.href}>
                 {heading ? (
-                  <p className="px-2.5 pt-3 pb-1.5 text-[12px] font-medium text-muted-foreground/70 first:pt-1">
+                  <p
+                    className={cn(
+                      "px-2.5 pb-1.5 text-[12px] font-medium text-muted-foreground/70",
+                      index === 0 ? "pt-1" : "pt-3",
+                    )}
+                  >
                     {heading}
                   </p>
                 ) : null}
                 <button
                   type="button"
                   data-active={active}
-                  onClick={() => go(entry.href)}
+                  onClick={() => go(entry.href, "pointer")}
                   onPointerMove={() => setActiveIndex(index)}
                   className={cn(
-                    "flex w-full cursor-pointer items-center rounded-lg px-2.5 py-2 text-left text-[13.5px] transition-colors duration-100",
+                    "flex w-full cursor-pointer items-center gap-1.5 rounded-control px-2.5 py-2 text-left text-[13.5px] outline-none",
                     active
-                      ? "bg-muted text-foreground"
+                      ? "bg-[var(--surface-hover)] text-foreground"
                       : "text-muted-foreground",
                   )}
                 >
                   {entry.label}
+                  {entry.isNew ? (
+                    <>
+                      <span
+                        aria-hidden
+                        className="size-1.5 shrink-0 rounded-full bg-blue-500"
+                      />
+                      <span className="sr-only">New</span>
+                    </>
+                  ) : null}
                 </button>
               </div>
             );

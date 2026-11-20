@@ -1,6 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import { createRectCache } from "../rect-cache";
+import { resolveOptions } from "../options";
 
 export interface GridOptions {
   /** Size of each grid tile in CSS pixels. */
@@ -40,20 +41,14 @@ export interface GridOptions {
 }
 
 export interface GridElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGL effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface GridInstance {
-  /** Update effect options live. */
   setOptions: (options: GridOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -65,7 +60,7 @@ const DEFAULTS: Required<GridOptions> = {
   waveSpeed: 0.5,
   frequency: 12,
   waveWidth: 0.05,
-  fadeTime: 0.2,
+  fadeTime: 0.6,
   maxLift: 1,
   jitter: 0,
   liftHeight: 60,
@@ -323,7 +318,7 @@ export function createGrid(
   elements: GridElements,
   options: GridOptions = {},
 ): GridInstance | null {
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const gl = output.getContext("webgl2", {
@@ -719,10 +714,21 @@ export function createGrid(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   const listenTarget = output.parentElement ?? output;
@@ -774,6 +780,7 @@ export function createGrid(
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) => config[key as keyof GridOptions] !== value,
@@ -793,6 +800,7 @@ export function createGrid(
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       motionQuery.removeEventListener("change", onMotionChange);
       listenTarget.removeEventListener("pointermove", onPointerMove);
       listenTarget.removeEventListener("pointerleave", onPointerLeave);

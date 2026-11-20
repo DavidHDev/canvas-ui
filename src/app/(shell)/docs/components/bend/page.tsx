@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
 import { ComponentDoc } from "@/components/docs/component-doc";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
 import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
@@ -16,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 const DESCRIPTION =
-  "Your page scrolls on the face of a cube. The top and bottom fold over virtual edges and flatten back out at the scroll ends. This page is the demo, scroll it.";
+  "Your page scrolls on the face of a cube. The top and bottom fold over virtual edges and flatten back out at the scroll ends.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -121,14 +120,8 @@ export default async function BendPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Scroll to watch the photo bend over the fold along with the rest of the page."
-            alt="Demo photo for the Bend effect"
-          />
-        }
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </BendDemo>

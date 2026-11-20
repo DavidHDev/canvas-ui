@@ -7,7 +7,11 @@ import {
   type GlassObjectOptions,
 } from "./GlassObjectVanilla";
 
-const props = defineProps<GlassObjectOptions>();
+const props = withDefaults(defineProps<GlassObjectOptions>(), {
+  orbit: undefined,
+  zoom: undefined,
+  autoRotate: undefined,
+});
 
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 

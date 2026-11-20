@@ -26,17 +26,13 @@ export function ChoiceSelect<T extends string>({
   align,
   className,
 }: {
-  /** Accessible name for the control, e.g. "Framework". */
   label: string;
   options: readonly ChoiceOption<T>[];
   value: T;
   onValueChange: (value: T) => void;
-  /** Which trigger edge the popup hangs from. `"end"` for a right-flush row. */
   align?: "start" | "end";
   className?: string;
 }) {
-  // The trigger remounts when an effect wrapper flips between its native and
-  // fallback DOM, so resolving from the current element stays accurate.
   const [trigger, setTrigger] = useState<HTMLButtonElement | null>(null);
   const container = effectPortalContainer(trigger);
 

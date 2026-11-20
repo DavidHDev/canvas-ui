@@ -11,7 +11,6 @@ export type RendererId = (typeof RENDERERS)[number]["id"];
 
 export const RENDERER_IDS = RENDERERS.map((renderer) => renderer.id);
 
-/** Every framework ships a WebGPU build; the wrappers are shared across engines. */
 export const WEBGPU_FRAMEWORK_IDS = [
   "react",
   "vue",
@@ -21,10 +20,6 @@ export const WEBGPU_FRAMEWORK_IDS = [
   "vanilla",
 ] as const;
 
-/**
- * The renderer preference, resolved against what the current component ships.
- * Components without a WebGPU engine always resolve to WebGL.
- */
 export function useRenderer(hasWebGPU: boolean) {
   const [preferred, setRenderer] = usePreference<RendererId>(
     "renderer",
@@ -35,7 +30,6 @@ export function useRenderer(hasWebGPU: boolean) {
   return [renderer, setRenderer] as const;
 }
 
-/** Every framework has both builds, so the stored framework applies as is. */
 export function resolveFramework(frameworkId: string, renderer: RendererId) {
   void renderer;
   return frameworkId;

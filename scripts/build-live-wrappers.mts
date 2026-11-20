@@ -220,7 +220,7 @@ function addRendererKey(source: string, file: string, base: string) {
 
 function addFailedReset(source: string) {
   const failedLine = "  const [failed, setFailed] = useState(false);\n";
-  const resetEffect = `\n  useEffect(() => {\n    // Retry native initialization when switching renderer engines.\n    // eslint-disable-next-line react-hooks/set-state-in-effect\n    setFailed(false);\n  }, [renderer]);\n`;
+  const resetEffect = `\n  useEffect(() => {\n    // eslint-disable-next-line react-hooks/set-state-in-effect\n    setFailed(false);\n  }, [renderer]);\n`;
   if (!source.includes(failedLine) || source.includes("setFailed(false);\n  }, [renderer]);")) {
     return source;
   }

@@ -8,7 +8,8 @@ import {
   Star,
   Users,
   Zap,
-} from "lucide-react";
+} from "@/components/icons";
+import { photoUrl } from "@/lib/demo-photo";
 
 const img = (id: string, width: number) =>
   `https://images.unsplash.com/${id}?q=80&w=${width}&auto=format&fit=crop`;
@@ -26,8 +27,6 @@ export const MOCK_IMAGES = {
     img("photo-1572021335469-31706a17aaef", 900),
   ],
   avatar: img("photo-1581065178047-8ee15951ede6", 200),
-  glassBackdrop: img("photo-1618005182384-a83a8bd57fbe", 1600),
-  hero: img("photo-1774425316479-4de6166e7408", 1740),
 } as const;
 
 function MockLink({
@@ -110,7 +109,7 @@ export function MockDashboard({
     return (
       <div className="flex h-full w-full flex-col bg-[#ece9e2] font-mono text-[#3a382f]">
         <div className="flex items-center justify-between bg-[#2f5d8a] px-4 py-2 text-[12px] text-white">
-          <span className="font-bold">bolt admin v1.3</span>
+          <span className="font-medium">bolt admin v1.3</span>
           <span className="hidden text-white/70 sm:block">
             logged in as maya
           </span>
@@ -132,7 +131,7 @@ export function MockDashboard({
                 {["ID", "TASK", "STATUS", "TIME"].map((th) => (
                   <th
                     key={th}
-                    className="border border-[#b5b1a3] bg-[#d3cfc2] px-2.5 py-1.5 font-bold"
+                    className="border border-[#b5b1a3] bg-[#d3cfc2] px-2.5 py-1.5 font-medium"
                   >
                     {th}
                   </th>
@@ -149,7 +148,7 @@ export function MockDashboard({
                     {row.task}
                   </td>
                   <td
-                    className={`border border-[#b5b1a3] px-2.5 py-1.5 font-bold ${
+                    className={`border border-[#b5b1a3] px-2.5 py-1.5 font-medium ${
                       row.status === "FAILED"
                         ? "text-[#a03123]"
                         : row.status === "OK"
@@ -178,7 +177,7 @@ export function MockDashboard({
   return (
     <div className="flex h-full w-full bg-background">
       <aside className="hidden w-40 shrink-0 flex-col gap-1 border-r border-border/60 bg-muted/30 px-3 py-4 sm:flex">
-        <span className="mb-3 flex items-center gap-1.5 px-2 text-[14px] font-semibold tracking-tight">
+        <span className="mb-3 flex items-center gap-1.5 px-2 text-[14px] font-medium tracking-tight">
           <Zap aria-hidden className="size-3.5 fill-current" />
           bolt
         </span>
@@ -200,7 +199,7 @@ export function MockDashboard({
       <div className="flex min-w-0 flex-1 flex-col px-5 py-4 sm:px-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[15px] font-semibold tracking-[-0.01em]">
+            <p className="text-[15px] font-medium tracking-[-0.01em]">
               Deploys
             </p>
             <p className="text-[12px] text-muted-foreground">Last 30 days</p>
@@ -219,7 +218,7 @@ export function MockDashboard({
               <p className="truncate text-[12px] text-muted-foreground">
                 {stat.label}
               </p>
-              <p className="mt-1 text-lg font-semibold tracking-[-0.01em]">
+              <p className="mt-1 text-lg font-medium tracking-[-0.01em]">
                 {stat.value}
               </p>
               <p
@@ -313,11 +312,6 @@ export interface MockSiteCopy {
   footerFinePrint: string;
 }
 
-/**
- * Two complete versions of the page copy. Effects that swap one body of
- * content for another render the same layout with a different entry, so every
- * line of text differs between them.
- */
 export const MOCK_SITE_COPY: [MockSiteCopy, MockSiteCopy] = [
   {
     brand: "bolt",
@@ -487,9 +481,7 @@ export function MockSite({
   copy = MOCK_SITE_COPY[0],
 }: {
   heroMedia?: React.ReactNode;
-  /** Lets 3D hero scenes overflow the panel instead of clipping at its edge. */
   heroBleed?: boolean;
-  /** Which body of page copy to render. Defaults to the first variant. */
   copy?: MockSiteCopy;
 }) {
   return (
@@ -499,7 +491,7 @@ export function MockSite({
       }`}
     >
       <header className="flex items-center justify-between gap-4 border-b border-border/50 px-6 py-4 sm:px-10">
-        <span className="flex items-center gap-1.5 text-lg font-semibold tracking-tight">
+        <span className="flex items-center gap-1.5 text-lg font-medium tracking-tight">
           <Zap aria-hidden className="size-4.5 fill-current" />
           {copy.brand}
         </span>
@@ -527,7 +519,7 @@ export function MockSite({
       </header>
 
       <section className="px-6 pt-16 pb-10 text-center sm:px-10 sm:pt-24">
-        <h1 className="mx-auto max-w-3xl text-4xl font-semibold tracking-[-0.03em] text-balance sm:text-6xl">
+        <h1 className="mx-auto max-w-3xl text-4xl font-medium tracking-[-0.03em] text-balance sm:text-6xl">
           {copy.heroTitle}
         </h1>
         <p className="mx-auto mt-6 max-w-xl text-base leading-7 text-balance text-muted-foreground sm:text-lg sm:leading-8">
@@ -549,7 +541,12 @@ export function MockSite({
             heroBleed ? "" : "overflow-hidden"
           }`}
         >
-          {heroMedia ?? <MockImage src={MOCK_IMAGES.hero} alt="Showcase" />}
+          {heroMedia ?? (
+            <>
+              <MockImage src={photoUrl(0, "light", 1740)} alt="Showcase" className="dark:hidden" />
+              <MockImage src={photoUrl(0, "dark", 1740)} alt="Showcase" className="hidden dark:block" />
+            </>
+          )}
         </div>
       </section>
 
@@ -571,7 +568,7 @@ export function MockSite({
         <p className="font-mono text-xs tracking-[0.2em] text-muted-foreground uppercase">
           {copy.howEyebrow}
         </p>
-        <h2 className="mt-3 max-w-lg text-3xl font-semibold tracking-[-0.02em] text-balance">
+        <h2 className="mt-3 max-w-lg text-3xl font-medium tracking-[-0.02em] text-balance">
           {copy.howTitle}
         </h2>
         <div className="mt-10 grid gap-4 sm:grid-cols-3">
@@ -602,7 +599,7 @@ export function MockSite({
       <section className="grid gap-8 border-t border-border/50 px-6 py-14 sm:grid-cols-3 sm:px-10">
         {copy.stats.map((stat) => (
           <div key={stat.label} className="text-center sm:text-left">
-            <p className="text-4xl font-semibold tracking-[-0.02em]">
+            <p className="text-4xl font-medium tracking-[-0.02em]">
               {stat.value}
             </p>
             <p className="mt-1.5 text-sm text-muted-foreground">{stat.label}</p>
@@ -635,7 +632,7 @@ export function MockSite({
         <p className="font-mono text-xs tracking-[0.2em] text-muted-foreground uppercase">
           {copy.galleryEyebrow}
         </p>
-        <h2 className="mt-3 text-3xl font-semibold tracking-[-0.02em]">
+        <h2 className="mt-3 text-3xl font-medium tracking-[-0.02em]">
           {copy.galleryTitle}
         </h2>
         <div className="mt-10 grid grid-cols-2 gap-4">
@@ -653,7 +650,7 @@ export function MockSite({
       </section>
 
       <section className="border-t border-border/50 px-6 py-16 sm:px-10">
-        <h2 className="text-center text-3xl font-semibold tracking-[-0.02em]">
+        <h2 className="text-center text-3xl font-medium tracking-[-0.02em]">
           {copy.pricingTitle}
         </h2>
         <div className="mx-auto mt-10 grid max-w-3xl gap-4 sm:grid-cols-2">
@@ -669,7 +666,7 @@ export function MockSite({
               <h3 className="text-[15px] font-medium tracking-tight">
                 {tier.name}
               </h3>
-              <p className="mt-3 text-3xl font-semibold tracking-[-0.02em]">
+              <p className="mt-3 text-3xl font-medium tracking-[-0.02em]">
                 {tier.price}
                 <span className="text-sm font-normal text-muted-foreground">
                   /month
@@ -707,7 +704,7 @@ export function MockSite({
       </section>
 
       <section className="border-t border-border/50 px-6 py-20 text-center sm:px-10">
-        <h2 className="mx-auto max-w-xl text-3xl font-semibold tracking-[-0.02em] text-balance sm:text-4xl">
+        <h2 className="mx-auto max-w-xl text-3xl font-medium tracking-[-0.02em] text-balance sm:text-4xl">
           {copy.finalTitle}
         </h2>
         <p className="mx-auto mt-4 max-w-md text-base leading-7 text-muted-foreground">
@@ -721,7 +718,7 @@ export function MockSite({
       <footer className="border-t border-border/50 px-6 py-12 sm:px-10">
         <div className="flex flex-col justify-between gap-10 sm:flex-row">
           <div>
-            <span className="flex items-center gap-1.5 text-lg font-semibold tracking-tight">
+            <span className="flex items-center gap-1.5 text-lg font-medium tracking-tight">
               <Zap aria-hidden className="size-4.5 fill-current" />
               {copy.brand}
             </span>

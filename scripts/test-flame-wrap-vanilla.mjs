@@ -1,7 +1,3 @@
-// Run with `node scripts/test-flame-wrap-vanilla.mjs`.
-// Prerequisites: Playwright and installed Chrome (or CHROME_EXECUTABLE).
-// Set BROWSER=webkit to test DOM fallbacks with Playwright's WebKit browser.
-// Exercises the exact HTML and TypeScript displayed in the vanilla docs.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { chromium, webkit } from "playwright";

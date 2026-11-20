@@ -1,7 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import {
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   init,
   sampler,
@@ -13,6 +13,7 @@ import {
   type Target,
 } from "vgpu";
 import type { Texture } from "vgpu";
+import { resolveOptions } from "../options";
 
 export interface GridOptions {
   /** Size of each grid tile in CSS pixels. */
@@ -52,20 +53,14 @@ export interface GridOptions {
 }
 
 export interface GridElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGPU effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface GridInstance {
-  /** Update effect options live. */
   setOptions: (options: GridOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -77,7 +72,7 @@ const DEFAULTS: Required<GridOptions> = {
   waveSpeed: 0.5,
   frequency: 12,
   waveWidth: 0.05,
-  fadeTime: 0.2,
+  fadeTime: 0.6,
   maxLift: 1,
   jitter: 0,
   liftHeight: 60,
@@ -123,7 +118,7 @@ function createRectCache(element: Element) {
   };
 }
 
-const TILE_FIELD_SHADER = /* wgsl */ `
+const TILE_FIELD_SHADER = `
 struct Params {
   trail: array<vec4f, 64>,
   gridTiles: vec2f,
@@ -172,7 +167,7 @@ fn hash2(pIn: vec2f) -> vec2f {
   return vec4f(lift * 0.5 + 0.5, 0.0, 0.0, 1.0);
 }`;
 
-const MAIN_SHADER = /* wgsl */ `
+const MAIN_SHADER = `
 struct Params {
   tint: vec4f,
   resolution: vec2f,
@@ -349,7 +344,6 @@ export function supportsHtmlInCanvas(): boolean {
   );
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
@@ -375,7 +369,7 @@ export function createGrid(
   options: GridOptions = {},
 ): GridInstance | null {
   if (!supportsWebGPU()) return null;
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
@@ -455,7 +449,6 @@ export function createGrid(
       contentTexture.size[0] !== w ||
       contentTexture.size[1] !== h
     ) {
-      // A new wrapper invalidates vgpu's cached bindings to the old texture.
       contentTexture?.destroy();
       contentTexture = gpu!.device.createTexture({
         size: [w, h],
@@ -683,8 +676,8 @@ export function createGrid(
         addressModeU: "clamp-to-edge",
         addressModeV: "clamp-to-edge",
       });
-      tileFieldFx = effect(gpu, TILE_FIELD_SHADER, { label: "grid.tile-field" });
-      mainFx = effect(gpu, MAIN_SHADER, {
+      tileFieldFx = gpuEffect(gpu, TILE_FIELD_SHADER, { label: "grid.tile-field" });
+      mainFx = gpuEffect(gpu, MAIN_SHADER, {
         label: "grid.main",
         set: { uSampler: linear, uContent: ensureContentTexture() },
       });
@@ -714,10 +707,21 @@ export function createGrid(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   const listenTarget = output.parentElement ?? output;
@@ -768,6 +772,7 @@ export function createGrid(
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) => config[key as keyof GridOptions] !== value,
@@ -787,6 +792,7 @@ export function createGrid(
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       motionQuery.removeEventListener("change", onMotionChange);
       listenTarget.removeEventListener("pointermove", onPointerMove);
       listenTarget.removeEventListener("pointerleave", onPointerLeave);

@@ -103,6 +103,7 @@ export interface DemoControlsHandle<S extends ControlSchema = ControlSchema> {
   schema: S;
   values: SchemaValues<S>;
   setValue<K extends keyof S & string>(key: K, value: SchemaValues<S>[K]): void;
+  apply(values: Partial<SchemaValues<S>>): void;
   reset(): void;
   isDefault: boolean;
 }
@@ -149,6 +150,20 @@ export function useDemoControls<S extends ControlSchema>(
     void setState(null);
   }, [setState]);
 
+  const apply = useCallback(
+    (preset: Partial<Record<string, ControlValue>>) => {
+      setTransient({});
+      const next: Record<string, ControlValue | null> = {};
+      for (const key of Object.keys(schema)) {
+        if (schema[key].kind === "custom" && !(key in preset)) continue;
+        const value = preset[key];
+        next[key] = value === undefined ? null : value;
+      }
+      void setState(next);
+    },
+    [schema, setState],
+  );
+
   const registerReset = useContext(DemoControlsResetContext);
   useLayoutEffect(() => {
     if (!registerReset) return;
@@ -167,7 +182,7 @@ export function useDemoControls<S extends ControlSchema>(
   );
 
   return useMemo(
-    () => ({ schema, values, setValue, reset, isDefault }),
-    [schema, values, setValue, reset, isDefault],
+    () => ({ schema, values, setValue, apply, reset, isDefault }),
+    [schema, values, setValue, apply, reset, isDefault],
   );
 }

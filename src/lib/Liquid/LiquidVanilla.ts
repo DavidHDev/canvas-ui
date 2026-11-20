@@ -1,6 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import { createRectCache } from "../rect-cache";
+import { resolveOptions } from "../options";
 
 export interface LiquidOptions {
   /** Resolution of the simulation grid. */
@@ -40,24 +41,15 @@ export interface LiquidOptions {
 }
 
 export interface LiquidElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGL effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface LiquidInstance {
-  /** Inject a splat at (x, y) in [0,1] space with velocity (dx, dy).
-   * Keeps the newest 64 pending calls while suspended; applies at most 8 per frame.
-   */
   splat: (x: number, y: number, dx: number, dy: number) => void;
-  /** Update simulation options live, including simulation target resolution. */
   setOptions: (options: LiquidOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -398,7 +390,7 @@ export function createLiquid(
   elements: LiquidElements,
   options: LiquidOptions = {},
 ): LiquidInstance | null {
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const gl = output.getContext("webgl2", {
@@ -635,7 +627,8 @@ export function createLiquid(
   function updateTexelSize() {
     const width = Math.max(output.clientWidth, 1);
     const height = Math.max(output.clientHeight, 1);
-    texelX = 1 / (config.simResolution * (width / (height + 400)));
+    const stretch = Math.min(width / (height + 400), 1.5);
+    texelX = 1 / (config.simResolution * stretch);
     texelY = 1 / config.simResolution;
   }
 
@@ -1053,11 +1046,11 @@ export function createLiquid(
   return {
     splat(x, y, dx, dy) {
       if (destroyed || reducedMotion) return;
-      // Explicit API input is retained while suspended, up to the queue limit.
       enqueueSplat([x, y, dx, dy]);
       start();
     },
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (destroyed) return;
       if (
         !Object.entries(next).some(

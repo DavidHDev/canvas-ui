@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 export default function PlaygroundPage() {
   return (
     <>
-      <div className="fixed top-4 right-[calc(1rem+var(--demo-sbw,0px))] z-40 hidden items-center gap-2 rounded-full border border-border/60 bg-background/70 p-1.5 backdrop-blur-xl backdrop-saturate-150 [view-transition-name:docs-controls] lg:flex">
+      <div className="surface-floating fixed top-4 right-[calc(1rem+var(--demo-sbw,0px))] z-40 hidden items-center gap-1.5 rounded-bar p-1 [view-transition-name:docs-controls] lg:flex">
         <NewsletterNavButton />
         <SearchButton />
         <ThemeToggle />

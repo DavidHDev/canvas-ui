@@ -14,6 +14,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { resolveOptions } from "../options";
 
 export interface ParticleObjectOptions {
   /** URL of the asset to display: GLB/glTF, SVG, PNG, JPEG, WebP, or GIF. Object URLs from a file input work too. The format is sniffed from the bytes, not the extension. */
@@ -73,16 +74,12 @@ export interface ParticleObjectOptions {
 }
 
 export interface ParticleObjectElements {
-  /** Canvas the scene renders to. */
   canvas: HTMLCanvasElement;
 }
 
 export interface ParticleObjectInstance {
-  /** Update options live. Changing src loads the new asset. */
   setOptions: (options: ParticleObjectOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -117,6 +114,13 @@ const DEFAULTS: Required<ParticleObjectOptions> = {
 };
 
 const CAMERA_DIR = new THREE.Vector3(0, -1, 4).normalize();
+
+function fitFov(fov: number, aspect: number): number {
+  if (aspect >= 1) return fov;
+  const half = THREE.MathUtils.degToRad(fov) / 2;
+  const margin = 1 + 0.25 * (1 - aspect);
+  return THREE.MathUtils.radToDeg(2 * Math.atan((Math.tan(half) * margin) / aspect));
+}
 const MODEL_LIFT = 0.3;
 const RASTER_SIZE = 420;
 const ALBEDO_SIZE = 128;
@@ -127,7 +131,7 @@ function geometryData(data: Float32Array): Float32Array<ArrayBuffer> {
   return data as Float32Array<ArrayBuffer>;
 }
 
-const PARTICLE_SHADER = /* wgsl */ `
+const PARTICLE_SHADER = `
 struct Params {
   modelViewMatrix: mat4x4f,
   projectionMatrix: mat4x4f,
@@ -546,14 +550,12 @@ function rasterizeImage(blob: Blob): Promise<ImageData> {
   });
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every ParticleObject instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -570,7 +572,7 @@ export function createParticleObject(
 ): ParticleObjectInstance | null {
   if (!supportsWebGPU()) return null;
   const { canvas } = elements;
-  const config: Required<ParticleObjectOptions> = { ...DEFAULTS, ...options };
+  const config: Required<ParticleObjectOptions> = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(config.fov, 1, 0.1, 200);
@@ -773,6 +775,7 @@ export function createParticleObject(
       canvas.height = deviceH;
     }
     camera.aspect = width / height;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
   }
 
@@ -788,7 +791,7 @@ export function createParticleObject(
     controls.enableZoom = config.zoom;
     controls.autoRotate = config.autoRotate && !reducedMotion;
     controls.autoRotateSpeed = config.autoRotateSpeed;
-    camera.fov = config.fov;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
     floatGroup.position.x = config.xOffset;
     floatGroup.position.y = MODEL_LIFT + config.yOffset;
@@ -1094,6 +1097,7 @@ export function createParticleObject(
 
   return {
     setOptions(next: ParticleObjectOptions) {
+      next = resolveOptions(DEFAULTS, next);
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
         if (typeof value === "function") continue;

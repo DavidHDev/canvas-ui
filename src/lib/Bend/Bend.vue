@@ -8,7 +8,10 @@ import {
   type BendOptions,
 } from "./BendVanilla";
 
-const props = defineProps<BendOptions>();
+const props = withDefaults(defineProps<BendOptions>(), {
+  top: undefined,
+  bottom: undefined,
+});
 
 const sourceEl = ref<HTMLCanvasElement | null>(null);
 const contentEl = ref<HTMLDivElement | null>(null);

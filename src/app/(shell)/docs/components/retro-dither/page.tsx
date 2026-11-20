@@ -6,7 +6,7 @@ import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { RetroDitherDemo } from "@/demos/retro-dither-demo";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Retro Dither",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const DESCRIPTION =
-  "A retro dither lens follows your cursor, crunching the page beneath it into chunky pixels. Move around, this page is the demo.";
+  "A retro dither lens follows your cursor, crunching the page beneath it into chunky pixels.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -153,14 +153,9 @@ export default async function RetroDitherPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Move your cursor over the photo to see how the dither treats images."
-            alt="Demo photo for the Retro Dither effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={2} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </RetroDitherDemo>

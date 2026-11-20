@@ -7,7 +7,14 @@ import {
   type DitheredObjectOptions,
 } from "./DitheredObjectVanilla";
 
-const props = defineProps<DitheredObjectOptions>();
+const props = withDefaults(defineProps<DitheredObjectOptions>(), {
+  grayscale: undefined,
+  invert: undefined,
+  dither: undefined,
+  orbit: undefined,
+  zoom: undefined,
+  autoRotate: undefined,
+});
 
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 

@@ -1,5 +1,6 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
+import { resolveOptions } from "../options";
 export interface FlameWrapOptions {
   /** Flame color as [r, g, b] in 0-1 range. */
   color?: [number, number, number];
@@ -44,20 +45,14 @@ export interface FlameWrapOptions {
 }
 
 export interface FlameWrapElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGL effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface FlameWrapInstance {
-  /** Update effect options live. */
   setOptions: (options: FlameWrapOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -418,7 +413,7 @@ export function createFlameWrap(
   elements: FlameWrapElements,
   options: FlameWrapOptions = {},
 ): FlameWrapInstance | null {
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const gl = output.getContext("webgl2", {
@@ -657,14 +652,26 @@ export function createFlameWrap(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
         const prev = config[key as keyof typeof config];
@@ -695,6 +702,7 @@ export function createFlameWrap(
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       motionQuery.removeEventListener("change", onMotionChange);
       gl!.deleteTexture(contentTexture);
       gl!.deleteProgram(program);

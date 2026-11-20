@@ -1,9 +1,5 @@
 "use client";
 
-/**
- * MP4 first so the file drops straight into X/LinkedIn; WebM is the fallback
- * for browsers whose MediaRecorder can't mux H.264.
- */
 const CANDIDATES = [
   "video/mp4;codecs=avc1.4d002a",
   "video/mp4;codecs=avc1.42E01E",

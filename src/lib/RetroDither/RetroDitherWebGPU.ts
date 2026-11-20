@@ -1,7 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import {
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   init,
   sampler,
@@ -11,6 +11,7 @@ import {
   type Surface,
 } from "vgpu";
 import type { Texture } from "vgpu";
+import { resolveOptions } from "../options";
 
 export interface RetroDitherOptions {
   /** Radius of the dither lens around the cursor, relative to the screen height. */
@@ -50,20 +51,14 @@ export interface RetroDitherOptions {
 }
 
 export interface RetroDitherElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGPU effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface RetroDitherInstance {
-  /** Update effect options live. */
   setOptions: (options: RetroDitherOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -126,7 +121,7 @@ function createRectCache(element: Element): RectCache {
   };
 }
 
-const SHADER = /* wgsl */ `
+const SHADER = `
 struct Params {
   trail: array<vec4f, 24>,
   ripples: array<vec4f, 3>,
@@ -287,14 +282,12 @@ export function supportsHtmlInCanvas(): boolean {
   );
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every RetroDither instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -310,7 +303,7 @@ export function createRetroDither(
   options: RetroDitherOptions = {},
 ): RetroDitherInstance | null {
   if (!supportsWebGPU()) return null;
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
@@ -507,7 +500,6 @@ export function createRetroDither(
       contentTexture.size[0] !== width ||
       contentTexture.size[1] !== height
     ) {
-      // A new wrapper invalidates vgpu's cached bindings to the old texture.
       contentTexture?.destroy();
       contentTexture = gpu!.device.createTexture({
         size: [width, height],
@@ -527,7 +519,6 @@ export function createRetroDither(
       textMaskTexture.size[0] !== width ||
       textMaskTexture.size[1] !== height
     ) {
-      // A new wrapper invalidates vgpu's cached bindings to the old texture.
       textMaskTexture?.destroy();
       textMaskTexture = gpu!.device.createTexture({
         size: [width, height],
@@ -675,7 +666,7 @@ export function createRetroDither(
         addressModeU: "clamp-to-edge",
         addressModeV: "clamp-to-edge",
       });
-      fx = effect(gpu, SHADER, {
+      fx = gpuEffect(gpu, SHADER, {
         label: "retro-dither",
         set: {
           uSampler: linear,
@@ -708,10 +699,21 @@ export function createRetroDither(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   const listenTarget = output.parentElement ?? output;
@@ -753,6 +755,7 @@ export function createRetroDither(
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
         const prev = config[key as keyof typeof config];
@@ -785,6 +788,7 @@ export function createRetroDither(
       window.clearTimeout(maskTimer);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       motionQuery.removeEventListener("change", onMotionChange);
       listenTarget.removeEventListener("pointermove", onPointerMove);
       listenTarget.removeEventListener("pointerleave", onPointerLeave);

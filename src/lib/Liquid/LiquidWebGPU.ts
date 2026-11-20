@@ -1,7 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import {
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   init,
   sampler,
@@ -13,6 +13,7 @@ import {
   type Target as VgpuTarget,
 } from "vgpu";
 import type { Texture } from "vgpu";
+import { resolveOptions } from "../options";
 
 export interface LiquidOptions {
   /** Resolution of the simulation grid. */
@@ -52,24 +53,15 @@ export interface LiquidOptions {
 }
 
 export interface LiquidElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGPU effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface LiquidInstance {
-  /** Inject a splat at (x, y) in [0,1] space with velocity (dx, dy).
-   * Keeps the newest 64 pending calls while suspended; applies at most 8 per frame.
-   */
   splat: (x: number, y: number, dx: number, dy: number) => void;
-  /** Update simulation options live, including simulation target resolution. */
   setOptions: (options: LiquidOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -110,7 +102,7 @@ type ElementImageContext = CanvasRenderingContext2D & {
   drawElementImage?: (element: Element, x: number, y: number) => void;
 };
 
-const DISPLAY_SHADER = /* wgsl */ `
+const DISPLAY_SHADER = `
 struct Params {
   color: vec3f,
   distortion: f32,
@@ -211,7 +203,7 @@ fn sampleContent(glUv: vec2f, warpedUv: vec2f, velocity: vec2f) -> vec4f {
   return vec4f(toSrgb(clamp(finalColor.rgb, vec3f(0.0), vec3f(1.0))), finalColor.a);
 }`;
 
-const SPLAT_SHADER = /* wgsl */ `
+const SPLAT_SHADER = `
 struct Params {
   color: vec3f,
   aspect: f32,
@@ -240,7 +232,7 @@ fn sampleTarget(glUv: vec2f) -> vec4f {
   return vec4f(base + splat, 1.0);
 }`;
 
-const ADVECT_SHADER = /* wgsl */ `
+const ADVECT_SHADER = `
 struct Params {
   texelSize: vec2f,
   dt: f32,
@@ -268,7 +260,7 @@ fn sampleSource(glUv: vec2f) -> vec4f {
   return outColor;
 }`;
 
-const CLEAR_SHADER = /* wgsl */ `
+const CLEAR_SHADER = `
 struct Params {
   value: f32,
 }
@@ -282,7 +274,7 @@ struct Params {
   return params.value * textureSampleLevel(uTexture, uSampler, vec2f(glUv.x, 1.0 - glUv.y), 0.0);
 }`;
 
-const DIVERGENCE_SHADER = /* wgsl */ `
+const DIVERGENCE_SHADER = `
 struct Params {
   texelSize: vec2f,
 }
@@ -314,7 +306,7 @@ fn sampleVelocity(glUv: vec2f) -> vec4f {
   return vec4f(div, 0.0, 0.0, 1.0);
 }`;
 
-const CURL_SHADER = /* wgsl */ `
+const CURL_SHADER = `
 struct Params {
   texelSize: vec2f,
 }
@@ -341,7 +333,7 @@ fn sampleVelocity(glUv: vec2f) -> vec4f {
   return vec4f(vorticity, 0.0, 0.0, 1.0);
 }`;
 
-const VORTICITY_SHADER = /* wgsl */ `
+const VORTICITY_SHADER = `
 struct Params {
   texelSize: vec2f,
   curlStrength: f32,
@@ -381,7 +373,7 @@ fn sampleCurl(glUv: vec2f) -> vec4f {
   return vec4f(velocity + force * params.dt, 0.0, 1.0);
 }`;
 
-const PRESSURE_SHADER = /* wgsl */ `
+const PRESSURE_SHADER = `
 struct Params {
   texelSize: vec2f,
 }
@@ -414,7 +406,7 @@ fn sampleDivergence(glUv: vec2f) -> vec4f {
   return vec4f(pressure, 0.0, 0.0, 1.0);
 }`;
 
-const GRADIENT_SHADER = /* wgsl */ `
+const GRADIENT_SHADER = `
 struct Params {
   texelSize: vec2f,
 }
@@ -511,14 +503,12 @@ export function supportsHtmlInCanvas(): boolean {
   );
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every Liquid instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -542,7 +532,7 @@ export function createLiquid(
   options: LiquidOptions = {},
 ): LiquidInstance | null {
   if (!supportsWebGPU()) return null;
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
@@ -584,7 +574,8 @@ export function createLiquid(
   function updateTexelSize() {
     const width = Math.max(output.clientWidth, 1);
     const height = Math.max(output.clientHeight, 1);
-    texelX = 1 / (config.simResolution * (width / (height + 400)));
+    const stretch = Math.min(width / (height + 400), 1.5);
+    texelX = 1 / (config.simResolution * stretch);
     texelY = 1 / config.simResolution;
   }
 
@@ -621,7 +612,6 @@ export function createLiquid(
       contentTexture.size[0] !== w ||
       contentTexture.size[1] !== h
     ) {
-      // A new wrapper invalidates vgpu's cached bindings to the old texture.
       contentTexture?.destroy();
       contentTexture = gpu!.device.createTexture({
         size: [w, h],
@@ -967,31 +957,31 @@ export function createLiquid(
       });
       fluidTargets = createFluidTargets(config.simResolution, config.dyeResolution);
       effects = {
-        display: effect(gpu, DISPLAY_SHADER, {
+        display: gpuEffect(gpu, DISPLAY_SHADER, {
           label: "liquid.display",
           set: { uSampler: linear, uContent: ensureContentTexture(), uFluid: fluidTargets.dye.read },
         }),
-        splat: effect(gpu, SPLAT_SHADER, {
+        splat: gpuEffect(gpu, SPLAT_SHADER, {
           label: "liquid.splat",
           set: { uSampler: linear, uTarget: fluidTargets.velocity.read },
         }),
-        advect: effect(gpu, ADVECT_SHADER, {
+        advect: gpuEffect(gpu, ADVECT_SHADER, {
           label: "liquid.advect",
           set: { uSampler: linear, uVelocity: fluidTargets.velocity.read, uSource: fluidTargets.velocity.read },
         }),
-        clear: effect(gpu, CLEAR_SHADER, {
+        clear: gpuEffect(gpu, CLEAR_SHADER, {
           label: "liquid.clear",
           set: { uSampler: nearest, uTexture: fluidTargets.pressure.read },
         }),
-        divergence: effect(gpu, DIVERGENCE_SHADER, {
+        divergence: gpuEffect(gpu, DIVERGENCE_SHADER, {
           label: "liquid.divergence",
           set: { uSampler: linear, uVelocity: fluidTargets.velocity.read },
         }),
-        curl: effect(gpu, CURL_SHADER, {
+        curl: gpuEffect(gpu, CURL_SHADER, {
           label: "liquid.curl",
           set: { uSampler: linear, uVelocity: fluidTargets.velocity.read },
         }),
-        vorticity: effect(gpu, VORTICITY_SHADER, {
+        vorticity: gpuEffect(gpu, VORTICITY_SHADER, {
           label: "liquid.vorticity",
           set: {
             uVelocitySampler: linear,
@@ -1000,7 +990,7 @@ export function createLiquid(
             uCurl: fluidTargets.curl,
           },
         }),
-        pressure: effect(gpu, PRESSURE_SHADER, {
+        pressure: gpuEffect(gpu, PRESSURE_SHADER, {
           label: "liquid.pressure",
           set: {
             uSampler: nearest,
@@ -1008,7 +998,7 @@ export function createLiquid(
             uDivergence: fluidTargets.divergence,
           },
         }),
-        gradient: effect(gpu, GRADIENT_SHADER, {
+        gradient: gpuEffect(gpu, GRADIENT_SHADER, {
           label: "liquid.gradient",
           set: {
             uPressureSampler: nearest,
@@ -1137,11 +1127,11 @@ export function createLiquid(
   return {
     splat(x, y, dx, dy) {
       if (destroyed || reducedMotion) return;
-      // Explicit API input is retained while suspended, up to the queue limit.
       enqueueSplat([x, y, dx, dy]);
       start();
     },
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (destroyed) return;
       if (
         !Object.entries(next).some(

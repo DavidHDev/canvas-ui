@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from "react";
 import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "@/components/icons";
 
 import { cn } from "@/lib/utils";
 
@@ -45,7 +45,7 @@ function AccordionTrigger({
     <AccordionPrimitive.Trigger
       data-slot="accordion-trigger"
       className={cn(
-        "group inline-flex cursor-pointer items-center gap-1 rounded-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
+        "group inline-flex cursor-pointer items-center gap-1 rounded-sm transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50",
         className,
       )}
       {...props}
@@ -53,7 +53,7 @@ function AccordionTrigger({
       {children}
       <ChevronDown
         aria-hidden
-        className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
+        className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-250 ease-out group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
       />
     </AccordionPrimitive.Trigger>
   );
@@ -69,10 +69,17 @@ function AccordionPanel({
   return (
     <AccordionPrimitive.Panel
       data-slot="accordion-panel"
-      className="h-[var(--accordion-panel-height)] overflow-hidden transition-[height] duration-200 ease-out data-[ending-style]:h-0 data-[starting-style]:h-0 motion-reduce:transition-none"
+      className="h-[var(--accordion-panel-height)] overflow-hidden transition-[height] duration-250 ease-out data-[ending-style]:h-0 data-[ending-style]:duration-200 data-[starting-style]:h-0 motion-reduce:transition-none"
       {...props}
     >
-      <div className={className}>{children}</div>
+      <div
+        className={cn(
+          "transition-opacity duration-200 ease-out in-data-[ending-style]:opacity-0 in-data-[starting-style]:opacity-0 motion-reduce:transition-none",
+          className,
+        )}
+      >
+        {children}
+      </div>
     </AccordionPrimitive.Panel>
   );
 }

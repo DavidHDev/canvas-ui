@@ -2,7 +2,7 @@ import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewp
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import {
   draw,
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   geometry,
   init,
@@ -17,6 +17,7 @@ import {
   type Target,
   type Texture,
 } from "vgpu";
+import { resolveOptions } from "../options";
 
 export type PeelSide = "left" | "right" | "top" | "bottom";
 
@@ -52,22 +53,15 @@ export interface PeelOptions {
 }
 
 export interface PeelElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGPU effect renders to. */
   output: HTMLCanvasElement;
-  /** Element revealed underneath the peel. Kept hidden until the first capture is ready. */
   under?: HTMLElement;
 }
 
 export interface PeelInstance {
-  /** Update effect options live. */
   setOptions: (options: PeelOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -131,7 +125,7 @@ type ElementImageContext = CanvasRenderingContext2D & {
   drawElementImage?: (element: Element, x: number, y: number) => void;
 };
 
-const SHEET_SHADER = /* wgsl */ `
+const SHEET_SHADER = `
 struct Params {
   resolution: vec2f,
   pointer: vec2f,
@@ -245,7 +239,7 @@ const PI = 3.1415926;
   return vec4f(rgb * tex.a, tex.a);
 }`;
 
-const COMPOSITE_SHADER = /* wgsl */ `
+const COMPOSITE_SHADER = `
 @group(0) @binding(0) var uScene: texture_2d<f32>;
 @group(0) @binding(1) var uSampler: sampler;
 
@@ -264,14 +258,12 @@ export function supportsHtmlInCanvas(): boolean {
   );
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every Peel instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -287,7 +279,7 @@ export function createPeel(
   options: PeelOptions = {},
 ): PeelInstance | null {
   if (!supportsWebGPU()) return null;
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output, under } = elements;
 
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
@@ -360,7 +352,6 @@ export function createPeel(
       contentTexture.size[0] !== w ||
       contentTexture.size[1] !== h
     ) {
-      // A new wrapper invalidates vgpu's cached bindings to the old texture.
       contentTexture?.destroy();
       contentTexture = gpu!.device.createTexture({
         size: [w, h],
@@ -623,7 +614,7 @@ export function createPeel(
         set: { uSampler: linear, uContent: ensureContentTexture() },
         label: "peel.sheet",
       });
-      compositeFx = effect(gpu, COMPOSITE_SHADER, {
+      compositeFx = gpuEffect(gpu, COMPOSITE_SHADER, {
         blend: "premultiplied",
         set: { uSampler: linear, uScene: scene },
         label: "peel.composite",
@@ -671,10 +662,21 @@ export function createPeel(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   const listenTarget = output.parentElement ?? output;
@@ -710,6 +712,7 @@ export function createPeel(
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) => config[key as keyof PeelOptions] !== value,
@@ -730,6 +733,7 @@ export function createPeel(
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       themeObserver.disconnect();
       schemeQuery.removeEventListener("change", onThemeShift);
       window.clearTimeout(themeTimer);

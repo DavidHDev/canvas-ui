@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "@/components/icons";
 
 import { useThemeToggle } from "@/hooks/use-theme-toggle";
 
@@ -22,15 +22,15 @@ export function ThemeToggle() {
       type="button"
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
       onClick={toggleTheme}
-      className="grid size-8 place-items-center rounded-full border border-border/70 text-muted-foreground transition-[color,transform] duration-150 ease-out hover:text-foreground active:scale-95 motion-reduce:transition-none sm:border-transparent"
+      className="btn-icon btn-icon-quiet"
     >
       <Sun
         aria-hidden
-        className="col-start-1 row-start-1 size-[17px] opacity-100 blur-none transition-[opacity,filter] duration-300 ease-out dark:opacity-0 dark:blur-[3px] motion-reduce:transition-none"
+        className="col-start-1 row-start-1 size-[17px] scale-100 rotate-0 opacity-100 blur-none transition-[opacity,filter,transform] duration-300 ease-out dark:scale-75 dark:-rotate-45 dark:opacity-0 dark:blur-[2px] motion-reduce:transform-none motion-reduce:transition-[opacity]"
       />
       <Moon
         aria-hidden
-        className="col-start-1 row-start-1 size-[17px] opacity-0 blur-[3px] transition-[opacity,filter] duration-300 ease-out dark:opacity-100 dark:blur-none motion-reduce:transition-none"
+        className="col-start-1 row-start-1 size-[17px] scale-75 rotate-45 opacity-0 blur-[2px] transition-[opacity,filter,transform] duration-300 ease-out dark:scale-100 dark:rotate-0 dark:opacity-100 dark:blur-none motion-reduce:transform-none motion-reduce:transition-[opacity]"
       />
     </button>
   );

@@ -4,12 +4,9 @@ import path from "node:path";
 const LIB_ROOT = path.join(process.cwd(), "src/lib");
 
 interface ComponentDef {
-  /** Directory and file base name under src/lib, e.g. "Liquid". */
   base: string;
   description: string;
-  /** npm packages the component needs at runtime. */
   dependencies?: string[];
-  /** npm packages the component needs for types only. */
   devDependencies?: string[];
 }
 
@@ -201,16 +198,36 @@ const COMPONENTS: Record<string, ComponentDef> = {
     dependencies: ["three"],
     devDependencies: ["@types/three"],
   },
+  "chrome-object": {
+    base: "ChromeObject",
+    description:
+      "Casts any GLB/glTF model, SVG, or image in polished liquid chrome. A built-in studio environment reflects off the surface, ripples flow across it, and the reflections follow the cursor. Built on three.js.",
+    dependencies: ["three"],
+    devDependencies: ["@types/three"],
+  },
+  "topographic-object": {
+    base: "TopographicObject",
+    description:
+      "Draws any GLB/glTF model, SVG, or image as contour lines at even height steps, with heavier index contours like a survey map. SVGs and images rise into terrain shaped by their outline. Built on three.js.",
+    dependencies: ["three"],
+    devDependencies: ["@types/three"],
+  },
+  "wireframe-object": {
+    base: "WireframeObject",
+    description:
+      "Draws any GLB/glTF model, SVG, or image as crisp edge lines with hidden-line removal and glowing nodes at the corners. Built on three.js.",
+    dependencies: ["three"],
+    devDependencies: ["@types/three"],
+  },
 };
 
 function read(base: string, fileName: string) {
   return fs.readFileSync(path.join(LIB_ROOT, base, fileName), "utf8");
 }
 
-/** Keep shared runtime helpers in the single-file, installed component too. */
 function inlineEngineHelpers(engine: string) {
   return engine.replace(
-    /import\s*\{[^}]*\}\s*from\s*["']\.\.\/(canvas-viewport|html-in-canvas|rect-cache)["'];\r?\n*/g,
+    /import\s*\{[^}]*\}\s*from\s*["']\.\.\/(canvas-viewport|html-in-canvas|options|rect-cache)["'];\r?\n*/g,
     (_import, helper: string) =>
       fs.readFileSync(path.join(LIB_ROOT, `${helper}.ts`), "utf8")
         .replace(/^export /gm, "") + "\n",
@@ -221,12 +238,10 @@ export type Renderer = "webgl" | "webgpu";
 
 export const RENDERERS: readonly Renderer[] = ["webgl", "webgpu"];
 
-/** Engine file name for a renderer, e.g. "RippleVanilla.ts" or "RippleWebGPU.ts". */
 export function engineFileName(base: string, renderer: Renderer) {
   return renderer === "webgpu" ? `${base}WebGPU.ts` : `${base}Vanilla.ts`;
 }
 
-/** True when the component ships a WebGPU (vgpu) engine. */
 export function hasWebGPUEngine(component: string): boolean {
   const def = COMPONENTS[component];
   if (!def) return false;
@@ -270,7 +285,11 @@ export interface ComponentSource {
   source: string;
 }
 
-const WEBGPU_DEPENDENCIES = ["vgpu"];
+const VGPU_DEPENDENCY = "vgpu@^0.3.1";
+const SOLID_DEPENDENCY = "solid-js@^1.9.0";
+const PREACT_DEPENDENCY = "preact@^10.25.0";
+
+const WEBGPU_DEPENDENCIES = [VGPU_DEPENDENCY];
 const WEBGPU_DEV_DEPENDENCIES = ["@webgpu/types"];
 
 export function getComponentDependencies(
@@ -292,17 +311,6 @@ export function getComponentDependencies(
   return { dependencies, devDependencies };
 }
 
-export function getDemoSource(component: string): string | null {
-  const file = path.join(process.cwd(), "src/demos", `${component}-demo.tsx`);
-  if (!fs.existsSync(file)) return null;
-  return fs.readFileSync(file, "utf8");
-}
-
-/**
- * Standalone sources per framework. The WebGPU renderer swaps the WebGL engine
- * for the vgpu one; the wrappers are shared because both engines expose the
- * same API.
- */
 export function getComponentSources(
   component: string,
   renderer: Renderer = "webgl",
@@ -437,9 +445,9 @@ export function getRegistryItem(name: string): RegistryItem | null {
         : def.description,
     dependencies:
       id === "solid"
-        ? ["solid-js", ...dependencies]
+        ? [SOLID_DEPENDENCY, ...dependencies]
         : id === "preact"
-          ? ["preact", ...dependencies]
+          ? [PREACT_DEPENDENCY, ...dependencies]
           : dependencies,
     devDependencies,
     files: [

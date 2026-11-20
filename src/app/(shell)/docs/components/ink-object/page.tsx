@@ -32,9 +32,10 @@ const API_REFERENCE: ApiProp[] = [
   },
   {
     name: "inkColor",
-    description: "Color of the ink strokes.",
+    description:
+      "Color of the ink strokes, as any CSS color. Leave empty to pick one automatically: dark or light against background, or the page text color on a transparent canvas, so it follows your theme.",
     type: "string",
-    defaultValue: '"#111111"',
+    defaultValue: '""',
   },
   {
     name: "lineSpacing",
@@ -272,21 +273,9 @@ export default async function InkObjectPage() {
         installItem="ink-object"
         tags={["webgl", "three.js", "3D"]}
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <section className="mt-8" aria-label="Demo">
-            <h2 className="text-lg font-semibold tracking-[-0.01em]">Demo</h2>
-            <p className="mt-2 text-[13px] text-muted-foreground">
-              Drag to orbit the object, push the line spacing and dash breakup
-              around, then open the controls to swap in your own GLB/glTF model,
-              SVG, or image by URL or from disk.
-            </p>
-            <div className="mt-3">
-              <InkObjectDemo />
-            </div>
-          </section>
-        }
+        preview={<InkObjectDemo />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </div>

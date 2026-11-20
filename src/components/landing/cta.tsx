@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight } from "@/components/icons";
 
 import { Footer } from "@/components/landing/footer";
 import { Reveal } from "@/components/landing/reveal";
@@ -45,7 +45,7 @@ export function Cta() {
                 <div className="mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-6">
                   <Link
                     href="/docs"
-                    className="group inline-flex h-11 items-center justify-center gap-2 rounded-full bg-white px-6 text-[15px] font-medium tracking-[-0.01em] text-black transition-[opacity,transform] duration-150 ease-out hover:opacity-85 active:scale-[0.98]"
+                    className="group inline-flex h-11 items-center justify-center gap-2 rounded-control bg-white px-6 text-[15px] font-medium tracking-[-0.01em] text-black transition-[opacity,transform] duration-150 ease-out hover:opacity-85 active:scale-[0.98]"
                   >
                     Get started
                     <ArrowRight
@@ -56,7 +56,7 @@ export function Cta() {
                   </Link>
                   <Link
                     href="/components"
-                    className="inline-flex h-11 items-center justify-center rounded-full border border-white/20 px-6 text-[15px] font-medium text-white transition-colors duration-150 hover:bg-white/10 active:scale-[0.98]"
+                    className="inline-flex h-11 items-center justify-center rounded-control bg-white/10 px-6 text-[15px] font-medium text-white transition-colors duration-150 hover:bg-white/10 active:scale-[0.98]"
                   >
                     Browse components
                   </Link>

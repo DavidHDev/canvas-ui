@@ -8,7 +8,10 @@ import {
   type ForceFieldOptions,
 } from "./ForceFieldVanilla";
 
-const props = defineProps<ForceFieldOptions>();
+const props = withDefaults(defineProps<ForceFieldOptions>(), {
+  hideOnHover: undefined,
+  clickRipples: undefined,
+});
 
 const sourceEl = ref<HTMLCanvasElement | null>(null);
 const contentEl = ref<HTMLDivElement | null>(null);

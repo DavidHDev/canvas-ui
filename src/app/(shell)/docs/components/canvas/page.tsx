@@ -6,7 +6,7 @@ import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { CanvasDemo } from "@/demos/canvas-demo";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Canvas",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const DESCRIPTION =
-  "Your page, painted onto woven artist canvas. Fiber threads, paper tint, grain, and a halftone screen. Drag the cursor and it works like a loaded brush, leaving ridges of wet paint that catch the light and settle as they dry. This page is the demo.";
+  "Your page, painted onto woven artist canvas. Fiber threads, paper tint, grain, and a halftone screen. Drag the cursor and it works like a loaded brush, leaving ridges of wet paint that catch the light and settle as they dry.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -148,14 +148,9 @@ export default async function CanvasPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Move your cursor over the photo to see how the painting treats images."
-            alt="Demo photo for the Canvas effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={1} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </CanvasDemo>

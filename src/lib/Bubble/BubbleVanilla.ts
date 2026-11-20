@@ -1,6 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import { createRectCache } from "../rect-cache";
+import { resolveOptions } from "../options";
 
 export type BubbleOptions = {
   size?: number;
@@ -43,8 +44,8 @@ const DEFAULTS: Required<BubbleOptions> = {
   refraction: 80,
   dispersion: 1,
   frost: 0,
-  shine: 0.25,
-  rim: 0.5,
+  shine: 0.5,
+  rim: 1,
   iridescence: 1,
   intensity: 0.9,
   tint: [1, 1, 1],
@@ -216,8 +217,8 @@ void main () {
       page(frag + offG, lod).g,
       page(frag + offB, lod).b);
     refr *= mix(vec3(1.0), uTint, clamp(uTintStrength, 0.0, 1.0));
-    float edge = pow(1.0 - clamp(n.z, 0.0, 1.0), 1.5);
-    refr *= 1.0 - 0.35 * uRim * edge;
+    float edge = pow(1.0 - clamp(n.z, 0.0, 1.0), 3.0);
+    refr *= max(1.0 - 0.9 * uRim * edge, 0.0);
     color = pow(max(refr, 0.0), vec3(1.0 / 2.2));
     color += glints * uIridescence;
     color += vec3(spec * uShine * 0.9);
@@ -249,7 +250,7 @@ export function createBubble(
   elements: BubbleElements,
   options: BubbleOptions = {},
 ): BubbleInstance | null {
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const gl = output.getContext("webgl2", {
@@ -280,7 +281,7 @@ export function createBubble(
     paintable.onpaint = () => {
       try {
         sourceCtx!.reset();
-        drawHtmlInCanvas(source, sourceCtx!, content);
+        drawHtmlInCanvas(source, sourceCtx!, content, true);
         contentDirty = true;
         wake();
       } catch {}
@@ -613,14 +614,26 @@ export function createBubble(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) => config[key as keyof BubbleOptions] !== value,
@@ -643,6 +656,7 @@ export function createBubble(
       content.removeEventListener("scroll", onScroll);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       motionQuery.removeEventListener("change", onMotionChange);
       gl!.deleteTexture(contentTexture);
       gl!.deleteProgram(program);

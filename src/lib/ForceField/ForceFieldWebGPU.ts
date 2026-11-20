@@ -1,7 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import {
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   init,
   sampler,
@@ -13,6 +13,7 @@ import {
   type Target,
   type Texture,
 } from "vgpu";
+import { resolveOptions } from "../options";
 
 export type ForceFieldShape = "hexagon" | "triangle" | "square";
 
@@ -106,26 +107,19 @@ export interface ForceFieldOptions {
   /** Spawn ripples on click (default true). */
   clickRipples?: boolean;
   /** Called with the impact position in CSS pixels after each click. */
-  onHit?: (x: number, y: number) => void;
+  onHit?: ((x: number, y: number) => void) | null;
 }
 
 export interface ForceFieldElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGPU effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface ForceFieldInstance {
-  /** Update effect options live. */
   setOptions: (options: ForceFieldOptions) => void;
-  /** Spawn a ripple at CSS pixel coordinates relative to the output canvas. */
   impact: (x: number, y: number) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -216,7 +210,7 @@ type ElementImageContext = CanvasRenderingContext2D & {
   drawElementImage?: (element: Element, x: number, y: number) => void;
 };
 
-const FIELD_SHADER = /* wgsl */ `
+const FIELD_SHADER = `
 struct FieldParams {
   hits: array<vec4f, 10>,
   resolution: vec2f,
@@ -532,7 +526,7 @@ fn cellFlash(id: vec2f) -> f32 {
   return out;
 }`;
 
-const BRIGHT_SHADER = /* wgsl */ `
+const BRIGHT_SHADER = `
 struct BrightParams {
   threshold: f32,
 }
@@ -548,7 +542,7 @@ struct BrightParams {
   return vec4f(c.rgb * gate, 1.0);
 }`;
 
-const KAWASE_DOWN_SHADER = /* wgsl */ `
+const KAWASE_DOWN_SHADER = `
 struct BlurParams {
   texel: vec2f,
 }
@@ -567,7 +561,7 @@ struct BlurParams {
   return sum * 0.125;
 }`;
 
-const KAWASE_UP_SHADER = /* wgsl */ `
+const KAWASE_UP_SHADER = `
 struct BlurParams {
   texel: vec2f,
 }
@@ -591,7 +585,7 @@ struct BlurParams {
   return mix(base, sum / 12.0, 0.62);
 }`;
 
-const COMPOSITE_SHADER = /* wgsl */ `
+const COMPOSITE_SHADER = `
 struct CompositeParams {
   resolution: vec2f,
   bloomStrength: f32,
@@ -637,14 +631,12 @@ export function supportsHtmlInCanvas(): boolean {
   );
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every ForceField instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -680,7 +672,7 @@ export function createForceField(
   options: ForceFieldOptions = {},
 ): ForceFieldInstance | null {
   if (!supportsWebGPU()) return null;
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
@@ -740,7 +732,7 @@ export function createForceField(
     paintable.onpaint = () => {
       try {
         sourceCtx!.reset();
-        drawHtmlInCanvas(source, sourceCtx!, content);
+        drawHtmlInCanvas(source, sourceCtx!, content, true);
         contentDirty = true;
         wake();
       } catch {}
@@ -817,7 +809,6 @@ export function createForceField(
       contentTexture.size[0] !== w ||
       contentTexture.size[1] !== h
     ) {
-      // A new wrapper invalidates vgpu's cached bindings to the old texture.
       contentTexture?.destroy();
       contentTexture = gpu!.device.createTexture({
         size: [w, h],
@@ -1071,23 +1062,23 @@ export function createForceField(
         addressModeU: "clamp-to-edge",
         addressModeV: "clamp-to-edge",
       });
-      fieldFx = effect(gpu, FIELD_SHADER, {
+      fieldFx = gpuEffect(gpu, FIELD_SHADER, {
         label: "force-field.field",
         set: { uSampler: linear, uContent: ensureContentTexture() },
       });
-      brightFx = effect(gpu, BRIGHT_SHADER, {
+      brightFx = gpuEffect(gpu, BRIGHT_SHADER, {
         label: "force-field.bright",
         set: { uSampler: linear },
       });
-      downFx = effect(gpu, KAWASE_DOWN_SHADER, {
+      downFx = gpuEffect(gpu, KAWASE_DOWN_SHADER, {
         label: "force-field.down",
         set: { uSampler: linear },
       });
-      upFx = effect(gpu, KAWASE_UP_SHADER, {
+      upFx = gpuEffect(gpu, KAWASE_UP_SHADER, {
         label: "force-field.up",
         set: { uSampler: linear },
       });
-      compositeFx = effect(gpu, COMPOSITE_SHADER, {
+      compositeFx = gpuEffect(gpu, COMPOSITE_SHADER, {
         label: "force-field.composite",
         set: { uSampler: linear },
       });
@@ -1162,14 +1153,26 @@ export function createForceField(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
         if (typeof value === "function") continue;
@@ -1205,6 +1208,7 @@ export function createForceField(
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       motionQuery.removeEventListener("change", onMotionChange);
       content.removeEventListener("scroll", onScroll);
       content.removeEventListener("pointerdown", onPointerDown);

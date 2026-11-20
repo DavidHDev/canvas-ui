@@ -1,7 +1,3 @@
-// Start the app, then run `node scripts/test-webgpu-resize.mjs`.
-// Prerequisite: `npm install --no-save --package-lock=false playwright`.
-// CANVAS_UI_URL defaults to http://localhost:3000. Uses installed Chrome;
-// CHROME_EXECUTABLE or CHROME_CHANNEL can select another Chromium build.
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 
@@ -28,7 +24,6 @@ try {
       const page = await context.newPage();
       const errors = [];
       page.on("pageerror", (error) => errors.push(error.message));
-      // WebGPU validation errors often appear as warnings, not pageerror.
       page.on("console", (message) => {
         if (["warning", "error"].includes(message.type()) &&
           /webgpu|gpuvalidationerror|destroyed.*texture|texture.*destroyed|bind.?group|command.?encoder/i.test(message.text())) {
@@ -94,8 +89,6 @@ try {
         await page.mouse.move(point.x - 80, point.y - 50);
         await page.mouse.move(point.x, point.y, { steps: 8 });
 
-        // Sample the actual WebGPU output, not a screenshot of the source DOM:
-        // a destroyed cached texture binding leaves this overlay transparent.
         await page.waitForFunction((selector) => {
           const canvas = document.querySelector(selector);
           const output = canvas.parentElement.querySelector("canvas[aria-hidden]");

@@ -7,7 +7,11 @@ import {
   type LiquidObjectOptions,
 } from "./LiquidObjectVanilla";
 
-const props = defineProps<LiquidObjectOptions>();
+const props = withDefaults(defineProps<LiquidObjectOptions>(), {
+  orbit: undefined,
+  zoom: undefined,
+  autoRotate: undefined,
+});
 
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 

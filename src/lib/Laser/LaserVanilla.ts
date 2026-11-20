@@ -1,5 +1,6 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
+import { resolveOptions } from "../options";
 export interface LaserOptions {
   /** Animation speed of the beam wave, flicker, and sparkle. 1 is normal. */
   speed?: number;
@@ -34,20 +35,14 @@ export interface LaserOptions {
 }
 
 export interface LaserElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGL effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface LaserInstance {
-  /** Update effect options live. */
   setOptions: (options: LaserOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -285,7 +280,7 @@ export function createLaser(
   elements: LaserElements,
   options: LaserOptions = {},
 ): LaserInstance | null {
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const gl = output.getContext("webgl2", {
@@ -614,14 +609,26 @@ export function createLaser(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) => config[key as keyof LaserOptions] !== value,
@@ -641,6 +648,7 @@ export function createLaser(
       content.removeEventListener("scroll", onScroll);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       motionQuery.removeEventListener("change", onMotionChange);
       gl!.deleteTexture(contentTexture);
       gl!.deleteProgram(program);

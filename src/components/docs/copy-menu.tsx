@@ -8,7 +8,7 @@ import {
   FileText,
   Sparkles,
   SquareCode,
-} from "lucide-react";
+} from "@/components/icons";
 import {
   useEffect,
   useRef,
@@ -29,6 +29,7 @@ import {
   MANAGER_IDS,
 } from "@/components/docs/install-tabs";
 import { resolveFramework, useRenderer } from "@/components/docs/renderer";
+import { DURATION, EASE_OUT } from "@/components/common/motion-tokens";
 import { usePreference } from "@/hooks/use-preference";
 import { cn } from "@/lib/utils";
 
@@ -39,12 +40,10 @@ interface CopyMenuProps {
   description: string;
   installItem: string;
   variants: CodeVariant[];
-  /** WebGPU (vgpu) sources; empty when the component has no WebGPU build. */
   webgpuVariants?: CodeVariant[];
   apiReference?: ApiProp[];
   dependencies?: string[];
   devDependencies?: string[];
-  /** Dependencies of the WebGPU build (includes vgpu). */
   webgpuDependencies?: string[];
   webgpuDevDependencies?: string[];
   demoSource?: string | null;
@@ -378,13 +377,13 @@ export function CopyMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
-        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/70 px-3 text-[13px] text-muted-foreground transition-[color,transform] duration-150 ease-out hover:text-foreground active:scale-95 motion-reduce:transition-none"
+        className="inline-flex h-8 items-center gap-1.5 rounded-control bg-muted/60 px-3 text-[13px] text-muted-foreground transition-[color,border-color,background-color,transform] duration-150 ease-out hover:border-border-strong hover:text-foreground active:scale-[0.97] aria-expanded:border-border-strong aria-expanded:text-foreground motion-reduce:transition-none"
       >
         Copy for AI
         <ChevronDown
           aria-hidden
           className={cn(
-            "size-3.5 transition-transform duration-150 ease-out motion-reduce:transition-none",
+            "size-3.5 transition-transform duration-200 ease-out motion-reduce:transition-none",
             open && "rotate-180",
           )}
         />
@@ -398,20 +397,23 @@ export function CopyMenu({
             initial={
               shouldReduceMotion
                 ? { opacity: 0 }
-                : { opacity: 0, y: -4, scale: 0.98 }
+                : { opacity: 0, transform: "translateY(-4px) scale(0.97)" }
             }
-            animate={
-              shouldReduceMotion
-                ? { opacity: 1 }
-                : { opacity: 1, y: 0, scale: 1 }
-            }
+            animate={{
+              opacity: 1,
+              transform: "translateY(0px) scale(1)",
+              transition: { duration: DURATION.fast, ease: EASE_OUT },
+            }}
             exit={
               shouldReduceMotion
-                ? { opacity: 0 }
-                : { opacity: 0, y: -4, scale: 0.98 }
+                ? { opacity: 0, transition: { duration: DURATION.exit } }
+                : {
+                    opacity: 0,
+                    transform: "translateY(-4px) scale(0.97)",
+                    transition: { duration: DURATION.exit, ease: EASE_OUT },
+                  }
             }
-            transition={{ duration: 0.15, ease: "easeOut" }}
-            className="absolute right-0 top-full z-40 mt-2 w-56 origin-top-right rounded-xl border border-border/70 bg-background p-1 shadow-lg"
+            className="surface-popover absolute top-full right-0 z-40 mt-2 w-56 origin-top-right"
           >
             {items.map((item) => {
               const copied = "copy" in item.action && copiedId === item.id;
@@ -421,8 +423,11 @@ export function CopyMenu({
                   key={item.id}
                   role="menuitem"
                   type="button"
-                  onClick={() => { handleSelect(item); play('bloom'); }}
-                  className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-muted-foreground transition-colors duration-100 hover:bg-muted/60 hover:text-foreground"
+                  onClick={() => {
+                    handleSelect(item);
+                    play("bloom");
+                  }}
+                  className="menu-item"
                 >
                   <Icon aria-hidden className="size-4 shrink-0" />
                   {copied ? "Copied" : item.label}

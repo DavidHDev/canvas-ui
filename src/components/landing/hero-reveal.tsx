@@ -1,11 +1,49 @@
 "use client";
 
+import { useTheme } from "next-themes";
 import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 
 import { ParticleReveal } from "@/components/docs/live/ParticleReveal";
 import { supportsHtmlInCanvas } from "@/lib/ParticleReveal/ParticleRevealVanilla";
 
 const emptySubscribe = () => () => {};
+
+function FallbackVideo() {
+  const { resolvedTheme } = useTheme();
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false,
+  );
+  const tone = !mounted
+    ? null
+    : resolvedTheme === "light"
+      ? "light"
+      : resolvedTheme === "dark"
+        ? "dark"
+        : null;
+
+  return (
+    <>
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-[url(/assets/fallback-hero-poster-light.jpg)] bg-cover bg-center dark:bg-[url(/assets/fallback-hero-poster-dark.jpg)]"
+      />
+      {tone ? (
+        <video
+          key={tone}
+          src={`/assets/fallback-hero-${tone}.mp4`}
+          autoPlay
+          muted
+          loop
+          playsInline
+          aria-hidden
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : null}
+    </>
+  );
+}
 
 export function HeroReveal({
   background,
@@ -147,17 +185,7 @@ export function HeroReveal({
   if (!native) {
     return (
       <div className="absolute inset-0">
-        <video
-          src="/assets/fallback-hero.mp4"
-          poster="/assets/fallback-hero-poster.jpg"
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="metadata"
-          aria-hidden
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+        <FallbackVideo />
         {children}
       </div>
     );

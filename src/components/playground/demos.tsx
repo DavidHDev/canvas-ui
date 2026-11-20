@@ -19,7 +19,7 @@ function Skeleton() {
   return (
     <div
       aria-hidden
-      className="fixed right-6 bottom-6 z-40 rounded-full border border-border/60 bg-background/70 px-4 py-2.5 text-[13px] font-medium text-muted-foreground backdrop-blur-xl"
+      className="surface-floating fixed right-6 bottom-6 z-40 inline-flex h-10 items-center rounded-control px-4 text-[13px] font-medium text-muted-foreground"
     >
       Loading effect...
     </div>
@@ -99,6 +99,17 @@ export const PLAYGROUND_DEMOS: PlaygroundDemo[] = [
     ),
   },
   {
+    slug: "chrome-object",
+    name: "Chrome Object",
+    description: "Models, SVGs, and images cast in liquid chrome.",
+    kind: "custom",
+    Component: load(() =>
+      import("@/components/playground/entries/chrome-object-entry").then(
+        (m) => m.ChromeObjectEntry,
+      ),
+    ),
+  },
+  {
     slug: "cloth",
     name: "Cloth",
     description: "Hangs the page on rippling fabric.",
@@ -120,11 +131,9 @@ export const PLAYGROUND_DEMOS: PlaygroundDemo[] = [
     slug: "decrypt-reveal",
     name: "Decrypt Reveal",
     description: "UI encrypted into ASCII, decoded by the cursor.",
-    kind: "custom",
+    kind: "wrap",
     Component: load(() =>
-      import("@/components/playground/entries/decrypt-reveal-entry").then(
-        (m) => m.DecryptRevealEntry,
-      ),
+      import("@/demos/decrypt-reveal-demo").then((m) => m.DecryptRevealDemo),
     ),
   },
   {
@@ -293,11 +302,9 @@ export const PLAYGROUND_DEMOS: PlaygroundDemo[] = [
     slug: "particle-reveal",
     name: "Particle Reveal",
     description: "UI revealed from fine particles by the cursor.",
-    kind: "custom",
+    kind: "wrap",
     Component: load(() =>
-      import("@/components/playground/entries/particle-reveal-entry").then(
-        (m) => m.ParticleRevealEntry,
-      ),
+      import("@/demos/particle-reveal-demo").then((m) => m.ParticleRevealDemo),
     ),
   },
   {
@@ -348,6 +355,17 @@ export const PLAYGROUND_DEMOS: PlaygroundDemo[] = [
     ),
   },
   {
+    slug: "topographic-object",
+    name: "Topographic Object",
+    description: "A 3D model or image drawn as survey-map contours.",
+    kind: "custom",
+    Component: load(() =>
+      import("@/components/playground/entries/topographic-object-entry").then(
+        (m) => m.TopographicObjectEntry,
+      ),
+    ),
+  },
+  {
     slug: "liquid-object",
     name: "Liquid Object",
     description: "Models dragged through invisible liquid.",
@@ -364,6 +382,17 @@ export const PLAYGROUND_DEMOS: PlaygroundDemo[] = [
     description: "Analog tape artifacts over the live page.",
     kind: "wrap",
     Component: load(() => import("@/demos/vhs-demo").then((m) => m.VHSDemo)),
+  },
+  {
+    slug: "wireframe-object",
+    name: "Wireframe Object",
+    description: "A 3D model or image as crisp edges with glowing nodes.",
+    kind: "custom",
+    Component: load(() =>
+      import("@/components/playground/entries/wireframe-object-entry").then(
+        (m) => m.WireframeObjectEntry,
+      ),
+    ),
   },
 ];
 

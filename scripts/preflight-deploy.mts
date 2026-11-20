@@ -39,10 +39,6 @@ function resolve(name: string): string | undefined {
   return undefined;
 }
 
-/**
- * Origin-trial tokens are base64: a version byte, a 64-byte signature, a
- * 4-byte big-endian payload length, then a JSON payload with `expiry` (Unix s).
- */
 function originTrialExpiry(token: string): Date | null {
   try {
     const bytes = Buffer.from(token, "base64");
@@ -107,7 +103,6 @@ if (!otToken) {
     "NEXT_PUBLIC_HTML_IN_CANVAS_OT_TOKEN is not set — html-in-canvas demos will fall back on canvasui.dev for visitors on Chrome older than 157.",
   );
 } else {
-  // Tokens lapse silently: the first one expired 2026-10-20 between deploys.
   const expiry = originTrialExpiry(otToken);
   if (!expiry) {
     warnings.push(

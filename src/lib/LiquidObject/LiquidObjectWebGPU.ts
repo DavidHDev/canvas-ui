@@ -1,12 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
-/* WebGPU port. three.js is kept for loading, shape tracing, matrices, and controls; rendering goes through vgpu.
- * The studio environment that the WebGL build gets from PMREMGenerator is reproduced by ray casting the same
- * room (shell, blocks, emissive formers, lights) into an equirect radiance map on the CPU, prefiltering it per
- * roughness on the GPU, and shading with the MeshStandardMaterial IBL terms (SH irradiance + split-sum specular).
- * The fluid and composite passes are direct WGSL ports of the WebGL shaders. */
 import {
   draw,
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   geometry,
   init,
@@ -27,6 +22,7 @@ import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
+import { resolveOptions } from "../options";
 
 
 interface RectCache {
@@ -135,16 +131,12 @@ export interface LiquidObjectOptions {
 }
 
 export interface LiquidObjectElements {
-  /** Canvas the scene renders to. */
   canvas: HTMLCanvasElement;
 }
 
 export interface LiquidObjectInstance {
-  /** Update options live. Changing src loads the new asset. */
   setOptions: (options: LiquidObjectOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -198,6 +190,13 @@ const ENV_HEIGHT = 64;
 const ENV_LEVELS = 6;
 
 const CAMERA_DIR = new THREE.Vector3(0, -1, 4).normalize();
+
+function fitFov(fov: number, aspect: number): number {
+  if (aspect >= 1) return fov;
+  const half = THREE.MathUtils.degToRad(fov) / 2;
+  const margin = 1 + 0.25 * (1 - aspect);
+  return THREE.MathUtils.radToDeg(2 * Math.atan((Math.tan(half) * margin) / aspect));
+}
 const MODEL_LIFT = 0.3;
 const RASTER_SIZE = 256;
 const TEXTURE_SIZE = 512;
@@ -832,9 +831,7 @@ interface RoomSurface {
   kind: "box" | "ring";
   inverse: THREE.Matrix4;
   normalMatrix: THREE.Matrix3;
-  /** Linear emissive radiance, or null for a lit (Lambert) surface. */
   emissive: [number, number, number] | null;
-  /** Ring former: its radiance is `highlight * 15`, stored separately as a weight. */
   ring: boolean;
   albedo: number;
   backSide: boolean;
@@ -851,22 +848,13 @@ interface RoomLight {
 }
 
 interface StudioRadiance {
-  /** 128x64 RGBA float: rgb radiance, a = ring weight. */
   hi: Float32Array;
-  /** 64x32 box-filtered copy for the rough prefilter levels. */
   lo: Float32Array;
-  /** Nine SH coefficients of irradiance / pi (rgb) and ring weight (a). */
   sh: [number, number, number, number][];
 }
 
 let studioRadiance: StudioRadiance | null = null;
 
-/**
- * Casts the same room three.js's PMREMGenerator renders in the WebGL build
- * (gray shell, white blocks, emissive formers, point and spot lights) into an
- * equirect radiance map, seen from the scene origin. Lit surfaces use the
- * physically based light falloff and Lambert term MeshStandardMaterial uses.
- */
 function bakeStudioRadiance(): StudioRadiance {
   if (studioRadiance) return studioRadiance;
   const surfaces: RoomSurface[] = [];
@@ -922,7 +910,6 @@ function bakeStudioRadiance(): StudioRadiance {
     });
   }
 
-  // The room group sits at y = -0.5, so the world origin is (0, 0.5, 0) in room space.
   const origin = new THREE.Vector3(0, 0.5, 0);
   const localO = new THREE.Vector3();
   const localD = new THREE.Vector3();
@@ -960,7 +947,6 @@ function bakeStudioRadiance(): StudioRadiance {
     for (const surface of surfaces) {
       localO.copy(origin).applyMatrix4(surface.inverse);
       localD.copy(dir).transformDirection(surface.inverse);
-      // transformDirection normalizes; undo that so t stays in world units.
       const scale = new THREE.Vector3().copy(dir).applyMatrix4(surface.inverse).sub(new THREE.Vector3().applyMatrix4(surface.inverse)).length();
       localD.multiplyScalar(scale);
       if (surface.kind === "ring") {
@@ -1023,7 +1009,6 @@ function bakeStudioRadiance(): StudioRadiance {
     hitNormal.set(0, 0, 0);
     hitNormal.setComponent(bestAxis, Math.sign(localO.getComponent(bestAxis)) || 1);
     hitNormal.applyMatrix3(best.normalMatrix).normalize();
-    // Lit from the side we see, as three.js flips back-face normals.
     if (hitNormal.dot(dir) > 0) hitNormal.negate();
     const l = shade(hitPoint, hitNormal, best.albedo);
     out[0] = out[1] = out[2] = l;
@@ -1119,7 +1104,7 @@ function toHalfArray(data: Float32Array): Uint16Array<ArrayBuffer> {
   return out;
 }
 
-const SPLAT_SHADER = /* wgsl */ `
+const SPLAT_SHADER = `
 struct SplatParams {
   point: vec2f,
   value: vec3f,
@@ -1138,7 +1123,7 @@ struct SplatParams {
   return vec4f(textureSampleLevel(tTarget, uSampler, uv, 0.0).xyz + params.value * fall, 1.0);
 }`;
 
-const CURL_SHADER = /* wgsl */ `
+const CURL_SHADER = `
 struct TexelParams { texel: vec2f }
 @group(0) @binding(0) var<uniform> params: TexelParams;
 @group(0) @binding(1) var tVelocity: texture_2d<f32>;
@@ -1152,7 +1137,7 @@ struct TexelParams { texel: vec2f }
   return vec4f((r - l - t + b) * 0.5, 0.0, 0.0, 1.0);
 }`;
 
-const VORTICITY_SHADER = /* wgsl */ `
+const VORTICITY_SHADER = `
 struct VorticityParams {
   texel: vec2f,
   curl: f32,
@@ -1177,7 +1162,7 @@ struct VorticityParams {
   return vec4f(clamp(v, vec2f(-600.0), vec2f(600.0)), 0.0, 1.0);
 }`;
 
-const DIVERGENCE_SHADER = /* wgsl */ `
+const DIVERGENCE_SHADER = `
 struct TexelParams { texel: vec2f }
 @group(0) @binding(0) var<uniform> params: TexelParams;
 @group(0) @binding(1) var tVelocity: texture_2d<f32>;
@@ -1191,7 +1176,7 @@ struct TexelParams { texel: vec2f }
   return vec4f((r - l + t - b) * 0.5, 0.0, 0.0, 1.0);
 }`;
 
-const PRESSURE_SHADER = /* wgsl */ `
+const PRESSURE_SHADER = `
 struct TexelParams { texel: vec2f }
 @group(0) @binding(0) var<uniform> params: TexelParams;
 @group(0) @binding(1) var tPressure: texture_2d<f32>;
@@ -1207,7 +1192,7 @@ struct TexelParams { texel: vec2f }
   return vec4f((l + r + b + t - d) * 0.25, 0.0, 0.0, 1.0);
 }`;
 
-const GRADIENT_SHADER = /* wgsl */ `
+const GRADIENT_SHADER = `
 struct TexelParams { texel: vec2f }
 @group(0) @binding(0) var<uniform> params: TexelParams;
 @group(0) @binding(1) var tPressure: texture_2d<f32>;
@@ -1223,7 +1208,7 @@ struct TexelParams { texel: vec2f }
   return vec4f(v, 0.0, 1.0);
 }`;
 
-const ADVECT_SHADER = /* wgsl */ `
+const ADVECT_SHADER = `
 struct AdvectParams {
   texel: vec2f,
   dt: f32,
@@ -1239,7 +1224,7 @@ struct AdvectParams {
   return textureSampleLevel(tSource, uSampler, coord, 0.0) * params.dissipation;
 }`;
 
-const FADE_SHADER = /* wgsl */ `
+const FADE_SHADER = `
 struct FadeParams { fade: f32 }
 @group(0) @binding(0) var<uniform> params: FadeParams;
 @group(0) @binding(1) var tSource: texture_2d<f32>;
@@ -1249,7 +1234,7 @@ struct FadeParams { fade: f32 }
   return textureSampleLevel(tSource, uSampler, uv, 0.0) * params.fade;
 }`;
 
-const PREFILTER_SHADER = /* wgsl */ `
+const PREFILTER_SHADER = `
 const PI = 3.14159265359;
 const LEVELS = 6.0;
 const SRC_W = 64u;
@@ -1298,7 +1283,7 @@ fn dirFor(u: f32, v: f32) -> vec3f {
   return acc / max(wsum, 1e-6);
 }`;
 
-const MODEL_SHADER = /* wgsl */ `
+const MODEL_SHADER = `
 const PI = 3.14159265359;
 const ENV_LEVELS = 6.0;
 const ENV_ROWS = 64.0;
@@ -1433,12 +1418,11 @@ fn dfgApprox(ndv: f32, roughness: f32) -> vec2f {
 
   var color = radiance * single + multi * irradiance + diffuse * irradiance;
   color += params.emissive;
-  // HDR: the composite's neutral tone mapper compresses highlights, as in the WebGL build.
   color = max(color, vec3f(0.0));
   return vec4f(color * alpha, alpha);
 }`
 
-const COMPOSITE_SHADER = /* wgsl */ `
+const COMPOSITE_SHADER = `
 struct CompositeParams {
   fieldTexel: vec2f,
   cursor: vec2f,
@@ -1529,14 +1513,12 @@ fn unpremultiply(c: vec4f) -> vec4f {
   return vec4f(max(blended, vec3f(0.0)), mix(alpha, 1.0, params.hasBackground));
 }`;
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every LiquidObject instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -1614,7 +1596,6 @@ function uploadExternalTexture(
   const height = Math.max(1, Math.round(rawH));
   let tex = previous;
   if (!tex || tex.size[0] !== width || tex.size[1] !== height) {
-    // A new wrapper invalidates bindings when a resized canvas is uploaded.
     tex?.destroy();
     tex = gpu.device.createTexture({
       size: [width, height],
@@ -1691,7 +1672,7 @@ export function createLiquidObject(
 ): LiquidObjectInstance | null {
   if (!supportsWebGPU()) return null;
   const { canvas } = elements;
-  const config: Required<LiquidObjectOptions> = { ...DEFAULTS, ...options };
+  const config: Required<LiquidObjectOptions> = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(config.fov, 1, 0.1, 200);
@@ -1749,7 +1730,6 @@ export function createLiquidObject(
   let envSampler: GPUSampler | null = null;
   let envSh: [number, number, number, number][] = [];
   let gpuMeshes: GpuMesh[] = [];
-  /** Set when the model changes; GPU buffers and pipelines are rebuilt once, not per frame. */
   let gpuMeshesDirty = true;
   const textureCache = new Map<THREE.Texture, Texture>();
   let fallback2d: CanvasRenderingContext2D | null = null;
@@ -2169,7 +2149,7 @@ export function createLiquidObject(
     controls.enableZoom = config.zoom;
     controls.autoRotate = config.autoRotate && !reducedMotion;
     controls.autoRotateSpeed = config.autoRotateSpeed;
-    camera.fov = config.fov;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
     floatGroup.position.x = config.xOffset;
     floatGroup.position.y = MODEL_LIFT + config.yOffset;
@@ -2200,6 +2180,7 @@ export function createLiquidObject(
       sceneTarget.resize([pixelWidth, pixelHeight]);
     }
     camera.aspect = width / height;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
     aspect = width / height;
     startLoop();
@@ -2244,7 +2225,7 @@ export function createLiquidObject(
     gpu.gpu.queue.writeTexture({ texture: lo.gpu }, toHalfArray(baked.lo), { bytesPerRow: (ENV_WIDTH / 2) * 8 }, [ENV_WIDTH / 2, ENV_HEIGHT / 2]);
     envAtlas = target(gpu, { size: [ENV_WIDTH, ENV_HEIGHT * ENV_LEVELS], format: "rgba16float", label: "liquid-object.env" });
     envSampler = sampler(gpu, { minFilter: "linear", magFilter: "linear", addressModeU: "repeat", addressModeV: "clamp-to-edge" });
-    const prefilter = effect(gpu, PREFILTER_SHADER, {
+    const prefilter = gpuEffect(gpu, PREFILTER_SHADER, {
       label: "liquid-object.prefilter",
       set: { params: { hiSize: [ENV_WIDTH, ENV_HEIGHT] }, uHi: hi, uLo: lo },
     });
@@ -2446,15 +2427,15 @@ export function createLiquidObject(
         addressModeV: "clamp-to-edge",
       });
       whiteTexture = createOnePixelTexture(gpu, [255, 255, 255, 255], "liquid-object.white");
-      splatFx = effect(gpu, SPLAT_SHADER, { set: { tTarget: velocity[0], uSampler: linearSampler }, label: "liquid-object.splat" });
-      curlFx = effect(gpu, CURL_SHADER, { set: { tVelocity: velocity[0], uSampler: linearSampler }, label: "liquid-object.curl-pass" });
-      vorticityFx = effect(gpu, VORTICITY_SHADER, { set: { tVelocity: velocity[0], tCurl: curl, uSampler: linearSampler }, label: "liquid-object.vorticity" });
-      divergenceFx = effect(gpu, DIVERGENCE_SHADER, { set: { tVelocity: velocity[0], uSampler: linearSampler }, label: "liquid-object.divergence-pass" });
-      pressureFx = effect(gpu, PRESSURE_SHADER, { set: { tPressure: pressure[0], tDivergence: divergence, uSampler: linearSampler }, label: "liquid-object.pressure" });
-      gradientFx = effect(gpu, GRADIENT_SHADER, { set: { tPressure: pressure[0], tVelocity: velocity[0], uSampler: linearSampler }, label: "liquid-object.gradient" });
-      advectFx = effect(gpu, ADVECT_SHADER, { set: { tVelocity: velocity[0], tSource: velocity[0], uSampler: linearSampler }, label: "liquid-object.advect" });
-      fadeFx = effect(gpu, FADE_SHADER, { set: { tSource: pressure[0], uSampler: linearSampler }, label: "liquid-object.fade" });
-      compositeFx = effect(gpu, COMPOSITE_SHADER, { set: { tScene: sceneTarget, tField: field[0], uSampler: linearSampler }, label: "liquid-object.composite" });
+      splatFx = gpuEffect(gpu, SPLAT_SHADER, { set: { tTarget: velocity[0], uSampler: linearSampler }, label: "liquid-object.splat" });
+      curlFx = gpuEffect(gpu, CURL_SHADER, { set: { tVelocity: velocity[0], uSampler: linearSampler }, label: "liquid-object.curl-pass" });
+      vorticityFx = gpuEffect(gpu, VORTICITY_SHADER, { set: { tVelocity: velocity[0], tCurl: curl, uSampler: linearSampler }, label: "liquid-object.vorticity" });
+      divergenceFx = gpuEffect(gpu, DIVERGENCE_SHADER, { set: { tVelocity: velocity[0], uSampler: linearSampler }, label: "liquid-object.divergence-pass" });
+      pressureFx = gpuEffect(gpu, PRESSURE_SHADER, { set: { tPressure: pressure[0], tDivergence: divergence, uSampler: linearSampler }, label: "liquid-object.pressure" });
+      gradientFx = gpuEffect(gpu, GRADIENT_SHADER, { set: { tPressure: pressure[0], tVelocity: velocity[0], uSampler: linearSampler }, label: "liquid-object.gradient" });
+      advectFx = gpuEffect(gpu, ADVECT_SHADER, { set: { tVelocity: velocity[0], tSource: velocity[0], uSampler: linearSampler }, label: "liquid-object.advect" });
+      fadeFx = gpuEffect(gpu, FADE_SHADER, { set: { tSource: pressure[0], uSampler: linearSampler }, label: "liquid-object.fade" });
+      compositeFx = gpuEffect(gpu, COMPOSITE_SHADER, { set: { tScene: sceneTarget, tField: field[0], uSampler: linearSampler }, label: "liquid-object.composite" });
       clearSimulation();
       buildEnvironment();
       buildGpuMeshes();
@@ -2475,6 +2456,7 @@ export function createLiquidObject(
 
   return {
     setOptions(next: LiquidObjectOptions) {
+      next = resolveOptions(DEFAULTS, next);
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
         if (typeof value === "function") continue;

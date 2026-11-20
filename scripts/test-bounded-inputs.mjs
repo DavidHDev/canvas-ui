@@ -1,6 +1,3 @@
-// Run with `node scripts/test-bounded-inputs.mjs`.
-// Prerequisite: npm install --no-save --package-lock=false playwright esbuild
-// SOURCE_REF=HEAD tests a committed version without changing the checkout.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -23,6 +20,7 @@ try {
       let source = process.env.SOURCE_REF
         ? execFileSync("git", ["show", `${process.env.SOURCE_REF}:${file}`], { encoding: "utf8" })
         : await readFile(file, "utf8");
+      source = source.replaceAll("\r\n", "\n");
       const liquid = component === "Liquid";
       const queue = liquid ? "queued" : "queuedMelts";
       const method = liquid ? "splat" : "melt";
@@ -36,8 +34,8 @@ try {
       source = source.replace("  function frame(now: number) {", "  function frame(now: number) { globalThis.testFrame++;");
       if (liquid) {
         source = source.replace(
-          "  function applySplat(x: number, y: number, dx: number, dy: number) {",
-          "  function applySplat(x: number, y: number, dx: number, dy: number) { globalThis.applied.push({ frame: globalThis.testFrame, input: [x,y,dx,dy] });",
+          "  function applySplat(x: number, y: number, dx: number, dy: number, fromX = x, fromY = y) {",
+          "  function applySplat(x: number, y: number, dx: number, dy: number, fromX = x, fromY = y) { globalThis.applied.push({ frame: globalThis.testFrame, input: [x,y,dx,dy] });",
         );
       } else {
         source = source.replace("const [mx, my] = queuedMelts.shift()!;", "const [mx, my] = queuedMelts.shift()!; globalThis.applied.push({ frame: globalThis.testFrame, input: [mx,my] });");

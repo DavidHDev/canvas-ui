@@ -45,7 +45,6 @@ export function InstallTabs({
   hasWebGPU = false,
 }: {
   item: string;
-  /** Whether this component ships a WebGPU (vgpu) build. */
   hasWebGPU?: boolean;
 }) {
   const [managerId, setManagerId] = usePreference("pm", "npm", MANAGER_IDS);
@@ -70,8 +69,8 @@ export function InstallTabs({
   );
 
   return (
-    <div className="rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background p-1">
-      <div className="flex h-8 items-center justify-between gap-2">
+    <div className="frame">
+      <div className="frame-bar">
         <ChoiceSelect
           label="Package manager"
           options={MANAGERS}
@@ -97,7 +96,7 @@ export function InstallTabs({
           />
         </div>
       </div>
-      <div className="mt-1 flex items-center justify-between gap-3 overflow-hidden rounded-lg border border-dashed border-border/70 bg-muted/40 py-1.5 pr-1.5 pl-4">
+      <div className="frame-inset flex items-center justify-between gap-3 overflow-hidden py-1.5 pr-1.5 pl-4">
         <code className="overflow-x-auto text-[13px] whitespace-nowrap text-foreground/90">
           {fullCommand}
         </code>
@@ -107,7 +106,6 @@ export function InstallTabs({
   );
 }
 
-/** Contextual note under the install command, driven by the renderer choice. */
 export function InstallNote({ hasWebGPU = false }: { hasWebGPU?: boolean }) {
   const [renderer] = useRenderer(hasWebGPU);
   if (renderer === "webgpu") {
@@ -118,7 +116,7 @@ export function InstallNote({ hasWebGPU = false }: { hasWebGPU?: boolean }) {
           href="https://vgpu.sh"
           target="_blank"
           rel="noreferrer"
-          className="underline underline-offset-4 hover:text-foreground"
+          className="underline decoration-border-strong underline-offset-4 transition-colors duration-150 hover:text-foreground hover:decoration-current"
         >
           vgpu
         </a>{" "}

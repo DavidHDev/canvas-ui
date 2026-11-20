@@ -141,9 +141,9 @@ export default async function PeelPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
-        beforeInstall={<PeelDemo />}
+        preview={<PeelDemo />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </div>

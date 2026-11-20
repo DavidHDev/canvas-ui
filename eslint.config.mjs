@@ -23,6 +23,7 @@ const eslintConfig = defineConfig([
   globalIgnores([
     "prompts/**",
     "skills/**",
+    ".claude/**",
     ".next/**",
     "out/**",
     "build/**",

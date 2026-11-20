@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
 import { ComponentDoc } from "@/components/docs/component-doc";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
 import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { CloudsDemo } from "@/demos/clouds-demo";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Clouds",
@@ -36,7 +36,7 @@ const API_REFERENCE: ApiProp[] = [
     name: "cover",
     description: "Base cloud coverage added everywhere (0 to 1).",
     type: "number",
-    defaultValue: "0.1",
+    defaultValue: "0.4",
   },
   {
     name: "density",
@@ -154,14 +154,9 @@ export default async function CloudsPage() {
         installItem="clouds"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Watch the clouds drift across the photo, and push them around with your cursor."
-            alt="Demo photo for the Clouds effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={2} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </CloudsDemo>

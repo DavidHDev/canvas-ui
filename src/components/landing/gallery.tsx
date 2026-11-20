@@ -1,17 +1,15 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight } from "@/components/icons";
 
 import { Reveal } from "@/components/landing/reveal";
 import { GalleryMarquee } from "@/components/landing/gallery-marquee";
-import { Stitches } from "@/components/landing/stitches";
 
 export function Gallery() {
   return (
     <section
       aria-labelledby="gallery-heading"
-      className="relative border-t border-dashed border-border/60 py-24 sm:py-32"
+      className="relative py-24 sm:py-32"
     >
-      <Stitches />
       <Reveal className="flex w-full flex-wrap items-end justify-between gap-x-8 gap-y-4 px-5 sm:px-8">
         <h2
           id="gallery-heading"

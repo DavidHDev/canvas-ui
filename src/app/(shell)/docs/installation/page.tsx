@@ -190,7 +190,7 @@ export default async function InstallationPage() {
           <CopyButton
             text={PAGE_MARKDOWN}
             label="Copy as Markdown"
-            className="mt-1 shrink-0 border border-border/70 px-3"
+            className="mt-1 bg-muted/60 px-3 hover:bg-muted"
           />
         </div>
         <p className="max-w-xl text-muted-foreground">

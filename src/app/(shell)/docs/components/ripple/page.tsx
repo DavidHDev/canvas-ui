@@ -6,7 +6,7 @@ import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { RippleDemo } from "@/demos/ripple-demo";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Ripple",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const DESCRIPTION =
-  "Click anywhere and water ripples spread across the page, bending the content like a pond surface. This page is the demo.";
+  "Click anywhere and water ripples spread across the page, bending the content like a pond surface.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -110,14 +110,9 @@ export default async function RipplePage() {
         installItem="ripple"
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Click the photos. Refraction and dispersion show best over imagery."
-            alt="Demo photo for the Ripple effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={1} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </RippleDemo>

@@ -13,6 +13,7 @@ import {
   type Surface,
 } from "vgpu";
 import type { Texture } from "vgpu";
+import { resolveOptions } from "../options";
 
 export type ClothPin = "top" | "bottom" | "left" | "right";
 
@@ -48,20 +49,14 @@ export interface ClothOptions {
 }
 
 export interface ClothElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGPU effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface ClothInstance {
-  /** Update effect options live. */
   setOptions: (options: ClothOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -99,7 +94,7 @@ fn fabricDist(p: vec2f, size: vec2f, radius: f32) -> f32 {
   return length(max(q, vec2f(0.0))) + min(max(q.x, q.y), 0.0) - r;
 }`;
 
-const CLOTH_SHADER = /* wgsl */ `
+const CLOTH_SHADER = `
 struct Params {
   backing: vec4f,
   res: vec2f,
@@ -182,7 +177,7 @@ ${SDF_SNIPPET}
   return vec4f(clamp(lit, vec3f(0.0), vec3f(1.0)), 1.0) * alpha;
 }`;
 
-const SHADOW_SHADER = /* wgsl */ `
+const SHADOW_SHADER = `
 struct Params {
   res: vec2f,
   out: vec2f,
@@ -246,14 +241,12 @@ export function supportsHtmlInCanvas(): boolean {
   );
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every Cloth instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -278,7 +271,7 @@ export function createCloth(
   options: ClothOptions = {},
 ): ClothInstance | null {
   if (!supportsWebGPU()) return null;
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
   const wrapper = (output.parentElement ?? output) as HTMLElement;
   output.style.top = `${-BLEED}px`;
@@ -350,7 +343,6 @@ export function createCloth(
       contentTexture.size[0] !== w ||
       contentTexture.size[1] !== h
     ) {
-      // A new wrapper invalidates vgpu's cached bindings to the old texture.
       contentTexture?.destroy();
       contentTexture = gpu!.device.createTexture({
         size: [w, h],
@@ -879,10 +871,21 @@ export function createCloth(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   const listenTarget = wrapper;
@@ -914,6 +917,7 @@ export function createCloth(
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) => config[key as keyof ClothOptions] !== value,
@@ -934,6 +938,7 @@ export function createCloth(
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       themeObserver.disconnect();
       schemeQuery.removeEventListener("change", onThemeShift);
       window.clearTimeout(themeTimer);

@@ -151,6 +151,12 @@ const API_REFERENCE: ApiProp[] = [
     type: "number",
     defaultValue: "0",
   },
+  {
+    name: "className",
+    description:
+      "Classes applied to the wrapper. Give it the wrapped element's width and height: with HTML-in-canvas the content renders inside a canvas and cannot size the wrapper. The fire extends outside these bounds.",
+    type: "string",
+  },
 ];
 
 export default async function FlameWrapPage() {
@@ -178,23 +184,13 @@ export default async function FlameWrapPage() {
         tags={["html-in-canvas"]}
         apiReference={API_REFERENCE}
         usageMarkdown={FLAME_WRAP_VANILLA_MARKDOWN}
+        preview={<FlameWrapDemo />}
         beforeInstall={
           <>
-            <section className="mt-8" aria-label="Demo">
-              <h2 className="text-lg font-semibold tracking-[-0.01em]">Demo</h2>
-              <p className="mt-2 text-[13px] text-muted-foreground">
-                Recolor the
-                flames, raise them higher, or melt the edges further. Use the
-                toggle below the demo to try other UI.
-              </p>
-              <div className="mt-3">
-                <FlameWrapDemo />
-              </div>
-            </section>
             <section className="mt-8" aria-label="Vanilla setup">
               <h2
                 id="vanilla-setup"
-                className="scroll-mt-24 text-lg font-semibold tracking-[-0.01em]"
+                className="scroll-mt-24 text-xl font-medium tracking-tight"
               >
                 Vanilla setup
               </h2>
@@ -245,7 +241,7 @@ export default async function FlameWrapPage() {
           </>
         }
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </div>

@@ -2,7 +2,13 @@ export type ControlValue = string | number | boolean;
 
 export type When = (values: Record<string, ControlValue>) => boolean;
 
-export interface ScrubControl {
+export interface ControlLayout {
+  group?: string;
+  advanced?: boolean;
+  when?: When;
+}
+
+export interface ScrubControl extends ControlLayout {
   kind: "scrub";
   label: string;
   defaultValue: number;
@@ -10,41 +16,32 @@ export interface ScrubControl {
   max: number;
   step: number;
   decimals: number;
-  when?: When;
 }
 
-export interface ToggleControl {
+export interface ToggleControl extends ControlLayout {
   kind: "toggle";
   label: string;
   defaultValue: boolean;
-  when?: When;
 }
 
-export interface ColorControl {
+export interface ColorControl extends ControlLayout {
   kind: "color";
   label: string;
   defaultValue: string;
-  /**
-   * Sentinel for "no explicit color" (theme-derived, clear, …). The
-   * sentinel is the default value; while active the row shows `label`
-   * over the `swatch` color instead of a hex value.
-   */
   auto?: { label: string; swatch: string };
-  when?: When;
 }
 
-export interface RadioControl<V extends string = string> {
+export interface RadioControl<V extends string = string> extends ControlLayout {
   kind: "radio";
   label: string;
   defaultValue: V;
   options: readonly { value: V; label: string }[];
-  when?: When;
 }
 
-export interface CustomControl<V extends ControlValue = ControlValue> {
+export interface CustomControl<V extends ControlValue = ControlValue>
+  extends ControlLayout {
   kind: "custom";
   defaultValue: V;
-  when?: When;
 }
 
 export type Control =
@@ -80,6 +77,18 @@ export type SchemaValues<S extends ControlSchema> = {
   [K in keyof S]: ValueOf<S[K]>;
 };
 
+export interface DemoPreset<S extends ControlSchema = ControlSchema> {
+  label: string;
+  values: Partial<SchemaValues<S>>;
+}
+
+export function presets<S extends ControlSchema>(
+  _schema: S,
+  list: DemoPreset<S>[],
+): DemoPreset<S>[] {
+  return list;
+}
+
 export function scrub(
   label: string,
   defaultValue: number,
@@ -88,8 +97,7 @@ export function scrub(
     max: number;
     step: number;
     decimals?: number;
-    when?: When;
-  },
+  } & ControlLayout,
 ): ScrubControl {
   return {
     kind: "scrub",
@@ -100,31 +108,34 @@ export function scrub(
     step: range.step,
     decimals: range.decimals ?? 2,
     when: range.when,
+    group: range.group,
+    advanced: range.advanced,
   };
 }
 
 export function toggle(
   label: string,
   defaultValue: boolean,
-  opts?: { when?: When },
+  opts?: ControlLayout,
 ): ToggleControl {
-  return { kind: "toggle", label, defaultValue, when: opts?.when };
+  return { kind: "toggle", label, defaultValue, ...opts };
 }
 
 export function color(
   label: string,
   defaultValue: string,
-  opts?: { auto?: { label: string; swatch?: string }; when?: When },
+  opts?: { auto?: { label: string; swatch?: string } } & ControlLayout,
 ): ColorControl {
+  const { auto, ...layout } = opts ?? {};
   return {
     kind: "color",
     label,
     defaultValue,
-    auto: opts?.auto && {
-      label: opts.auto.label,
-      swatch: opts.auto.swatch ?? "#ffffff",
+    auto: auto && {
+      label: auto.label,
+      swatch: auto.swatch ?? "#ffffff",
     },
-    when: opts?.when,
+    ...layout,
   };
 }
 
@@ -132,13 +143,39 @@ export function radio<const V extends string>(
   label: string,
   defaultValue: NoInfer<V>,
   options: readonly { value: V; label: string }[],
-  opts?: { when?: When },
+  opts?: ControlLayout,
 ): RadioControl<V> {
-  return { kind: "radio", label, defaultValue, options, when: opts?.when };
+  return { kind: "radio", label, defaultValue, options, ...opts };
 }
 
 export function custom<V extends ControlValue>(
   defaultValue: V,
+  opts?: ControlLayout,
 ): CustomControl<Widen<V>> {
-  return { kind: "custom", defaultValue: defaultValue as ControlValue as Widen<V> };
+  return {
+    kind: "custom",
+    defaultValue: defaultValue as ControlValue as Widen<V>,
+    ...opts,
+  };
+}
+
+export function withDefaults<S extends ControlSchema>(
+  schema: S,
+  defaults: Partial<SchemaValues<S>>,
+): S {
+  const next = { ...schema };
+  for (const [key, value] of Object.entries(defaults)) {
+    if (value === undefined || !(key in next)) continue;
+    next[key as keyof S] = { ...next[key], defaultValue: value } as S[keyof S];
+  }
+  return next;
+}
+
+export function hexToRgb(hex: string): [number, number, number] {
+  const value = parseInt(hex.replace("#", "").slice(0, 6), 16);
+  return [
+    Math.round((((value >> 16) & 255) / 255) * 1000) / 1000,
+    Math.round((((value >> 8) & 255) / 255) * 1000) / 1000,
+    Math.round(((value & 255) / 255) * 1000) / 1000,
+  ];
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { Select as SelectPrimitive } from "@base-ui/react/select";
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "@/components/icons";
 
 import { cn } from "@/lib/utils";
 
@@ -18,13 +18,13 @@ function SelectTrigger({
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        "inline-flex h-8 cursor-pointer items-center justify-between gap-1.5 rounded-lg border border-transparent px-2.5 text-[13px] whitespace-nowrap text-muted-foreground transition-[color,background-color,transform] duration-150 ease-out outline-none select-none hover:bg-muted/60 hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.97] data-popup-open:bg-muted/60 data-popup-open:text-foreground motion-reduce:transition-none",
+        "inline-flex h-8 cursor-pointer items-center justify-between gap-1.5 rounded-control border border-transparent px-2.5 text-[13px] whitespace-nowrap text-muted-foreground transition-[color,background-color,transform] duration-150 ease-out select-none hover:bg-[var(--surface-hover)] hover:text-foreground active:scale-[0.97] data-popup-open:bg-[var(--surface-hover)] data-popup-open:text-foreground motion-reduce:transition-none",
         className,
       )}
       {...props}
     >
       {children}
-      <SelectPrimitive.Icon className="shrink-0 transition-transform duration-150 ease-out data-popup-open:rotate-180 motion-reduce:transition-none">
+      <SelectPrimitive.Icon className="shrink-0 transition-transform duration-200 ease-out data-popup-open:rotate-180 motion-reduce:transition-none">
         <ChevronDown aria-hidden className="size-3.5" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
@@ -53,7 +53,7 @@ function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           className={cn(
-            "max-h-[var(--available-height)] min-w-[var(--anchor-width)] origin-[var(--transform-origin)] overflow-y-auto rounded-xl border border-border/70 bg-background p-1 shadow-lg outline-none transition-[opacity,transform] duration-150 ease-out data-ending-style:scale-98 data-ending-style:opacity-0 data-starting-style:scale-98 data-starting-style:opacity-0 motion-reduce:transition-none motion-reduce:data-ending-style:scale-100 motion-reduce:data-starting-style:scale-100",
+            "surface-popover max-h-[var(--available-height)] min-w-[var(--anchor-width)] origin-[var(--transform-origin)] overflow-y-auto outline-none transition-[opacity,transform] duration-150 ease-out data-ending-style:scale-[0.97] data-ending-style:opacity-0 data-ending-style:duration-100 data-starting-style:scale-[0.97] data-starting-style:opacity-0 motion-reduce:transition-[opacity] motion-reduce:data-ending-style:scale-100 motion-reduce:data-starting-style:scale-100",
             className,
           )}
           {...props}
@@ -74,7 +74,7 @@ function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "flex cursor-pointer items-center rounded-lg px-2.5 py-1.5 text-[13px] text-muted-foreground transition-colors duration-100 outline-none select-none data-highlighted:bg-muted/60 data-highlighted:text-foreground data-selected:bg-muted/60 data-selected:font-medium data-selected:text-foreground",
+        "flex cursor-pointer items-center gap-3 rounded-control py-1.5 pr-2 pl-2.5 text-[13px] text-muted-foreground outline-none select-none data-highlighted:bg-[var(--surface-hover)] data-highlighted:text-foreground data-selected:font-medium data-selected:text-foreground",
         className,
       )}
       {...props}
@@ -82,6 +82,9 @@ function SelectItem({
       <SelectPrimitive.ItemText className="whitespace-nowrap">
         {children}
       </SelectPrimitive.ItemText>
+      <SelectPrimitive.ItemIndicator className="ml-auto flex shrink-0 items-center">
+        <Check aria-hidden className="size-3.5" />
+      </SelectPrimitive.ItemIndicator>
     </SelectPrimitive.Item>
   );
 }

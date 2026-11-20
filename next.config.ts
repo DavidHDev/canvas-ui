@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "export",
+  staticPageGenerationTimeout: 180,
   images: {
     unoptimized: true,
     remotePatterns: [

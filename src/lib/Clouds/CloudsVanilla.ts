@@ -1,6 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import { createRectCache } from "../rect-cache";
+import { resolveOptions } from "../options";
 
 export interface CloudsOptions {
   scale?: number;
@@ -45,7 +46,7 @@ type ElementImageContext = CanvasRenderingContext2D & {
 const DEFAULTS: Required<CloudsOptions> = {
   scale: 1,
   speed: 0.6,
-  cover: 0.1,
+  cover: 0.4,
   density: 2.5,
   shading: 0.1,
   color: "auto",
@@ -267,7 +268,7 @@ export function createClouds(
   elements: CloudsElements,
   options: CloudsOptions = {},
 ): CloudsInstance | null {
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const gl = output.getContext("webgl2", {
@@ -298,7 +299,7 @@ export function createClouds(
     paintable.onpaint = () => {
       try {
         sourceCtx!.reset();
-        drawHtmlInCanvas(source, sourceCtx!, content);
+        drawHtmlInCanvas(source, sourceCtx!, content, true);
         contentDirty = true;
         wake();
       } catch {}
@@ -692,10 +693,21 @@ export function createClouds(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   const rectCache = createRectCache(output);
@@ -744,6 +756,7 @@ export function createClouds(
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) => config[key as keyof CloudsOptions] !== value,
@@ -765,6 +778,7 @@ export function createClouds(
       cancelAnimationFrame(raf);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       themeObserver.disconnect();
       schemeQuery.removeEventListener("change", onThemeShift);
       window.clearTimeout(themeTimer);

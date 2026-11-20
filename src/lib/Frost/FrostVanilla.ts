@@ -1,6 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import { createRectCache } from "../rect-cache";
+import { resolveOptions } from "../options";
 
 export interface FrostOptions {
   /** Base frozen coverage added on top of the frost pattern (0-1). */
@@ -60,24 +61,15 @@ export interface FrostOptions {
 }
 
 export interface FrostElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGL effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface FrostInstance {
-  /** Melt a spot at (x, y) in [0,1] space, top-left origin.
-   * Keeps the newest 32 pending calls while suspended; applies at most 4 per frame.
-   */
   melt: (x: number, y: number) => void;
-  /** Update options live. */
   setOptions: (options: FrostOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -544,7 +536,7 @@ export function createFrost(
   elements: FrostElements,
   options: FrostOptions = {},
 ): FrostInstance | null {
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const gl = output.getContext("webgl2", {
@@ -575,7 +567,7 @@ export function createFrost(
   function captureContent() {
     try {
       sourceCtx!.reset();
-      drawHtmlInCanvas(source, sourceCtx!, content);
+      drawHtmlInCanvas(source, sourceCtx!, content, true);
       contentDirty = true;
       wake();
     } catch {}
@@ -1161,13 +1153,13 @@ export function createFrost(
   return {
     melt(x, y) {
       if (destroyed || reducedMotion) return;
-      // Explicit API input is retained while suspended, up to the queue limit.
       if (queuedMelts.length >= MAX_PENDING_MELTS) queuedMelts.shift();
       queuedMelts.push([x, y]);
       activeUntil = performance.now() + refreezeDelayMs();
       start();
     },
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (destroyed) return;
       if (
         !Object.entries(next).some(

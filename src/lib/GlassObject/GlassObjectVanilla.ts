@@ -5,6 +5,7 @@ import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
+import { resolveOptions } from "../options";
 
 export interface GlassObjectOptions {
   /** URL of the asset to display: GLB/glTF, SVG, PNG, JPEG, WebP, or GIF. Object URLs from a file input work too. The format is sniffed from the bytes, not the extension. */
@@ -68,16 +69,12 @@ export interface GlassObjectOptions {
 }
 
 export interface GlassObjectElements {
-  /** Canvas the scene renders to. */
   canvas: HTMLCanvasElement;
 }
 
 export interface GlassObjectInstance {
-  /** Update options live. Changing src loads the new asset. */
   setOptions: (options: GlassObjectOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -114,6 +111,13 @@ const DEFAULTS: Required<GlassObjectOptions> = {
 };
 
 const CAMERA_DIR = new THREE.Vector3(0, -1, 4).normalize();
+
+function fitFov(fov: number, aspect: number): number {
+  if (aspect >= 1) return fov;
+  const half = THREE.MathUtils.degToRad(fov) / 2;
+  const margin = 1 + 0.25 * (1 - aspect);
+  return THREE.MathUtils.radToDeg(2 * Math.atan((Math.tan(half) * margin) / aspect));
+}
 const MODEL_LIFT = 0.3;
 const BACKDROP_DISTANCE = 30;
 const RASTER_SIZE = 256;
@@ -674,7 +678,7 @@ export function createGlassObject(
   options: GlassObjectOptions = {},
 ): GlassObjectInstance | null {
   const { canvas } = elements;
-  const config: Required<GlassObjectOptions> = { ...DEFAULTS, ...options };
+  const config: Required<GlassObjectOptions> = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
 
   let renderer: THREE.WebGLRenderer;
   try {
@@ -713,18 +717,82 @@ export function createGlassObject(
   backdrop.visible = false;
   camera.add(backdrop);
 
+  const studioCanvas = document.createElement("canvas");
+  studioCanvas.width = 4;
+  studioCanvas.height = 256;
+  const studioCtx = studioCanvas.getContext("2d");
+  const studioTexture = new THREE.CanvasTexture(studioCanvas);
+  studioTexture.colorSpace = THREE.SRGBColorSpace;
+  const studioMaterial = new THREE.MeshBasicMaterial({
+    map: studioTexture,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const studio = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), studioMaterial);
+  studio.position.set(0, 0, -BACKDROP_DISTANCE);
+  studio.onBeforeRender = (target) => {
+    studioMaterial.colorWrite = target.getRenderTarget() !== null;
+  };
+  camera.add(studio);
+
+  const pageProbe = document.createElement("canvas");
+  pageProbe.width = pageProbe.height = 1;
+  const pageProbeCtx = pageProbe.getContext("2d", { willReadFrequently: true });
+  const studioBase = new THREE.Color();
+
+  function readPageColor(target: THREE.Color) {
+    target.set(0xffffff);
+    if (!pageProbeCtx) return;
+    let el: Element | null = canvas;
+    while (el) {
+      const css = getComputedStyle(el).backgroundColor;
+      if (css && css !== "transparent") {
+        pageProbeCtx.clearRect(0, 0, 1, 1);
+        pageProbeCtx.fillStyle = css;
+        pageProbeCtx.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = pageProbeCtx.getImageData(0, 0, 1, 1).data;
+        if (a > 0) {
+          target.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
+          return;
+        }
+      }
+      el = el.parentElement;
+    }
+  }
+
+  function paintStudio() {
+    if (!studioCtx) return;
+    if (config.background) studioBase.set(config.background);
+    else readPageColor(studioBase);
+    const { r, g, b } = studioBase.getRGB({ r: 0, g: 0, b: 0 }, THREE.SRGBColorSpace);
+    const light = 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5;
+    const shade = (c: number) => (light ? c * 0.62 : c + (1 - c) * 0.1);
+    const css = (k: number) =>
+      `rgb(${[r, g, b].map((c) => Math.round((c + (shade(c) - c) * k) * 255)).join(",")})`;
+    const gradient = studioCtx.createLinearGradient(0, 0, 0, studioCanvas.height);
+    gradient.addColorStop(0, css(0));
+    gradient.addColorStop(0.48, css(0.18));
+    gradient.addColorStop(0.62, css(0.75));
+    gradient.addColorStop(1, css(1));
+    studioCtx.fillStyle = gradient;
+    studioCtx.fillRect(0, 0, studioCanvas.width, studioCanvas.height);
+    studioTexture.needsUpdate = true;
+  }
+
   const textureLoader = new THREE.TextureLoader();
   textureLoader.setCrossOrigin("anonymous");
   let backdropTexture: THREE.Texture | null = null;
   let backdropSrc: string | null = null;
 
   function layoutBackdrop() {
-    if (!backdropTexture) return;
     const height =
       2 *
       BACKDROP_DISTANCE *
       Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
     const width = height * camera.aspect;
+    studio.scale.set(width, height, 1);
+    studio.visible = !backdrop.visible;
+    if (!backdropTexture) return;
     backdrop.scale.set(width, height, 1);
     const image = backdropTexture.image as { width: number; height: number };
     const planeAspect = width / height;
@@ -744,6 +812,7 @@ export function createGlassObject(
     backdropSrc = src;
     if (!src) {
       backdrop.visible = false;
+      studio.visible = true;
       backdropMaterial.map = null;
       backdropTexture?.dispose();
       backdropTexture = null;
@@ -1051,12 +1120,13 @@ export function createGlassObject(
       scene.background = null;
       renderer.setClearColor(0x000000, 0);
     }
+    paintStudio();
     scene.environmentIntensity = config.environmentIntensity;
     controls.enableRotate = config.orbit;
     controls.enableZoom = config.zoom;
     controls.autoRotate = config.autoRotate && !reducedMotion;
     controls.autoRotateSpeed = config.autoRotateSpeed;
-    camera.fov = config.fov;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
     loadBackdrop();
     layoutBackdrop();
@@ -1086,6 +1156,7 @@ export function createGlassObject(
     renderer.setPixelRatio(pr);
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
     layoutBackdrop();
   }
@@ -1097,10 +1168,12 @@ export function createGlassObject(
   loadAsset();
 
   let inView = true;
+  let pageVisible =
+    typeof document === "undefined" || document.visibilityState !== "hidden";
   let loopRunning = false;
 
   function tick(time: number) {
-    if (!inView) {
+    if (!inView || !pageVisible) {
       lastTime = 0;
       stopLoop();
       return;
@@ -1131,7 +1204,7 @@ export function createGlassObject(
   }
 
   function startLoop() {
-    if (loopRunning || !inView || disposed) return;
+    if (loopRunning || !inView || !pageVisible || disposed) return;
     loopRunning = true;
     renderer.setAnimationLoop(tick);
   }
@@ -1155,6 +1228,32 @@ export function createGlassObject(
       : null;
   viewObserver?.observe(canvas);
 
+  const onVisibilityChange = () => {
+    pageVisible = document.visibilityState !== "hidden";
+    if (pageVisible) {
+      lastTime = 0;
+      startLoop();
+    } else {
+      stopLoop();
+    }
+  };
+  document.addEventListener("visibilitychange", onVisibilityChange);
+
+  let themeTimer = 0;
+  const onThemeShift = () => {
+    if (config.background) return;
+    paintStudio();
+    window.clearTimeout(themeTimer);
+    themeTimer = window.setTimeout(paintStudio, 300);
+  };
+  const themeObserver = new MutationObserver(onThemeShift);
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class", "style", "data-theme"],
+  });
+  const schemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  schemeQuery.addEventListener("change", onThemeShift);
+
   let lastTime = 0;
   let elapsed = Math.random() * 100;
 
@@ -1162,6 +1261,7 @@ export function createGlassObject(
 
   return {
     setOptions(next: GlassObjectOptions) {
+      next = resolveOptions(DEFAULTS, next);
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
         if (typeof value === "function") continue;
@@ -1193,12 +1293,19 @@ export function createGlassObject(
       stopLoop();
       observer.disconnect();
       viewObserver?.disconnect();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       motionQuery.removeEventListener("change", onMotionChange);
+      themeObserver.disconnect();
+      schemeQuery.removeEventListener("change", onThemeShift);
+      window.clearTimeout(themeTimer);
       controls.dispose();
       clearAsset();
       backdrop.geometry.dispose();
       backdropMaterial.dispose();
       backdropTexture?.dispose();
+      studio.geometry.dispose();
+      studioMaterial.dispose();
+      studioTexture.dispose();
       if (roomScene) disposeObject(roomScene);
       envTarget?.dispose();
       pmrem.dispose();

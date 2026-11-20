@@ -2,41 +2,19 @@
 
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ArrowLeft, ChevronDown, ChevronsUpDown, X } from "lucide-react";
-import { useEffect, useLayoutEffect, useState } from "react";
+import { ArrowLeft, ChevronDown, ChevronsUpDown, X } from "@/components/icons";
+import { useEffect, useState } from "react";
 
 import { SiteLogo } from "@/components/common/site-logo";
 import { ThemeToggle } from "@/components/common/theme-toggle";
 import { PreviewVideo } from "@/components/common/preview-video";
+import { useScrollFade } from "@/components/docs/docs-sidebar";
 import { PlaygroundActions } from "@/components/playground/playground-actions";
 import { PLAYGROUND_DEMOS } from "@/components/playground/demos";
+import { DURATION, EASE_OUT } from "@/components/common/motion-tokens";
 import { cn } from "@/lib/utils";
 
-const EASE = [0.23, 1, 0.32, 1] as const;
-
 const videoFor = (slug: string) => `/assets/videos/${slug}.webm`;
-
-function useScrollFade() {
-  const [el, setEl] = useState<HTMLElement | null>(null);
-  useLayoutEffect(() => {
-    if (!el) return;
-    const update = () => {
-      const top = el.scrollTop > 4;
-      const bottom = el.scrollHeight - el.clientHeight - el.scrollTop > 4;
-      el.style.setProperty("--fade-top", top ? "1" : "0");
-      el.style.setProperty("--fade-bottom", bottom ? "1" : "0");
-    };
-    update();
-    el.addEventListener("scroll", update, { passive: true });
-    const observer = new ResizeObserver(update);
-    observer.observe(el);
-    return () => {
-      el.removeEventListener("scroll", update);
-      observer.disconnect();
-    };
-  }, [el]);
-  return setEl;
-}
 
 export function PlaygroundSidebar({
   activeSlug,
@@ -49,8 +27,8 @@ export function PlaygroundSidebar({
 }) {
   const shouldReduceMotion = useReducedMotion();
   const [pickerOpen, setPickerOpen] = useState(false);
-  const setScrollEl = useScrollFade();
-  const setPickerScrollEl = useScrollFade();
+  const [setScrollEl] = useScrollFade();
+  const [setPickerScrollEl] = useScrollFade();
 
   const active = PLAYGROUND_DEMOS.find((demo) => demo.slug === activeSlug)!;
 
@@ -70,16 +48,16 @@ export function PlaygroundSidebar({
 
   return (
     <>
-      <aside className="fixed top-4 bottom-4 left-4 z-40 hidden w-60 flex-col rounded-2xl border border-border/60 bg-background/70 backdrop-blur-xl backdrop-saturate-150 lg:flex">
+      <aside className="surface-panel fixed top-4 bottom-4 left-4 z-40 hidden w-60 flex-col rounded-panel lg:flex">
         <div className="flex items-center justify-between gap-2 px-3 pt-5 pb-4">
           <Link
             href="/"
             aria-label="Canvas UI home"
-            className="inline-block transition-opacity duration-150 hover:opacity-70"
+            className="inline-block rounded-sm transition-opacity duration-150 hover:opacity-70"
           >
             <SiteLogo />
           </Link>
-          <span className="rounded-full border border-border px-3 py-1 text-[12px] font-semibold tracking-tight text-muted-foreground">
+          <span className="chip font-medium">
             Playground
           </span>
         </div>
@@ -94,16 +72,16 @@ export function PlaygroundSidebar({
             aria-expanded={pickerOpen}
             aria-haspopup="dialog"
             onClick={() => setPickerOpen((prev) => !prev)}
-            className="group w-full cursor-pointer rounded-xl border border-border/60 bg-muted/30 p-2 text-left transition-colors hover:bg-muted/60"
+            className="group frame w-full cursor-pointer text-left transition-[background-color,transform] duration-150 ease-out hover:bg-muted/70 active:scale-[0.99] aria-expanded:bg-muted/70"
           >
-            <span className="block aspect-video overflow-hidden rounded-lg bg-muted/60">
+            <span className="frame-inset block aspect-video overflow-hidden bg-background">
               <PreviewVideo
                 key={active.slug}
                 src={videoFor(active.slug)}
                 className="h-full w-full object-cover"
               />
             </span>
-            <span className="mt-2 flex items-center justify-between gap-2 px-1 pb-0.5">
+            <span className="flex items-center justify-between gap-2 px-2 pt-2 pb-1.5">
               <span className="min-w-0">
                 <span className="block truncate text-[13px] font-medium">
                   {active.name}
@@ -114,7 +92,7 @@ export function PlaygroundSidebar({
               </span>
               <ChevronsUpDown
                 aria-hidden
-                className="size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
+                className="size-3.5 shrink-0 text-muted-foreground transition-colors duration-150 group-hover:text-foreground"
               />
             </span>
           </button>
@@ -133,10 +111,10 @@ export function PlaygroundSidebar({
           <div ref={onControlsHostChange} />
         </div>
 
-        <div className="border-t border-border/50 p-2">
+        <div className="p-2">
           <Link
             href="/docs"
-            className="flex items-center justify-center gap-2 rounded-[calc(1rem-0.5rem)] bg-foreground px-3 py-3 text-sm font-medium text-background transition-opacity duration-150 hover:opacity-85"
+            className="pressable flex h-11 items-center justify-center gap-2 rounded-control bg-foreground px-3 text-sm font-medium text-background transition-[opacity,transform] duration-150 hover:opacity-85"
           >
             <ArrowLeft aria-hidden className="size-4" />
             Back to Docs
@@ -149,9 +127,8 @@ export function PlaygroundSidebar({
           <>
             <motion.div
               initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              animate={{ opacity: 1, transition: { duration: DURATION.base } }}
+              exit={{ opacity: 0, transition: { duration: DURATION.exit } }}
               aria-hidden
               onClick={() => setPickerOpen(false)}
               className="fixed inset-0 z-40 hidden bg-black/10 lg:block"
@@ -162,26 +139,33 @@ export function PlaygroundSidebar({
               initial={
                 shouldReduceMotion
                   ? { opacity: 0 }
-                  : { opacity: 0, x: -12, scale: 0.99 }
+                  : { opacity: 0, transform: "translateX(-12px) scale(0.99)" }
               }
-              animate={{ opacity: 1, x: 0, scale: 1 }}
+              animate={{
+                opacity: 1,
+                transform: "translateX(0px) scale(1)",
+                transition: { duration: DURATION.slow, ease: EASE_OUT },
+              }}
               exit={
                 shouldReduceMotion
-                  ? { opacity: 0 }
-                  : { opacity: 0, x: -12, scale: 0.99 }
+                  ? { opacity: 0, transition: { duration: DURATION.exit } }
+                  : {
+                      opacity: 0,
+                      transform: "translateX(-12px) scale(0.99)",
+                      transition: { duration: DURATION.fast, ease: EASE_OUT },
+                    }
               }
-              transition={{ duration: 0.3, ease: EASE }}
-              className="fixed top-4 bottom-4 left-[16.5rem] z-50 hidden w-120 max-w-[calc(100vw-18rem)] flex-col rounded-2xl border border-border/60 bg-background/85 shadow-xl shadow-black/5 backdrop-blur-xl backdrop-saturate-150 lg:flex"
+              className="surface-popover fixed top-4 bottom-4 left-[16.5rem] z-50 hidden w-120 max-w-[calc(100vw-18rem)] origin-left flex-col rounded-panel p-0 lg:flex"
             >
-              <div className="flex items-center justify-between border-b border-border/50 py-3 pr-3 pl-5">
-                <p className="text-[13px] font-semibold tracking-[-0.01em]">
+              <div className="flex items-center justify-between border-b border-border-subtle py-3 pr-3 pl-5">
+                <p className="text-[13px] font-medium tracking-[-0.01em]">
                   Pick a component
                 </p>
                 <button
                   type="button"
                   onClick={() => setPickerOpen(false)}
                   aria-label="Close picker"
-                  className="grid size-7 cursor-pointer place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                  className="pressable grid size-7 cursor-pointer place-items-center rounded-md text-muted-foreground transition-[color,background-color,transform] duration-150 hover:bg-[var(--surface-hover)] hover:text-foreground"
                 >
                   <X aria-hidden className="size-3.5" />
                 </button>
@@ -200,13 +184,13 @@ export function PlaygroundSidebar({
                       aria-current={isActive ? "true" : undefined}
                       onClick={() => pick(demo.slug)}
                       className={cn(
-                        "group cursor-pointer rounded-xl border p-1.5 text-left transition-colors",
+                        "group frame cursor-pointer text-left transition-[background-color,transform] duration-150 ease-out active:scale-[0.98]",
                         isActive
-                          ? "border-foreground/40 bg-muted/60"
-                          : "border-border/50 bg-muted/20 hover:bg-muted/50",
+                          ? "bg-muted"
+                          : "hover:bg-muted/70",
                       )}
                     >
-                      <span className="block aspect-video overflow-hidden rounded-lg bg-muted/60">
+                      <span className="frame-inset block aspect-video overflow-hidden bg-background">
                         <PreviewVideo
                           src={videoFor(demo.slug)}
                           className={cn(
@@ -215,7 +199,7 @@ export function PlaygroundSidebar({
                           )}
                         />
                       </span>
-                      <span className="mt-1.5 block truncate px-1 pb-0.5 text-[12.5px] font-medium">
+                      <span className="block truncate px-2 pt-1.5 pb-1 text-[12.5px] font-medium">
                         {demo.name}
                       </span>
                     </button>
@@ -227,11 +211,11 @@ export function PlaygroundSidebar({
         )}
       </AnimatePresence>
 
-      <div className="fixed top-4 right-[calc(1rem+var(--demo-sbw,0px))] left-4 z-40 flex items-center gap-2 rounded-2xl border border-border/60 bg-background/70 p-2 backdrop-blur-xl backdrop-saturate-150 lg:hidden">
+      <div className="surface-floating fixed top-4 right-[calc(1rem+var(--demo-sbw,0px))] left-4 z-40 flex items-center gap-2 rounded-panel p-2 lg:hidden">
         <Link
           href="/docs"
           aria-label="Back to Docs"
-          className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted/60 hover:text-foreground"
+          className="pressable grid size-9 shrink-0 place-items-center rounded-control text-muted-foreground transition-[color,background-color,transform] duration-150 hover:bg-[var(--surface-hover)] hover:text-foreground"
         >
           <ArrowLeft aria-hidden className="size-4" />
         </Link>
@@ -240,7 +224,7 @@ export function PlaygroundSidebar({
           <select
             value={activeSlug}
             onChange={(event) => onSelect(event.target.value)}
-            className="h-9 w-full cursor-pointer appearance-none truncate rounded-lg border border-border/60 bg-background pr-8 pl-2.5 text-sm font-medium"
+            className="h-9 w-full cursor-pointer appearance-none truncate rounded-control bg-muted/60 pr-8 pl-2.5 text-[16px] font-medium transition-colors duration-150 hover:border-border-strong sm:text-sm"
           >
             {PLAYGROUND_DEMOS.map((demo) => (
               <option key={demo.slug} value={demo.slug}>

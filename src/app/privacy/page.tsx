@@ -16,7 +16,7 @@ const LAST_UPDATED = "August 14, 2026";
 const CONTACT = "hello@canvasui.dev";
 
 const linkClass =
-  "text-foreground underline decoration-border underline-offset-4 transition-colors duration-150 hover:decoration-foreground";
+  "text-foreground underline decoration-border-strong underline-offset-4 transition-colors duration-150 hover:decoration-foreground";
 
 function Section({
   title,
@@ -27,7 +27,7 @@ function Section({
 }) {
   return (
     <section className="mt-12">
-      <h2 className="text-lg font-medium tracking-tight text-foreground">
+      <h2 className="text-xl font-medium tracking-tight text-foreground">
         {title}
       </h2>
       <div className="mt-3 flex flex-col gap-3 text-[15px] leading-7 text-muted-foreground">
@@ -68,8 +68,8 @@ export default function PrivacyPage() {
             updated {LAST_UPDATED}.
           </p>
 
-          <div className="mt-10 rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background p-1">
-            <div className="rounded-[var(--radius)] border border-dashed border-border/70 bg-background p-4 sm:p-5">
+          <div className="frame mt-10">
+            <div className="frame-inset bg-background p-4 sm:p-5">
               <h2 className="text-sm font-medium text-foreground">
                 The short version
               </h2>
@@ -202,17 +202,23 @@ export default function PrivacyPage() {
             </p>
           </Section>
 
-          <div className="mt-14 border-t border-border/60 pt-6">
+          <div className="mt-14 border-t border-border pt-6">
             <Link
               href="/"
-              className="text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground"
+              className="group inline-flex items-center gap-1.5 rounded-sm text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground"
             >
-              &larr; Back home
+              <span
+                aria-hidden
+                className="transition-transform duration-200 ease-out group-hover:-translate-x-0.5 motion-reduce:transition-none"
+              >
+                &larr;
+              </span>
+              Back home
             </Link>
           </div>
         </div>
 
-        <div className="mt-auto border-t border-border/60">
+        <div className="mt-auto border-t border-border">
           <Footer />
         </div>
       </main>

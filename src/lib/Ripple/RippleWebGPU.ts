@@ -1,7 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import {
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   init,
   sampler,
@@ -11,6 +11,7 @@ import {
   type Surface,
 } from "vgpu";
 import type { Texture } from "vgpu";
+import { resolveOptions } from "../options";
 
 export type RippleTrigger = "click" | "hover" | "none";
 
@@ -38,22 +39,15 @@ export interface RippleOptions {
 }
 
 export interface RippleElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGPU effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface RippleInstance {
-  /** Update effect options live. */
   setOptions: (options: RippleOptions) => void;
-  /** Spawn a ripple at a position in CSS pixels relative to the element. */
   splash: (x: number, y: number, strength?: number) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -82,7 +76,7 @@ type ElementImageContext = CanvasRenderingContext2D & {
   drawElementImage?: (element: Element, x: number, y: number) => void;
 };
 
-const SHADER = /* wgsl */ `
+const SHADER = `
 struct Params {
   ripples: array<vec4f, 12>,
   resolution: vec2f,
@@ -111,7 +105,6 @@ fn page(p: vec2f) -> vec4f {
 }
 
 @fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
-  // vgpu's uv is top-origin, which matches the captured page texture directly.
   let pUv = uv;
   let frag = pUv * params.resolution;
 
@@ -171,14 +164,12 @@ export function supportsHtmlInCanvas(): boolean {
   );
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every Ripple instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -194,7 +185,7 @@ export function createRipple(
   options: RippleOptions = {},
 ): RippleInstance | null {
   if (!supportsWebGPU()) return null;
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
@@ -216,15 +207,13 @@ export function createRipple(
     paintable.onpaint = () => {
       try {
         sourceCtx!.reset();
-        drawHtmlInCanvas(source, sourceCtx!, content);
+        drawHtmlInCanvas(source, sourceCtx!, content, true);
         contentDirty = true;
         wake();
       } catch {}
     };
   }
 
-  // GPU resources are created once the device resolves; everything before that
-  // is plain DOM bookkeeping so the instance can be returned synchronously.
   let gpu: Gpu | null = null;
   let screen: Surface | null = null;
   let fx: Effect | null = null;
@@ -271,7 +260,6 @@ export function createRipple(
       contentTexture.size[0] !== w ||
       contentTexture.size[1] !== h
     ) {
-      // A new wrapper invalidates vgpu's cached bindings to the old texture.
       contentTexture?.destroy();
       contentTexture = gpu!.device.createTexture({
         size: [w, h],
@@ -352,7 +340,6 @@ export function createRipple(
         maxX: contentMaxX,
       },
     });
-    // Surfaces can only be drawn inside frame(); one pass, one command buffer.
     gpuFrame(gpu, (f) => f.pass(screen!, fx!));
   }
 
@@ -360,12 +347,10 @@ export function createRipple(
     if (htmlInCanvas) {
       render();
     } else if (gpu && screen) {
-      // Nothing to show without ripples: leave the overlay fully transparent.
       gpuFrame(gpu, (f) => f.pass({ target: screen!, clear: [0, 0, 0, 0] }, () => {}));
     }
   }
 
-  /** Without a GPU device the page still has to show: blit the capture as-is. */
   function renderFallback() {
     if (!fallback2d || !htmlInCanvas || !contentDirty) return;
     contentDirty = false;
@@ -406,7 +391,6 @@ export function createRipple(
       return;
     }
     if (!gpu) {
-      // Device still initializing: keep the loop parked until it resolves.
       running = false;
       return;
     }
@@ -458,7 +442,7 @@ export function createRipple(
         addressModeU: "clamp-to-edge",
         addressModeV: "clamp-to-edge",
       });
-      fx = effect(gpu, SHADER, {
+      fx = gpuEffect(gpu, SHADER, {
         label: "ripple",
         set: { uSampler: linear, uContent: ensureContentTexture() },
       });
@@ -513,14 +497,26 @@ export function createRipple(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) => config[key as keyof RippleOptions] !== value,
@@ -542,6 +538,7 @@ export function createRipple(
       content.removeEventListener("pointermove", onPointerMove);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       motionQuery.removeEventListener("change", onMotionChange);
       contentTexture?.destroy();
       screen?.dispose();

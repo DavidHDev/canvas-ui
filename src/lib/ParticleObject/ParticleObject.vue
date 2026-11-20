@@ -7,7 +7,11 @@ import {
   type ParticleObjectOptions,
 } from "./ParticleObjectVanilla";
 
-const props = defineProps<ParticleObjectOptions>();
+const props = withDefaults(defineProps<ParticleObjectOptions>(), {
+  orbit: undefined,
+  zoom: undefined,
+  autoRotate: undefined,
+});
 
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 

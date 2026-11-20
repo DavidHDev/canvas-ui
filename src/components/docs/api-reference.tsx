@@ -1,13 +1,9 @@
 import { cn } from "@/lib/utils";
 
 export interface ApiProp {
-  /** Property name, rendered as code. */
   name: string;
-  /** Short description shown under the name. */
   description: string;
-  /** Type, rendered as a code chip. */
   type: string;
-  /** Default value, rendered as a code chip. Omit for none. */
   defaultValue?: string;
 }
 
@@ -17,32 +13,23 @@ const HEADER_CELL =
 export function ApiReference({ props }: { props: ApiProp[] }) {
   const lastRow = props.length - 1;
 
-  // The body cells draw the dashed box themselves (edge borders, corner radii,
-  // tint), so the column titles can sit outside it on the frame's gap while
-  // staying in the same table and sharing its column widths.
   const bodyCell = (row: number, column: 0 | 1 | 2) =>
     cn(
-      "border-dashed bg-muted/40 px-4 py-3.5 align-top",
-      row === 0 && "border-t border-t-border/70",
-      row === lastRow
-        ? "border-b border-b-border/70"
-        : "border-b border-b-border/50",
-      column === 0 && "border-l border-l-border/70",
-      column === 2 && "border-r border-r-border/70",
-      row === 0 && column === 0 && "rounded-tl-lg",
-      row === 0 && column === 2 && "rounded-tr-lg",
-      row === lastRow && column === 0 && "rounded-bl-lg",
-      row === lastRow && column === 2 && "rounded-br-lg",
+      "bg-background px-4 py-3.5 align-top",
+      row !== lastRow && "border-b border-b-border-subtle",
+      row === 0 && column === 0 && "rounded-tl-control",
+      row === 0 && column === 2 && "rounded-tr-control",
+      row === lastRow && column === 0 && "rounded-bl-control",
+      row === lastRow && column === 2 && "rounded-br-control",
     );
 
   return (
-    <div className="rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background p-1">
+    <div className="frame">
       <div className="overflow-x-auto">
         <table className="w-full border-separate border-spacing-0 text-left">
           <thead>
             <tr>
-              {/* The transparent border matches the box's left edge below. */}
-              <th className={cn(HEADER_CELL, "border-l border-transparent")}>
+              <th className={HEADER_CELL}>
                 Property
               </th>
               <th className={HEADER_CELL}>Type</th>

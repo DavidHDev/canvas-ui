@@ -1,12 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
-/*
- * WebGPU/vgpu port of GlassObject. three.js is kept for loading, tracing, matrices, and controls;
- * rendering goes through vgpu. The studio PMREM is approximated by baking the same room to a
- * prefiltered radiance atlas, while transmission is reproduced with screen-space refraction.
- */
 import {
   draw,
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   geometry,
   init,
@@ -27,6 +22,7 @@ import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
+import { resolveOptions } from "../options";
 
 export interface GlassObjectOptions {
   /** URL of the asset to display: GLB/glTF, SVG, PNG, JPEG, WebP, or GIF. Object URLs from a file input work too. The format is sniffed from the bytes, not the extension. */
@@ -90,16 +86,12 @@ export interface GlassObjectOptions {
 }
 
 export interface GlassObjectElements {
-  /** Canvas the scene renders to. */
   canvas: HTMLCanvasElement;
 }
 
 export interface GlassObjectInstance {
-  /** Update options live. Changing src loads the new asset. */
   setOptions: (options: GlassObjectOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -136,6 +128,13 @@ const DEFAULTS: Required<GlassObjectOptions> = {
 };
 
 const CAMERA_DIR = new THREE.Vector3(0, -1, 4).normalize();
+
+function fitFov(fov: number, aspect: number): number {
+  if (aspect >= 1) return fov;
+  const half = THREE.MathUtils.degToRad(fov) / 2;
+  const margin = 1 + 0.25 * (1 - aspect);
+  return THREE.MathUtils.radToDeg(2 * Math.atan((Math.tan(half) * margin) / aspect));
+}
 const MODEL_LIFT = 0.3;
 const RASTER_SIZE = 256;
 const ALPHA_THRESHOLD = 64;
@@ -989,7 +988,7 @@ interface ShapeSource {
 
 type AssetSource = MeshSource | ShapeSource;
 
-const PREFILTER_SHADER = /* wgsl */ `
+const PREFILTER_SHADER = `
 const PI = 3.14159265359;
 const LEVELS = 6.0;
 const SRC_W = 32u;
@@ -1038,7 +1037,7 @@ fn dirFor(u: f32, v: f32) -> vec3f {
   return acc / max(wsum, 1e-6);
 }`;
 
-const MIPMAP_SHADER = /* wgsl */ `
+const MIPMAP_SHADER = `
 struct VSOut {
   @builtin(position) pos: vec4f,
   @location(0) uv: vec2f,
@@ -1065,16 +1064,13 @@ struct VSOut {
 }`;
 
 
-const BACKDROP_SHADER = /* wgsl */ `
+const BACKDROP_SHADER = `
 struct BackdropParams {
   resolution: vec2f,
-  background: vec3f,
-  highlight: vec3f,
+  studioBase: vec3f,
   backdropTransform: vec4f,
-  hasBackground: f32,
   hasBackdrop: f32,
-  environmentIntensity: f32,
-  time: f32,
+  studioLight: f32,
 }
 
 @group(0) @binding(0) var<uniform> params: BackdropParams;
@@ -1093,15 +1089,19 @@ fn srgbToLinear(c: vec3f) -> vec3f {
     let c = textureSampleLevel(uBackdrop, uSampler, q, 0.0);
     return vec4f(srgbToLinear(c.rgb), c.a);
   }
-  if (params.hasBackground > 0.5) {
-    return vec4f(srgbToLinear(params.background), 1.0);
+  let base = params.studioBase;
+  let shade = select(base + (vec3f(1.0) - base) * 0.1, base * 0.62, params.studioLight > 0.5);
+  let t = clamp(uv.y, 0.0, 1.0);
+  var k = mix(0.75, 1.0, (t - 0.62) / 0.38);
+  if (t < 0.48) {
+    k = mix(0.0, 0.18, t / 0.48);
+  } else if (t < 0.62) {
+    k = mix(0.18, 0.75, (t - 0.48) / 0.14);
   }
-  let vignette = 1.0 - smoothstep(0.25, 0.95, distance(uv, vec2f(0.5)));
-  let glow = params.highlight * (0.05 + 0.08 * vignette) * params.environmentIntensity;
-  return vec4f(glow, 0.0);
+  return vec4f(srgbToLinear(mix(base, shade, k)), 1.0);
 }`;
 
-const GLASS_SHADER = /* wgsl */ `
+const GLASS_SHADER = `
 const PI = 3.14159265359;
 const ENV_LEVELS = 6.0;
 const ENV_ROWS = 32.0;
@@ -1205,7 +1205,6 @@ fn environmentBRDF(ndv: f32, specularColor: vec3f, roughness: f32) -> vec3f {
   return out;
 }
 
-// three.js cubic B-spline textureBicubic, sampled across the two nearest mip levels.
 fn w0(a: f32) -> f32 { return (1.0 / 6.0) * (a * (a * (-a + 3.0) - 3.0) + 1.0); }
 fn w1(a: f32) -> f32 { return (1.0 / 6.0) * (a * a * (3.0 * a - 6.0) + 4.0); }
 fn w2(a: f32) -> f32 { return (1.0 / 6.0) * (a * (a * (-3.0 * a + 3.0) + 3.0) + 1.0); }
@@ -1324,10 +1323,17 @@ fn getTransmissionTap(worldPos: vec3f, v: vec3f, n: vec3f, ior: f32, roughness: 
   return vec4f(max(outgoing, vec3f(0.0)) * alpha, alpha);
 }`;
 
-const COMPOSITE_SHADER = /* wgsl */ `
+const COMPOSITE_SHADER = `
+struct CompositeParams {
+  background: vec3f,
+  hasBackground: f32,
+  hasBackdrop: f32,
+}
+
 @group(0) @binding(0) var uBehind: texture_2d<f32>;
 @group(0) @binding(1) var uGlass: texture_2d<f32>;
 @group(0) @binding(2) var uSampler: sampler;
+@group(0) @binding(3) var<uniform> params: CompositeParams;
 
 fn rrtAndOdtFit(v: vec3f) -> vec3f {
   let a = v * (v + vec3f(0.0245786)) - vec3f(0.000090537);
@@ -1363,19 +1369,24 @@ fn toSrgb(cIn: vec3f) -> vec3f {
 @fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let behind = textureSampleLevel(uBehind, uSampler, uv, 0.0);
   let glass = textureSampleLevel(uGlass, uSampler, uv, 0.0);
-  let linear = behind.rgb * behind.a * (1.0 - glass.a) + glass.rgb;
-  let alpha = glass.a + behind.a * (1.0 - glass.a);
-  return vec4f(toSrgb(acesFilmicToneMapping(max(linear, vec3f(0.0)))), alpha);
+  if (params.hasBackdrop > 0.5) {
+    let linear = behind.rgb * behind.a * (1.0 - glass.a) + glass.rgb;
+    let alpha = glass.a + behind.a * (1.0 - glass.a);
+    return vec4f(toSrgb(acesFilmicToneMapping(max(linear, vec3f(0.0)))), alpha);
+  }
+  let toned = toSrgb(acesFilmicToneMapping(max(glass.rgb, vec3f(0.0))));
+  if (params.hasBackground > 0.5) {
+    return vec4f(toned + params.background * (1.0 - glass.a), 1.0);
+  }
+  return vec4f(toned, glass.a);
 }`;
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every GlassObject instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -1445,7 +1456,6 @@ function uploadExternalTexture(
   const height = Math.max(1, Math.round(rawH));
   let tex = previous;
   if (!tex || tex.size[0] !== width || tex.size[1] !== height) {
-    // A new wrapper invalidates bindings when a resized canvas is uploaded.
     tex?.destroy();
     tex = gpu.device.createTexture({
       size: [width, height],
@@ -1503,7 +1513,7 @@ export function createGlassObject(
 ): GlassObjectInstance | null {
   if (!supportsWebGPU()) return null;
   const { canvas } = elements;
-  const config: Required<GlassObjectOptions> = { ...DEFAULTS, ...options };
+  const config: Required<GlassObjectOptions> = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
 
   const camera = new THREE.PerspectiveCamera(config.fov, 1, 0.1, 200);
   camera.position.copy(CAMERA_DIR).multiplyScalar(config.cameraDistance);
@@ -1543,7 +1553,6 @@ export function createGlassObject(
   let mipmapLayout: GPUBindGroupLayout | null = null;
   let mipmapPipeline: GPURenderPipeline | null = null;
   let behindMipTexture: Texture | null = null;
-  /** The backdrop layer is screen-fixed: re-render it (and its mips) only when its inputs change. */
   let behindDirty = true;
   let uploadedBackdropImage: unknown = null;
   let envAtlas: Target | null = null;
@@ -1561,6 +1570,39 @@ export function createGlassObject(
   const tintColor = new THREE.Color(1, 1, 1);
   const highlightColor = new THREE.Color();
   let hasBackground = 0;
+  const studioBase = new THREE.Color(1, 1, 1);
+  let studioLight = 1;
+  const pageProbe = document.createElement("canvas");
+  pageProbe.width = pageProbe.height = 1;
+  const pageProbeCtx = pageProbe.getContext("2d", { willReadFrequently: true });
+
+  function readPageColor(target: THREE.Color) {
+    target.set(0xffffff);
+    if (!pageProbeCtx) return;
+    let el: Element | null = canvas;
+    while (el) {
+      const css = getComputedStyle(el).backgroundColor;
+      if (css && css !== "transparent") {
+        pageProbeCtx.clearRect(0, 0, 1, 1);
+        pageProbeCtx.fillStyle = css;
+        pageProbeCtx.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = pageProbeCtx.getImageData(0, 0, 1, 1).data;
+        if (a > 0) {
+          target.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
+          return;
+        }
+      }
+      el = el.parentElement;
+    }
+  }
+
+  function syncStudio() {
+    if (config.background) studioBase.set(config.background);
+    else readPageColor(studioBase);
+    const { r, g, b } = studioBase.getRGB({ r: 0, g: 0, b: 0 }, THREE.SRGBColorSpace);
+    studioLight = 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5 ? 1 : 0;
+    behindDirty = true;
+  }
 
   function syncColors() {
     hasBackground = config.background ? 1 : 0;
@@ -1568,6 +1610,7 @@ export function createGlassObject(
     if (config.tint) tintColor.set(config.tint);
     else tintColor.set(0xffffff);
     highlightColor.set(config.highlight);
+    syncStudio();
   }
 
   function layoutBackdrop() {
@@ -1791,7 +1834,7 @@ export function createGlassObject(
       addressModeU: "repeat",
       addressModeV: "clamp-to-edge",
     });
-    effect(gpu, PREFILTER_SHADER, {
+    gpuEffect(gpu, PREFILTER_SHADER, {
       label: "glass-object.prefilter",
       set: { params: { hiSize: [ENV_WIDTH, ENV_HEIGHT] }, uHi: hi, uLo: lo },
     }).draw(envAtlas);
@@ -2048,7 +2091,7 @@ export function createGlassObject(
     controls.enableZoom = config.zoom;
     controls.autoRotate = config.autoRotate && !reducedMotion;
     controls.autoRotateSpeed = config.autoRotateSpeed;
-    camera.fov = config.fov;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
     loadBackdrop();
     layoutBackdrop();
@@ -2091,6 +2134,7 @@ export function createGlassObject(
     }
     behindDirty = true;
     camera.aspect = width / height;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
     layoutBackdrop();
     startLoop();
@@ -2134,16 +2178,23 @@ export function createGlassObject(
     camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
     viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
 
+    const hasBackdrop = backdropTexture && backdropGpuTexture ? 1 : 0;
+    const studio = studioBase.getRGB({ r: 0, g: 0, b: 0 }, THREE.SRGBColorSpace);
     backgroundPass.set({
       params: {
         resolution: [width, height],
-        background: [backgroundColor.r, backgroundColor.g, backgroundColor.b],
-        highlight: [highlightColor.r, highlightColor.g, highlightColor.b],
+        studioBase: [studio.r, studio.g, studio.b],
         backdropTransform,
+        hasBackdrop,
+        studioLight,
+      },
+    });
+    const background = backgroundColor.getRGB({ r: 0, g: 0, b: 0 }, THREE.SRGBColorSpace);
+    compositePass.set({
+      params: {
+        background: [background.r, background.g, background.b],
         hasBackground,
-        hasBackdrop: backdropTexture && backdropGpuTexture ? 1 : 0,
-        environmentIntensity: Math.max(config.environmentIntensity, 0),
-        time: time * 0.001,
+        hasBackdrop,
       },
     });
 
@@ -2242,6 +2293,21 @@ export function createGlassObject(
   };
   document.addEventListener("visibilitychange", onVisibilityChange);
 
+  let themeTimer = 0;
+  const onThemeShift = () => {
+    if (config.background) return;
+    syncStudio();
+    window.clearTimeout(themeTimer);
+    themeTimer = window.setTimeout(syncStudio, 300);
+  };
+  const themeObserver = new MutationObserver(onThemeShift);
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class", "style", "data-theme"],
+  });
+  const schemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  schemeQuery.addEventListener("change", onThemeShift);
+
   acquireGpu()
     .then((device) => {
       if (disposed) return;
@@ -2273,11 +2339,11 @@ export function createGlassObject(
         addressModeV: "clamp-to-edge",
       });
       whiteTexture = createOnePixelTexture(gpu, [255, 255, 255, 255], "glass-object.white");
-      backdropFx = effect(gpu, BACKDROP_SHADER, {
+      backdropFx = gpuEffect(gpu, BACKDROP_SHADER, {
         set: { uBackdrop: whiteTexture, uSampler: linearSampler },
         label: "glass-object.backdrop",
       });
-      compositeFx = effect(gpu, COMPOSITE_SHADER, {
+      compositeFx = gpuEffect(gpu, COMPOSITE_SHADER, {
         set: { uBehind: behindTarget, uGlass: glassTarget, uSampler: linearSampler },
         label: "glass-object.composite",
       });
@@ -2302,6 +2368,7 @@ export function createGlassObject(
 
   return {
     setOptions(next: GlassObjectOptions) {
+      next = resolveOptions(DEFAULTS, next);
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
         if (typeof value === "function") continue;
@@ -2335,6 +2402,9 @@ export function createGlassObject(
       viewObserver?.disconnect();
       document.removeEventListener("visibilitychange", onVisibilityChange);
       motionQuery.removeEventListener("change", onMotionChange);
+      themeObserver.disconnect();
+      schemeQuery.removeEventListener("change", onThemeShift);
+      window.clearTimeout(themeTimer);
       controls.dispose();
       clearAsset();
       disposeGpuMeshes();

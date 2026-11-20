@@ -1,6 +1,6 @@
 "use client";
 
-import { Pipette } from "lucide-react";
+import { Pipette } from "@/components/icons";
 import { AnimatePresence } from "motion/react";
 import {
   useEffect,
@@ -60,7 +60,6 @@ export function CelebrateClient() {
   const stars = data?.slug === slug ? data.stars : 0;
   const loading = data?.slug !== slug && !error;
 
-  // Load whichever repo is currently selected.
   useEffect(() => {
     let cancelled = false;
     fetchStars(repo).then((result) => {
@@ -100,7 +99,6 @@ export function CelebrateClient() {
     setExporting(true);
     setError(null);
     stage.restart();
-    // Let the restarted run commit before the recorder starts sampling.
     await new Promise((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(resolve)),
     );
@@ -121,14 +119,13 @@ export function CelebrateClient() {
   const isPreset = PRESETS.some(
     (preset) => preset.hex.toLowerCase() === hex.toLowerCase(),
   );
-  // Keep the pipette legible against whatever custom colour is chosen.
   const [r, g, b] = hexToRgb(hex);
   const onColor = (r * 299 + g * 587 + b * 114) / 1000 > 140 ? "#000" : "#fff";
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-5 pt-28 pb-24 sm:px-8 sm:pt-36">
       <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">
+        <h1 className="text-2xl font-medium tracking-tight">
           Use Canvas UI to celebrate open source
         </h1>
         <p className="max-w-xl text-sm text-muted-foreground">

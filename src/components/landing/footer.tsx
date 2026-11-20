@@ -137,7 +137,7 @@ export function Footer({
               href="https://github.com/DavidHDev"
               target="_blank"
               rel="noreferrer"
-              className="text-foreground underline underline-offset-4 decoration-border transition-colors duration-150 hover:decoration-foreground"
+              className="text-foreground underline decoration-border-strong underline-offset-4 transition-colors duration-150 hover:decoration-foreground"
             >
               David Haz
             </a>

@@ -5,10 +5,6 @@ export interface RepoRef {
 
 const SEGMENT = /^[\w.-]+$/;
 
-/**
- * Accepts a full GitHub URL, a bare `github.com/owner/repo`, or just
- * `owner/repo`. Returns null when the input can't be read as a repo.
- */
 export function parseRepo(input: string): RepoRef | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
@@ -85,7 +81,6 @@ export function hexToRgb(hex: string): [number, number, number] {
   ];
 }
 
-/** Lift a colour toward white, used for spark highlights. */
 export function lighten(
   rgb: [number, number, number],
   amount: number,

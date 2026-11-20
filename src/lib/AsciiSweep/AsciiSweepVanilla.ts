@@ -1,5 +1,6 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
+import { resolveOptions } from "../options";
 export type AsciiSweepCharset = "ascii" | "blocks" | "binary";
 
 export type AsciiSweepBlend = "auto" | "add" | "over";
@@ -62,31 +63,21 @@ export interface AsciiSweepOptions {
 }
 
 export interface AsciiSweepSlot {
-  /** Canvas with layoutsubtree that hosts this panel's HTML. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
 }
 
 export interface AsciiSweepElements {
-  /** The two panel slots the effect sweeps between. */
   slots: [AsciiSweepSlot, AsciiSweepSlot];
-  /** Canvas the WebGL effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface AsciiSweepInstance {
-  /** Update effect options live. */
   setOptions: (options: AsciiSweepOptions) => void;
-  /** Sweep to slot 0 or 1. Pass an angle to override the configured direction for this sweep only. */
   sweep: (to: 0 | 1, options?: { angle?: number }) => void;
-  /** The slot the effect is resting on, or animating toward. */
   current: () => 0 | 1;
-  /** Force both panels to be captured again. */
   capture: () => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -99,7 +90,6 @@ const CHARSETS: Record<AsciiSweepCharset, number[]> = {
   binary: [0, 4591758, 15324974],
 };
 
-/** Seconds the settled effect takes to dissolve away. */
 const FADE_OUT_S = 0.45;
 
 const MAX_GLYPHS = 16;
@@ -223,8 +213,6 @@ void main () {
   }
 
   vec2 uv = vUv;
-  // Leave the panel's scrollbar alone. The output canvas spans the whole
-  // container, but the captured content stops where the scrollbar begins.
   if (uv.x > uMaxX) {
     outColor = vec4(0.0);
     return;
@@ -234,14 +222,11 @@ void main () {
   vec2 cell = floor(frag / cellPx);
   vec2 cellUv = (cell + 0.5) * cellPx / uResolution;
 
-  // Normalized coordinate along the sweep axis: 0 where the band enters, 1 where it leaves.
   float extent = max(0.5 * (abs(uDir.x) + abs(uDir.y)), 1e-4);
   float axis = dot(cellUv - 0.5, uDir) / (2.0 * extent) + 0.5;
 
   float band = max(uBand, 1e-3);
 
-  // Tear the edge apart per text row so the boundary eats lines instead of
-  // cutting straight. Seeds are time independent so the edge does not crawl.
   float rowSeed = hash21(vec2(floor(cell.y * 0.5), 19.7)) - 0.5;
   float cellSeed = hash21(cell * 0.37 + 3.1) - 0.5;
   float jitter = (rowSeed * 0.8 + cellSeed * 0.4) * uTurbulence * band;
@@ -249,23 +234,15 @@ void main () {
 
   float feather = max(clamp(uSoftness, 0.0, 1.0) * band, 1e-4);
 
-  // The head travels just past the far edge, far enough for the character band
-  // and its jittered edge to clear. Any glow still lingering past that is
-  // dissolved by the fade out, rather than by stretching the travel further,
-  // which would race the band across and leave the tail playing offscreen.
   float glowSpan = band * (1.0 + uTrail) + feather;
   float travel = 1.0 + band * (1.0 + uTrail) + uTurbulence * band;
   float head = uProgress * travel;
   float behind = head - axis;
-  // Swap inside the band, where the characters are densest, so the change is
-  // hidden. A wide crossfade would show both panels at once and read as ghosting.
   float swap = S(band * 0.30, band * 0.62, behind);
   float enter = S(0.0, feather, behind);
   float leave = 1.0 - S(band, band + max(uTrail, 0.001) * band, behind);
   float ascii = clamp(enter * leave, 0.0, 1.0);
 
-  // A wider, softer envelope than the character band itself, used for bloom so
-  // the glow reaches past the glyphs the way a phosphor tube does.
   float aura = (1.0 - S(0.0, glowSpan, abs(behind - band * 0.5)))
     * S(-feather * 2.0, feather, behind);
 
@@ -274,8 +251,6 @@ void main () {
 
   vec2 texUv = vec2(uv.x, 1.0 - uv.y);
   if (uDisplace > 0.001) {
-    // Displace in coarse horizontal slices that hold for a few frames, which
-    // reads as tape tearing rather than per-frame noise.
     float sliceH = max(cellPx * 1.6, 2.0);
     float slice = floor(frag.y / sliceH);
     float tick = floor(uTime * 12.0);
@@ -292,17 +267,11 @@ void main () {
     mix(uBg, rawFrom.rgb, rawFrom.a),
     mix(uBg, rawTo.rgb, rawTo.a),
     swap);
-  // Cover wherever either panel has ink, so the live DOM never shows through
-  // mid-sweep and the two panels never appear stacked.
   float alpha = max(rawFrom.a, rawTo.a);
 
   vec2 cellTexUv = vec2(cellUv.x, 1.0 - cellUv.y);
 
   if (aura > 0.002) {
-    // Bloom follows the edges the characters land on, not raw brightness.
-    // Gating on absolute contrast would light up every filled region, so a
-    // photo or a dark panel would bloom as one solid block. Comparing a sharp
-    // sample against a broad one leaves only text, icons and real detail.
     vec2 spread = vec2(cellPx) / max(uResolution, vec2(1.0));
     float edge = 0.0;
     for (int i = 0; i < 5; i++) {
@@ -339,11 +308,6 @@ void main () {
     float ink = abs(lum - uBgLum);
     float present = S(uThreshold * 0.5, uThreshold + 0.02, ink);
 
-    // Characters trace detail, not brightness. A broad average of the same
-    // spot tells us whether this cell sits on an edge (text, icons, the fine
-    // structure of a photo) or inside a flat region. Without this every cell
-    // over a photo or a filled panel passes the ink test at once and the band
-    // floods into a solid block of characters instead of following content.
     vec4 broadFrom = textureLod(uFrom, cellTexUv, uLod + 2.5);
     vec4 broadTo = textureLod(uTo, cellTexUv, uLod + 2.5);
     vec3 broadRgb = mix(
@@ -359,16 +323,10 @@ void main () {
       present *= 1.0 - clamp(uFlicker, 0.0, 1.0) * step(roll, 0.4);
     }
 
-    // A cell averaged over a glyph rarely exceeds a third of full contrast, so
-    // normalize into that range before picking a character. Without this every
-    // cell lands on the blank end of the ramp.
     float t = clamp(ink / 0.35, 0.0, 1.0);
     float amount = clamp((t - 0.5) * uContrast + 0.5 + uBrightness, 0.0, 1.0);
     amount = mix(amount, 1.0 - amount, clamp(uInvert, 0.0, 1.0));
 
-    // Nudge the character choice per cell and per tick. Neighbouring cells then
-    // land on different glyphs, which is what makes the band read as churning
-    // text rather than as a regular screen of identical marks.
     float churn = hash31(vec3(cell, floor(uTime * 15.0))) - 0.5;
     float picked = clamp(amount + churn * 0.25, 0.0, 1.0);
     int index = min(int(picked * float(uGlyphCount)), uGlyphCount - 1);
@@ -377,23 +335,16 @@ void main () {
     int pad = int(uSpacing);
     float on = glyphBit(index, ivec2(local.x - pad, local.y - pad));
 
-    // Push the sampled color away from the background so faint text still
-    // reads as ink rather than fading into the page.
     vec3 contentInk = clamp(uBg + (cellRgb - uBg) / max(ink, 0.2), 0.0, 1.0);
     vec3 glyphColor = mix(contentInk, uInk, clamp(uTint, 0.0, 1.0));
-    // Characters sit at their own brightness, so the band has depth instead of
-    // every mark burning at one level.
     float level = 0.72 + 0.28 * hash21(cell * 0.91 + 7.7);
     glyphColor *= level;
-    // The brightest characters burn toward white, like a hot phosphor core.
     glyphColor = mix(glyphColor, vec3(1.0),
       amount * amount * level * 0.55 * uAdditive);
 
     float strength = ascii * present;
     float lit = on * strength;
 
-    // Dim from the continuous band envelope rather than the per-cell mask, so
-    // the paper behind the characters darkens smoothly instead of in squares.
     base = mix(base, uBg, clamp(uFade, 0.0, 1.0) * ascii * (1.0 - on));
     base = mix(mix(base, glyphColor, lit), base + glyphColor * lit, uAdditive);
     alpha = max(alpha, lit);
@@ -835,7 +786,6 @@ interface SlotState {
   texture: WebGLTexture;
   fallbackCanvas: HTMLCanvasElement | null;
   dirty: boolean;
-  /** Timestamp of the most recent capture that reached the texture. */
   stamp: number;
   captureTimer: number;
   captureDeadline: number;
@@ -850,7 +800,7 @@ function initializeAsciiSweep(
   elements: AsciiSweepElements,
   options: AsciiSweepOptions,
 ): AsciiSweepInstance | null {
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { slots, output } = elements;
   if (!slots || slots.length !== 2) {
     throw new Error("AsciiSweep needs exactly two slots");
@@ -994,12 +944,12 @@ function initializeAsciiSweep(
   }));
 
   if (htmlInCanvas) {
-    for (const state of states) {
-      state.paintable.onpaint = () => {
+    for (const slot of states) {
+      slot.paintable.onpaint = () => {
         try {
-          state.ctx!.reset();
-          drawHtmlInCanvas(state.source, state.ctx!, state.content);
-          state.dirty = true;
+          slot.ctx!.reset();
+          drawHtmlInCanvas(slot.source, slot.ctx!, slot.content);
+          slot.dirty = true;
           wake();
         } catch {}
       };
@@ -1042,37 +992,19 @@ function initializeAsciiSweep(
   }
 
   function requestCapture(immediate = false) {
-    for (const state of states) {
-      if (htmlInCanvas) state.paintable.requestPaint?.();
-      else queueCapture(state, immediate);
+    for (const slot of states) {
+      if (htmlInCanvas) slot.paintable.requestPaint?.();
+      else queueCapture(slot, immediate);
     }
   }
 
-  /**
-   * Both panels stay visible and captured at all times, because a panel that
-   * is hidden when the browser repaints captures as an empty texture, and
-   * sweeping back to it would then reveal nothing. Instead the panel on show
-   * is stacked on top and painted opaque, so it occludes the other one while
-   * the effect is at rest and the real DOM stays live and selectable.
-   */
   function applyStacking(shown: 0 | 1) {
     states.forEach((state, index) => {
       const front = index === shown;
-      // The stacking layer is the source canvas under html-in-canvas, because
-      // the two canvases are the siblings that overlap. In the DOM fallback the
-      // content element is itself the layer.
       const layer = htmlInCanvas ? state.source : state.content;
-      // Scrollbars are deliberately left alone. Both panels are the same size
-      // and scroll together, so whichever is in front shows a scrollbar in the
-      // same place. Toggling it per panel would add and remove a scrollbar
-      // mid sweep and reflow the content underneath.
       layer.style.zIndex = front ? "1" : "0";
       layer.style.pointerEvents = front ? "" : "none";
-      // The captured element carries the page background so the front panel is
-      // opaque and fully occludes the one behind it.
       state.content.style.backgroundColor = backgroundCss;
-      // Keep the panel behind out of the tab order and the accessibility tree,
-      // so assistive tech never sees both panels at once.
       if (front) layer.removeAttribute("aria-hidden");
       else layer.setAttribute("aria-hidden", "true");
       layer.inert = !front;
@@ -1083,8 +1015,6 @@ function initializeAsciiSweep(
 
   function syncCanvasSize(): boolean {
     let changed = false;
-    // clientWidth excludes the panel's own scrollbar, so this is the fraction
-    // of the output the captured content actually covers.
     contentMaxX = Math.min(
       1,
       Math.max(
@@ -1101,18 +1031,18 @@ function initializeAsciiSweep(
       changed = true;
     }
     if (htmlInCanvas) {
-      for (const state of states) {
-        const sourceWidth = Math.max(1, Math.round(state.source.clientWidth * dpr));
-        const sourceHeight = Math.max(1, Math.round(state.source.clientHeight * dpr));
+      for (const slot of states) {
+        const sourceWidth = Math.max(1, Math.round(slot.source.clientWidth * dpr));
+        const sourceHeight = Math.max(1, Math.round(slot.source.clientHeight * dpr));
         if (
-          state.source.width !== sourceWidth ||
-          state.source.height !== sourceHeight
+          slot.source.width !== sourceWidth ||
+          slot.source.height !== sourceHeight
         ) {
-          state.source.width = sourceWidth;
-          state.source.height = sourceHeight;
+          slot.source.width = sourceWidth;
+          slot.source.height = sourceHeight;
           changed = true;
         }
-        state.paintable.requestPaint?.();
+        slot.paintable.requestPaint?.();
       }
     }
     return changed;
@@ -1210,7 +1140,7 @@ function initializeAsciiSweep(
   const controlled = () => config.progress >= 0;
 
   function render(now: number) {
-    for (const state of states) uploadSlot(state);
+    for (const slot of states) uploadSlot(slot);
 
     const from = states[fromSlot];
     const to = states[toSlot];
@@ -1234,8 +1164,6 @@ function initializeAsciiSweep(
     const spacing = Math.round(Math.min(Math.max(config.spacing, 0), 3));
     gl!.uniform1f(uniforms.uGlyphPx, glyphCss * dpr);
     gl!.uniform1f(uniforms.uSpacing, spacing);
-    // The content texture is in device pixels, so the LOD that averages a cell
-    // has to be derived in device pixels too.
     gl!.uniform1f(
       uniforms.uLod,
       Math.max(0, Math.log2((5 + 2 * spacing) * glyphCss * dpr) - 1),
@@ -1295,13 +1223,10 @@ function initializeAsciiSweep(
   let reducedMotion = motionQuery.matches;
 
   function ease(t: number): number {
-    // Ease out. Velocity is highest at the very start, so the band reacts the
-    // instant the panel changes instead of easing in from a standstill.
     const c = 1 - Math.min(Math.max(t, 0), 1);
     return 1 - c * c * c;
   }
 
-  /** Exact inverse of ease(), used to re-anchor the clock mid sweep. */
   function easeInverse(p: number): number {
     return 1 - Math.cbrt(1 - Math.min(Math.max(p, 0), 1));
   }
@@ -1329,10 +1254,6 @@ function initializeAsciiSweep(
     }
 
     if (sweeping) {
-      // Start timing from the first frame that actually renders. The first
-      // sweep pays for the initial panel paints, texture uploads and mipmap
-      // builds, and starting the clock at the click would spend that setup
-      // time out of the animation, leaving the band parked at the edge.
       if (!sweepClockSet) {
         sweepClockSet = true;
         sweepStart = now;
@@ -1345,16 +1266,12 @@ function initializeAsciiSweep(
       if (linear >= 1) {
         progress = 1;
         sweeping = false;
-        // Hold the effect for a couple of frames after it lands so the panel
-        // underneath is fully painted before the canvas goes transparent.
         settleFrames = 2;
         config.onSweepEnd?.(currentSlot);
       }
     }
 
     if (fadingOut) {
-      // Ease the whole effect out rather than switching it off, so any glow
-      // still lingering at the end of the travel dissolves instead of popping.
       const step = reducedMotion ? 1 : (now - lastFrame) / 1000 / FADE_OUT_S;
       active = Math.max(0, active - Math.max(step, 0));
       if (active <= 0.001) {
@@ -1394,24 +1311,14 @@ function initializeAsciiSweep(
   function sweep(to: 0 | 1, sweepOptions?: { angle?: number }) {
     if (destroyed || controlled()) return;
     const target: 0 | 1 = to === 1 ? 1 : 0;
-    // Already resting on this panel, or already on the way to it.
     if (sweeping ? target === toSlot : target === currentSlot) return;
 
     if (sweeping) {
-      // Interrupting a sweep in flight. Run the band backwards from wherever
-      // it currently is instead of restarting it at the edge, which would make
-      // it jump across the panel. Mirroring the progress and the direction
-      // together keeps the band in the same place on screen, and the swap it
-      // has already made is hidden under the characters as it passes back.
       progress = 1 - progress;
       const previousFrom = fromSlot;
       fromSlot = toSlot;
       toSlot = previousFrom;
-      // Wrapped, so a long run of reversals cannot drift the angle.
       sweepAngle = (sweepAngle + 180) % 360;
-      // Anchor the clock to the progress being resumed so the band keeps its
-      // speed. The remaining travel then takes exactly as long as it should:
-      // an immediate change of mind snaps back, a late one has further to go.
       sweepStart =
         performance.now() -
         easeInverse(progress) * Math.max(config.duration, 0.05) * 1000;
@@ -1421,8 +1328,6 @@ function initializeAsciiSweep(
       toSlot = target;
       progress = 0;
       sweepAngle = sweepOptions?.angle ?? config.angle;
-      // Anchor on the first rendered frame instead, so the one-off cost of the
-      // first paint and texture upload is not deducted from the animation.
       sweepClockSet = false;
     }
 
@@ -1431,8 +1336,6 @@ function initializeAsciiSweep(
     settleFrames = 0;
     fadingOut = false;
     active = 1;
-    // Raise the destination panel now. Both panels are always captured, so the
-    // textures for either side of the sweep are already valid.
     applyStacking(currentSlot);
     requestCapture(true);
     config.onSweepStart?.(target);
@@ -1470,7 +1373,7 @@ function initializeAsciiSweep(
     start();
   });
   resizeObserver.observe(output);
-  for (const state of states) resizeObserver.observe(state.content);
+  for (const slot of states) resizeObserver.observe(slot.content);
 
   const intersection = new IntersectionObserver((entries) => {
     visible = entries[entries.length - 1]?.isIntersecting ?? true;
@@ -1478,30 +1381,27 @@ function initializeAsciiSweep(
   });
   intersection.observe(output);
 
-  // Keep both panels at the same scroll offset. The panel behind is inert, so
-  // it never scrolls on its own, and a sweep would otherwise reveal the
-  // incoming content at the top while the outgoing one sits further down.
   let syncingScroll = false;
   function onPanelScroll(event: Event) {
     if (syncingScroll || destroyed) return;
     const source = event.target as HTMLElement | null;
     if (!source) return;
     syncingScroll = true;
-    for (const state of states) {
-      if (state.content === source) continue;
-      if (state.content.scrollTop !== source.scrollTop) {
-        state.content.scrollTop = source.scrollTop;
+    for (const slot of states) {
+      if (slot.content === source) continue;
+      if (slot.content.scrollTop !== source.scrollTop) {
+        slot.content.scrollTop = source.scrollTop;
       }
-      if (state.content.scrollLeft !== source.scrollLeft) {
-        state.content.scrollLeft = source.scrollLeft;
+      if (slot.content.scrollLeft !== source.scrollLeft) {
+        slot.content.scrollLeft = source.scrollLeft;
       }
     }
     syncingScroll = false;
     requestCapture();
     start();
   }
-  for (const state of states) {
-    state.content.addEventListener("scroll", onPanelScroll, { passive: true });
+  for (const slot of states) {
+    slot.content.addEventListener("scroll", onPanelScroll, { passive: true });
   }
 
   function onPageVisibility() {
@@ -1525,25 +1425,25 @@ function initializeAsciiSweep(
       });
 
   function onFallbackVisualChange() {
-    for (const state of states) queueCapture(state);
+    for (const slot of states) queueCapture(slot);
   }
 
   if (!htmlInCanvas) {
-    for (const state of states) {
-      state.content.addEventListener("load", onFallbackVisualChange, true);
-      state.content.addEventListener(
+    for (const slot of states) {
+      slot.content.addEventListener("load", onFallbackVisualChange, true);
+      slot.content.addEventListener(
         "loadeddata",
         onFallbackVisualChange,
         true,
       );
-      state.content.addEventListener("input", onFallbackVisualChange, true);
-      state.content.addEventListener("change", onFallbackVisualChange, true);
-      state.content.addEventListener(
+      slot.content.addEventListener("input", onFallbackVisualChange, true);
+      slot.content.addEventListener("change", onFallbackVisualChange, true);
+      slot.content.addEventListener(
         "transitionend",
         onFallbackVisualChange,
         true,
       );
-      state.content.addEventListener(
+      slot.content.addEventListener(
         "animationend",
         onFallbackVisualChange,
         true,
@@ -1554,6 +1454,7 @@ function initializeAsciiSweep(
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
         if (typeof value === "function") continue;
@@ -1600,29 +1501,29 @@ function initializeAsciiSweep(
       motionQuery.removeEventListener("change", onMotionChange);
       document.removeEventListener("visibilitychange", onPageVisibility);
       if (!htmlInCanvas) {
-        for (const state of states) {
-          state.content.removeEventListener("load", onFallbackVisualChange, true);
-          state.content.removeEventListener(
+        for (const slot of states) {
+          slot.content.removeEventListener("load", onFallbackVisualChange, true);
+          slot.content.removeEventListener(
             "loadeddata",
             onFallbackVisualChange,
             true,
           );
-          state.content.removeEventListener(
+          slot.content.removeEventListener(
             "input",
             onFallbackVisualChange,
             true,
           );
-          state.content.removeEventListener(
+          slot.content.removeEventListener(
             "change",
             onFallbackVisualChange,
             true,
           );
-          state.content.removeEventListener(
+          slot.content.removeEventListener(
             "transitionend",
             onFallbackVisualChange,
             true,
           );
-          state.content.removeEventListener(
+          slot.content.removeEventListener(
             "animationend",
             onFallbackVisualChange,
             true,
@@ -1633,12 +1534,12 @@ function initializeAsciiSweep(
           onFallbackVisualChange,
         );
       }
-      for (const state of states) {
-        state.content.removeEventListener("scroll", onPanelScroll);
-        window.clearTimeout(state.captureTimer);
-        window.clearTimeout(state.scrollTimer);
-        gl!.deleteTexture(state.texture);
-        if (htmlInCanvas) state.paintable.onpaint = null;
+      for (const slot of states) {
+        slot.content.removeEventListener("scroll", onPanelScroll);
+        window.clearTimeout(slot.captureTimer);
+        window.clearTimeout(slot.scrollTimer);
+        gl!.deleteTexture(slot.texture);
+        if (htmlInCanvas) slot.paintable.onpaint = null;
       }
       gl!.deleteProgram(program);
       gl!.deleteShader(vertexShader);

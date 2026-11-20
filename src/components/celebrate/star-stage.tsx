@@ -15,16 +15,10 @@ const IDLE_MS = 700;
 const COUNT_MS = 4800;
 const TAIL_MS = 1800;
 
-/** Full length of one run, used to time the recording. */
 export const RUN_MS = IDLE_MS + COUNT_MS + TAIL_MS;
 
-/**
- * Star count at which the fire reaches full intensity. Anything above this
- * burns identically, so a 200k-star repo doesn't wash the card out.
- */
 const FULL_HEAT_STARS = 4000;
 
-/** Floor so small repos still read as "on fire" rather than barely lit. */
 const MIN_CEILING = 0.55;
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -35,10 +29,6 @@ function easeInOutCubic(t: number) {
 
 export interface StarStageHandle {
   restart: () => void;
-  /**
-   * The Blaze output canvas. Both shaders composite the captured HTML into
-   * their own output, so this single canvas holds the finished picture.
-   */
   getOutputCanvas: () => HTMLCanvasElement | null;
 }
 
@@ -71,8 +61,6 @@ export function StarStage({ stars, slug, hex, ref }: StarStageProps) {
     },
   }));
 
-  // Everything is authored against DESIGN_W and scaled, so the composition is
-  // identical at any container width and the export stays 16:9.
   useEffect(() => {
     if (!root) return;
     const observer = new ResizeObserver(([entry]) =>
@@ -196,7 +184,7 @@ export function StarStage({ stars, slug, hex, ref }: StarStageProps) {
                 style={{
                   fontSize: px(baseNumber),
                   lineHeight: 0.92,
-                  fontWeight: 600,
+                  fontWeight: 500,
                   letterSpacing: "-0.055em",
                   fontVariantNumeric: "tabular-nums",
                   color: "#ffffff",

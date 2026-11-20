@@ -1,9 +1,10 @@
 "use client";
 
-import { Pipette, RotateCcw } from "lucide-react";
+import { Pipette, RotateCcw } from "@/components/icons";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   useCallback,
+  useContext,
   useEffect,
   useId,
   useLayoutEffect,
@@ -14,6 +15,8 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { createPortal } from "react-dom";
+
+import { DemoPortalContext } from "@/components/demos/demo-context";
 
 type Hsv = { h: number; s: number; v: number };
 
@@ -567,6 +570,7 @@ export function ColorPopover({
   } | null>(null);
   const shouldReduceMotion = useReducedMotion();
   const eyeDropper = useEyeDropper();
+  const portalTarget = useContext(DemoPortalContext);
 
   const initial = normalizeHex(value) ?? "#ffffff";
   const [state, setState] = useState<{ hsv: Hsv; draft: string; seen: string }>(
@@ -671,7 +675,7 @@ export function ColorPopover({
           onClose();
         }
       }}
-      className="fixed z-50 flex flex-col gap-2 rounded-t-[94px] rounded-b-2xl border border-border/60 bg-popover/95 px-3 pt-2.5 pb-3 shadow-xl backdrop-blur-xl outline-none"
+      className="fixed z-[60] flex flex-col gap-2 rounded-t-[94px] rounded-b-2xl border border-border bg-popover/95 px-3 pt-2.5 pb-3 shadow-[var(--shadow-popover)] backdrop-blur-xl outline-none"
       style={{
         width: POPOVER_WIDTH,
         top: pos?.top ?? -9999,
@@ -761,7 +765,7 @@ export function ColorPopover({
         )}
       </div>
     </motion.div>,
-    document.body,
+    portalTarget ?? document.body,
   );
 }
 
@@ -775,9 +779,7 @@ export function ColorRow({
   label: string;
   value: string;
   onValueChange: (value: string) => void;
-  /** Text shown instead of the hex value, e.g. "Auto". */
   displayValue?: string;
-  /** When set, shows a reset icon that reverts the row. */
   onReset?: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -790,7 +792,7 @@ export function ColorRow({
   }, []);
 
   return (
-    <div className="flex h-8 w-full shrink-0 items-center justify-between rounded-lg bg-muted/60 px-3 transition-colors select-none hover:bg-muted/80">
+    <div className="flex h-8 w-full shrink-0 items-center justify-between rounded-control bg-muted/60 px-3 transition-colors select-none hover:bg-muted/80">
       <span className="text-[12.5px] font-medium text-foreground/90">
         {label}
       </span>
@@ -801,7 +803,7 @@ export function ColorRow({
             onClick={onReset}
             aria-label={`Reset ${label}`}
             title="Reset"
-            className="inline-flex size-5 cursor-pointer items-center justify-center rounded-full text-muted-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground"
+            className="inline-flex size-5 cursor-pointer items-center justify-center rounded-[6px] text-muted-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground"
           >
             <RotateCcw aria-hidden className="size-3" />
           </button>
@@ -823,7 +825,7 @@ export function ColorRow({
             {displayValue ?? value}
           </span>
           <span
-            className="size-4.5 rounded-full border border-border/70"
+            className="size-4.5 rounded-[5px] border border-border-strong"
             style={{ background: value }}
           />
         </button>

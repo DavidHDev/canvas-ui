@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
+import { Menu, X } from "@/components/icons";
 
 import { cn } from "@/lib/utils";
 
@@ -22,7 +22,7 @@ export function MobileMenu() {
         aria-label={open ? "Close menu" : "Open menu"}
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className="grid size-8 place-items-center rounded-full border border-border/70 text-muted-foreground transition-[color,transform] duration-150 ease-out hover:text-foreground active:scale-95 motion-reduce:transition-none"
+        className="btn-icon"
       >
         <Menu
           aria-hidden
@@ -42,7 +42,7 @@ export function MobileMenu() {
 
       <div
         className={cn(
-          "absolute inset-x-0 top-full border-b border-border/60 bg-background shadow-lg shadow-black/5 transition-[opacity,transform] [transition-timing-function:cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none dark:shadow-black/20",
+          "absolute inset-x-0 top-full border-b border-border bg-background shadow-[var(--shadow-float)] transition-[opacity,transform] ease-drawer motion-reduce:transition-none",
           open
             ? "translate-y-0 opacity-100 duration-300"
             : "pointer-events-none -translate-y-1.5 opacity-0 duration-150",
@@ -54,7 +54,7 @@ export function MobileMenu() {
               key={link.href}
               style={{ transitionDelay: open ? `${40 + i * 35}ms` : "0ms" }}
               className={cn(
-                "transition-[opacity,transform] [transition-timing-function:cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none",
+                "transition-[opacity,transform] ease-out motion-reduce:transition-none",
                 open
                   ? "translate-y-0 opacity-100 duration-250"
                   : "-translate-y-1 opacity-0 duration-150",
@@ -63,7 +63,7 @@ export function MobileMenu() {
               <Link
                 href={link.href}
                 onClick={() => setOpen(false)}
-                className="block rounded-lg px-2 py-2.5 text-[15px] text-muted-foreground transition-colors duration-150 hover:text-foreground"
+                className="block rounded-control px-2 py-2.5 text-[15px] text-muted-foreground transition-colors duration-150 hover:bg-[var(--surface-hover)] hover:text-foreground"
               >
                 {link.label}
               </Link>

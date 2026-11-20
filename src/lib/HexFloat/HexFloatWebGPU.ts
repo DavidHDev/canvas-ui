@@ -1,7 +1,7 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
 import {
-  effect,
+  effect as gpuEffect,
   frame as gpuFrame,
   init,
   sampler,
@@ -13,6 +13,7 @@ import {
   type Target as GpuTarget,
 } from "vgpu";
 import type { Texture } from "vgpu";
+import { resolveOptions } from "../options";
 
 export interface HexFloatOptions {
   /** Width of each hex tile in CSS pixels. */
@@ -52,20 +53,14 @@ export interface HexFloatOptions {
 }
 
 export interface HexFloatElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGPU effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface HexFloatInstance {
-  /** Update effect options live. */
   setOptions: (options: HexFloatOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -98,7 +93,7 @@ type ElementImageContext = CanvasRenderingContext2D & {
   drawElementImage?: (element: Element, x: number, y: number) => void;
 };
 
-const MAIN_SHADER = /* wgsl */ `
+const MAIN_SHADER = `
 struct Params {
   res: vec2f,
   size: f32,
@@ -384,7 +379,7 @@ fn shade(sUv: vec2f) -> vec4f {
   return c * 0.5;
 }`;
 
-const SPLAT_SHADER = /* wgsl */ `
+const SPLAT_SHADER = `
 struct Params {
   aspect: f32,
   radius: f32,
@@ -403,7 +398,7 @@ struct Params {
   return vec4f(base + splat, 1.0);
 }`;
 
-const ADVECT_SHADER = /* wgsl */ `
+const ADVECT_SHADER = `
 struct Params {
   texelSize: vec2f,
   dt: f32,
@@ -421,7 +416,7 @@ struct Params {
   return outColor;
 }`;
 
-const CLEAR_SHADER = /* wgsl */ `
+const CLEAR_SHADER = `
 struct Params {
   value: f32,
 }
@@ -433,7 +428,7 @@ struct Params {
   return params.value * textureSampleLevel(uTexture, uSampler, uv, 0.0);
 }`;
 
-const DIVERGENCE_SHADER = /* wgsl */ `
+const DIVERGENCE_SHADER = `
 struct Params {
   texelSize: vec2f,
 }
@@ -459,7 +454,7 @@ struct Params {
   return vec4f(div, 0.0, 0.0, 1.0);
 }`;
 
-const CURL_SHADER = /* wgsl */ `
+const CURL_SHADER = `
 struct Params {
   texelSize: vec2f,
 }
@@ -480,7 +475,7 @@ struct Params {
   return vec4f(vorticity, 0.0, 0.0, 1.0);
 }`;
 
-const VORTICITY_SHADER = /* wgsl */ `
+const VORTICITY_SHADER = `
 struct Params {
   texelSize: vec2f,
   curlStrength: f32,
@@ -509,7 +504,7 @@ struct Params {
   return vec4f(velocity + force * params.dt, 0.0, 1.0);
 }`;
 
-const PRESSURE_SHADER = /* wgsl */ `
+const PRESSURE_SHADER = `
 struct Params {
   texelSize: vec2f,
 }
@@ -532,7 +527,7 @@ struct Params {
   return vec4f(pressure, 0.0, 0.0, 1.0);
 }`;
 
-const GRADIENT_SHADER = /* wgsl */ `
+const GRADIENT_SHADER = `
 struct Params {
   texelSize: vec2f,
 }
@@ -555,7 +550,7 @@ struct Params {
   return vec4f(velocity, 0.0, 1.0);
 }`;
 
-const BRIGHT_SHADER = /* wgsl */ `
+const BRIGHT_SHADER = `
 @group(0) @binding(0) var uScene: texture_2d<f32>;
 @group(0) @binding(1) var uSampler: sampler;
 
@@ -565,7 +560,7 @@ const BRIGHT_SHADER = /* wgsl */ `
   return vec4f(c * smoothstep(0.55, 0.95, l), 1.0);
 }`;
 
-const BLUR_SHADER = /* wgsl */ `
+const BLUR_SHADER = `
 struct Params {
   dir: vec2f,
 }
@@ -582,7 +577,7 @@ struct Params {
   return vec4f(c, 1.0);
 }`;
 
-const COMPOSITE_SHADER = /* wgsl */ `
+const COMPOSITE_SHADER = `
 struct Params {
   resolution: vec2f,
   bloomAmt: f32,
@@ -627,14 +622,12 @@ export function supportsHtmlInCanvas(): boolean {
   );
 }
 
-/** True when the browser exposes WebGPU. The device itself is requested lazily. */
 export function supportsWebGPU(): boolean {
   return typeof navigator !== "undefined" && Boolean(navigator.gpu);
 }
 
 let sharedGpu: Promise<Gpu> | null = null;
 
-/** One WebGPU device per page, shared by every HexFloat instance. */
 function acquireGpu(): Promise<Gpu> {
   if (!sharedGpu) {
     sharedGpu = init().catch((error) => {
@@ -697,7 +690,7 @@ export function createHexFloat(
   options: HexFloatOptions = {},
 ): HexFloatInstance | null {
   if (!supportsWebGPU()) return null;
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
@@ -933,7 +926,6 @@ export function createHexFloat(
       contentTexture.size[0] !== w ||
       contentTexture.size[1] !== h
     ) {
-      // A new wrapper invalidates vgpu's cached bindings to the old texture.
       contentTexture?.destroy();
       contentTexture = gpu!.device.createTexture({
         size: [w, h],
@@ -1264,7 +1256,7 @@ export function createHexFloat(
         addressModeV: "clamp-to-edge",
       });
       ensureSim();
-      mainFx = effect(gpu, MAIN_SHADER, {
+      mainFx = gpuEffect(gpu, MAIN_SHADER, {
         label: "hexfloat.main",
         set: {
           uContentSampler: linear,
@@ -1273,47 +1265,47 @@ export function createHexFloat(
           uFlow: flowTarget!.read,
         },
       });
-      splatFx = effect(gpu, SPLAT_SHADER, {
+      splatFx = gpuEffect(gpu, SPLAT_SHADER, {
         label: "hexfloat.splat",
         set: { uSampler: linear, uTarget: velocity!.read },
       });
-      advectFx = effect(gpu, ADVECT_SHADER, {
+      advectFx = gpuEffect(gpu, ADVECT_SHADER, {
         label: "hexfloat.advect",
         set: { uSampler: linear, uVelocity: velocity!.read, uSource: velocity!.read },
       });
-      clearFx = effect(gpu, CLEAR_SHADER, {
+      clearFx = gpuEffect(gpu, CLEAR_SHADER, {
         label: "hexfloat.clear",
         set: { uSampler: linear, uTexture: pressure!.read },
       });
-      divergenceFx = effect(gpu, DIVERGENCE_SHADER, {
+      divergenceFx = gpuEffect(gpu, DIVERGENCE_SHADER, {
         label: "hexfloat.divergence",
         set: { uSampler: linear, uVelocity: velocity!.read },
       });
-      curlFx = effect(gpu, CURL_SHADER, {
+      curlFx = gpuEffect(gpu, CURL_SHADER, {
         label: "hexfloat.curl",
         set: { uSampler: linear, uVelocity: velocity!.read },
       });
-      vorticityFx = effect(gpu, VORTICITY_SHADER, {
+      vorticityFx = gpuEffect(gpu, VORTICITY_SHADER, {
         label: "hexfloat.vorticity",
         set: { uSampler: linear, uVelocity: velocity!.read, uCurl: curl! },
       });
-      pressureFx = effect(gpu, PRESSURE_SHADER, {
+      pressureFx = gpuEffect(gpu, PRESSURE_SHADER, {
         label: "hexfloat.pressure",
         set: { uSampler: linear, uPressure: pressure!.read, uDivergence: divergence! },
       });
-      gradientFx = effect(gpu, GRADIENT_SHADER, {
+      gradientFx = gpuEffect(gpu, GRADIENT_SHADER, {
         label: "hexfloat.gradient",
         set: { uSampler: linear, uPressure: pressure!.read, uVelocity: velocity!.read },
       });
-      brightFx = effect(gpu, BRIGHT_SHADER, {
+      brightFx = gpuEffect(gpu, BRIGHT_SHADER, {
         label: "hexfloat.bright",
         set: { uSampler: linear, uScene: flowTarget!.read },
       });
-      blurFx = effect(gpu, BLUR_SHADER, {
+      blurFx = gpuEffect(gpu, BLUR_SHADER, {
         label: "hexfloat.blur",
         set: { uSampler: linear, uScene: flowTarget!.read },
       });
-      compositeFx = effect(gpu, COMPOSITE_SHADER, {
+      compositeFx = gpuEffect(gpu, COMPOSITE_SHADER, {
         label: "hexfloat.composite",
         set: { uSampler: linear, uScene: flowTarget!.read, uBloomTex: flowTarget!.read },
       });
@@ -1557,10 +1549,21 @@ export function createHexFloat(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   const mutation = new MutationObserver(() => {
@@ -1574,6 +1577,7 @@ export function createHexFloat(
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) => config[key as keyof HexFloatOptions] !== value,
@@ -1601,6 +1605,7 @@ export function createHexFloat(
       window.removeEventListener("mouseup", onSelEnd, true);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       mutation.disconnect();
       motionQuery.removeEventListener("change", onMotionChange);
       contentTexture?.destroy();

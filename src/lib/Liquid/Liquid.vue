@@ -8,7 +8,9 @@ import {
   type LiquidOptions,
 } from "./LiquidVanilla";
 
-const props = defineProps<LiquidOptions>();
+const props = withDefaults(defineProps<LiquidOptions>(), {
+  rainbow: undefined,
+});
 
 const sourceEl = ref<HTMLCanvasElement | null>(null);
 const contentEl = ref<HTMLDivElement | null>(null);

@@ -27,9 +27,9 @@ function GalleryCard({
     <Link
       href={component.href}
       tabIndex={focusable ? undefined : -1}
-      className="group block w-64 shrink-0 rounded-[calc(var(--radius)+0.25rem+1px)] border border-border/60 bg-background p-1 transition-colors duration-150 hover:bg-muted/50 sm:w-72"
+      className="group block w-64 shrink-0 frame transition-colors duration-150 ease-out hover:bg-muted/70 sm:w-72"
     >
-      <div className="relative flex aspect-4/3 items-center justify-center overflow-hidden rounded-lg border border-dashed border-border/70 bg-background/60">
+      <div className="relative flex aspect-4/3 items-center justify-center overflow-hidden frame-inset bg-background">
         <PreviewVideo
           src={component.video}
           className="absolute inset-0 size-full object-cover"
@@ -102,9 +102,9 @@ export function GalleryMarquee() {
           ) : (
             <div
               aria-hidden
-              className="w-64 rounded-2xl border border-transparent p-2 sm:w-72"
+              className="w-64 rounded-frame p-[var(--frame-gap)] sm:w-72"
             >
-              <div className="aspect-4/3 rounded-lg border border-transparent" />
+              <div className="aspect-4/3 rounded-control" />
             </div>
           )}
         </div>

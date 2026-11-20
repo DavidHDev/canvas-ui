@@ -1,22 +1,25 @@
 "use client";
 
 import { motion, useReducedMotion } from "motion/react";
-import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { cn } from "@/lib/utils";
 
 export interface ScrubberProps {
   className?: string;
-  /** Number of decimal places to display. */
   decimals?: number;
   defaultValue?: number;
-  /** Label displayed on the left side of the track. */
   label?: string;
   max?: number;
   min?: number;
   onValueChange?: (value: number) => void;
   step?: number;
-  /** Number of tick marks (0 to hide). */
   ticks?: number;
   value?: number;
 }
@@ -28,6 +31,7 @@ const roundToStep = (val: number, step: number, min: number) =>
   Math.round((val - min) / step) * step + min;
 
 const HOVER_QUERY = "(hover: hover) and (pointer: fine)";
+const EASE_OUT_CSS = "cubic-bezier(0.23, 1, 0.32, 1)";
 
 function subscribeHover(callback: () => void) {
   const mq = window.matchMedia(HOVER_QUERY);
@@ -51,6 +55,9 @@ export function Scrubber({
 }: ScrubberProps) {
   const shouldReduceMotion = useReducedMotion();
   const trackRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef<HTMLDivElement>(null);
+  const valueRef = useRef<HTMLDivElement>(null);
+  const [metrics, setMetrics] = useState({ track: 0, label: 0, value: 0 });
   const [internalValue, setInternalValue] = useState(defaultValue);
   const [isDragging, setIsDragging] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
@@ -65,6 +72,39 @@ export function Scrubber({
   const range = max - min;
   const percentage = range > 0 ? ((value - min) / range) * 100 : 0;
   const isActive = isDragging || (isHoverDevice && isHovering);
+
+  useEffect(() => {
+    const track = trackRef.current;
+    const labelEl = labelRef.current;
+    const valueEl = valueRef.current;
+    if (!track || !labelEl || !valueEl) return;
+    const observer = new ResizeObserver(() => {
+      const next = {
+        track: track.offsetWidth,
+        label: labelEl.offsetWidth,
+        value: valueEl.offsetWidth,
+      };
+      setMetrics((prev) =>
+        prev.track === next.track &&
+        prev.label === next.label &&
+        prev.value === next.value
+          ? prev
+          : next,
+      );
+    });
+    observer.observe(track);
+    observer.observe(labelEl);
+    observer.observe(valueEl);
+    return () => observer.disconnect();
+  }, []);
+
+  const thumbX = (percentage / 100) * metrics.track - 5;
+  const TEXT_INSET = 12;
+  const TEXT_GAP = 6;
+  const overText =
+    metrics.track > 0 &&
+    (thumbX < TEXT_INSET + metrics.label + TEXT_GAP ||
+      thumbX > metrics.track - TEXT_INSET - metrics.value - TEXT_GAP);
 
   const setValue = useCallback(
     (newValue: number) => {
@@ -158,7 +198,7 @@ export function Scrubber({
         aria-valuemax={max}
         aria-valuemin={min}
         aria-valuenow={Number(value.toFixed(decimals))}
-        className="relative h-8 cursor-pointer overflow-hidden rounded-lg bg-muted/60 outline-offset-2 hover:bg-muted/80 focus-visible:outline-2 focus-visible:outline-ring"
+        className="relative h-8 cursor-pointer overflow-hidden rounded-control bg-muted/60 transition-colors duration-150 hover:bg-muted/80"
         onKeyDown={handleKeyDown}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
@@ -173,12 +213,10 @@ export function Scrubber({
         tabIndex={0}
       >
         <div
-          className="pointer-events-none absolute inset-y-0 left-0 rounded-lg bg-foreground/10"
+          className="pointer-events-none absolute inset-0 rounded-control bg-foreground/10"
           style={{
-            width: `${percentage}%`,
-            transition: isDragging
-              ? "none"
-              : "width 150ms cubic-bezier(0.23, 1, 0.32, 1)",
+            transform: `translateX(${percentage - 100}%)`,
+            transition: isDragging ? "none" : `transform 150ms ${EASE_OUT_CSS}`,
           }}
         />
 
@@ -198,32 +236,34 @@ export function Scrubber({
         )}
 
         <div
-          className="pointer-events-none absolute z-3 -ml-[5px]"
+          className="pointer-events-none absolute inset-0 z-3"
           style={{
-            top: "50%",
-            left: `${percentage}%`,
-            transform: "translateX(-50%) translateY(-50%)",
-            transition: isDragging
-              ? "none"
-              : "left 150ms cubic-bezier(0.23, 1, 0.32, 1)",
+            transform: `translateX(${percentage}%)`,
+            transition: isDragging ? "none" : `transform 150ms ${EASE_OUT_CSS}`,
           }}
         >
-          <motion.div
-            animate={{
-              opacity: isActive ? 0.8 : 0.2,
-              scaleX: isActive ? 1 : 0.7,
-              scaleY: isActive ? 1 : 0.7,
-            }}
-            className="h-4 w-1 rounded-full bg-foreground/90"
-            transition={springConfig}
-          />
+          <div className="absolute top-1/2 left-0 -ml-[5px] -translate-x-1/2 -translate-y-1/2">
+            <motion.div
+              animate={{
+                opacity: overText ? 0 : isActive ? 0.8 : 0.2,
+                scaleX: isActive ? 1 : 0.7,
+                scaleY: isActive ? 1 : 0.7,
+              }}
+              className="h-4 w-1 rounded-full bg-foreground/90"
+              transition={springConfig}
+            />
+          </div>
         </div>
 
-        <div className="pointer-events-none absolute top-1/2 left-3 z-4 -translate-y-1/2 text-[12.5px] font-medium whitespace-nowrap text-foreground/90">
+        <div
+          ref={labelRef}
+          className="pointer-events-none absolute top-1/2 left-3 z-4 -translate-y-1/2 text-[12.5px] font-medium whitespace-nowrap text-foreground/90"
+        >
           {label}
         </div>
 
         <div
+          ref={valueRef}
           className="pointer-events-none absolute top-1/2 right-3 z-4 -translate-y-1/2 text-[12.5px] font-medium text-muted-foreground"
           style={{ fontVariantNumeric: "tabular-nums" }}
         >

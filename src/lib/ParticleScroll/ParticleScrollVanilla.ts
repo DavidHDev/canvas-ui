@@ -1,5 +1,6 @@
 import { getCanvasPixelRatio, createCanvasResizeObserver } from "../canvas-viewport";
 import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "../html-in-canvas";
+import { resolveOptions } from "../options";
 export interface ParticleScrollOptions {
   /** Viewport fraction of the formation line. Content assembles as it scrolls up past this line and dissolves back below it. */
   point?: number;
@@ -28,20 +29,14 @@ export interface ParticleScrollOptions {
 }
 
 export interface ParticleScrollElements {
-  /** Canvas with layoutsubtree that hosts the HTML content. */
   source: HTMLCanvasElement;
-  /** The scrollable element inside the source canvas that gets captured. */
   content: HTMLElement;
-  /** Canvas the WebGL effect renders to. */
   output: HTMLCanvasElement;
 }
 
 export interface ParticleScrollInstance {
-  /** Update effect options live. */
   setOptions: (options: ParticleScrollOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -237,7 +232,7 @@ export function createParticleScroll(
   elements: ParticleScrollElements,
   options: ParticleScrollOptions = {},
 ): ParticleScrollInstance | null {
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
 
   const sourceCtx = source.getContext("2d") as ElementImageContext | null;
@@ -250,8 +245,6 @@ export function createParticleScroll(
     typeof paintable.requestPaint === "function",
   );
 
-  // No particle renderer is available without a DOM capture. Leave the plain
-  // HTML fallback to the browser without creating a GPU overlay.
   if (!htmlInCanvas) return null;
 
   const gl = output.getContext("webgl2", {
@@ -665,14 +658,26 @@ export function createParticleScroll(
   observer.observe(output);
   observer.observe(content);
 
+  let intersecting = true;
+  function syncVisibility() {
+    visible = intersecting && document.visibilityState !== "hidden";
+    if (visible) {
+      start();
+    } else if (running) {
+      cancelAnimationFrame(raf);
+      running = false;
+    }
+  }
   const intersection = new IntersectionObserver((entries) => {
-    visible = entries[entries.length - 1]?.isIntersecting ?? true;
-    if (visible) start();
+    intersecting = entries[entries.length - 1]?.isIntersecting ?? true;
+    syncVisibility();
   });
+  document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
   return {
     setOptions(next) {
+      next = resolveOptions(DEFAULTS, next);
       if (
         !Object.entries(next).some(
           ([key, value]) =>
@@ -693,6 +698,7 @@ export function createParticleScroll(
       content.removeEventListener("scroll", onScroll);
       observer.disconnect();
       intersection.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
       motionQuery.removeEventListener("change", onMotionChange);
       gl!.deleteTexture(contentTexture);
       gl!.deleteTexture(rowTex);

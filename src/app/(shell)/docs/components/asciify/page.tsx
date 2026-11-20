@@ -6,7 +6,7 @@ import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
 import { highlight } from "@/components/docs/highlight";
 import { AsciifyDemo } from "@/demos/asciify-demo";
-import { DemoImageSection } from "@/demos/demo-image-cycler";
+import { PageDemoPhoto } from "@/demos/scenes";
 
 export const metadata: Metadata = {
   title: "Asciify",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 const DESCRIPTION =
-  "A soft lens follows your cursor, redrawing the page beneath it as ascii characters. Move around, this page is the demo.";
+  "A soft lens follows your cursor, redrawing the page beneath it as ascii characters.";
 
 const API_REFERENCE: ApiProp[] = [
   {
@@ -147,14 +147,9 @@ export default async function AsciifyPage() {
         tags={["html-in-canvas"]}
         requiresHtmlInCanvas
         apiReference={API_REFERENCE}
-        beforeInstall={
-          <DemoImageSection
-            hint="Move your cursor over the photo to see how it reads as ascii characters."
-            alt="Demo photo for the Asciify effect"
-          />
-        }
+        beforeInstall={<PageDemoPhoto photo={1} />}
       />
-      <div className="mx-auto mt-24 w-full max-w-3xl">
+      <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />
       </div>
     </AsciifyDemo>

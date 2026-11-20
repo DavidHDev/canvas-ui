@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { resolveOptions } from "../options";
 
 export type DitherMethod = "bayer" | "halftone" | "floyd";
 
@@ -62,16 +63,12 @@ export interface DitheredObjectOptions {
 }
 
 export interface DitheredObjectElements {
-  /** Canvas the scene renders to. */
   canvas: HTMLCanvasElement;
 }
 
 export interface DitheredObjectInstance {
-  /** Update options live. Changing src loads the new asset. */
   setOptions: (options: DitheredObjectOptions) => void;
-  /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
-  /** Stop the loop and release all GPU resources. */
   destroy: () => void;
 }
 
@@ -351,6 +348,13 @@ const ROOM_FORMERS: FormerDef[] = [
 ];
 
 const CAMERA_DIR = new THREE.Vector3(0, -1, 4).normalize();
+
+function fitFov(fov: number, aspect: number): number {
+  if (aspect >= 1) return fov;
+  const half = THREE.MathUtils.degToRad(fov) / 2;
+  const margin = 1 + 0.25 * (1 - aspect);
+  return THREE.MathUtils.radToDeg(2 * Math.atan((Math.tan(half) * margin) / aspect));
+}
 const MODEL_LIFT = 0.3;
 const RASTER_SIZE = 2048;
 const TRACE_SIZE = 512;
@@ -778,7 +782,7 @@ export function createDitheredObject(
   options: DitheredObjectOptions = {},
 ): DitheredObjectInstance | null {
   const { canvas } = elements;
-  const config: Required<DitheredObjectOptions> = { ...DEFAULTS, ...options };
+  const config: Required<DitheredObjectOptions> = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
 
   let renderer: THREE.WebGLRenderer;
   try {
@@ -1155,7 +1159,7 @@ export function createDitheredObject(
     controls.enableZoom = config.zoom;
     controls.autoRotate = config.autoRotate && !reducedMotion;
     controls.autoRotateSpeed = config.autoRotateSpeed;
-    camera.fov = config.fov;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
     floatGroup.position.x = config.xOffset;
     floatGroup.position.y = MODEL_LIFT + config.yOffset;
@@ -1193,6 +1197,7 @@ export function createDitheredObject(
     );
     postMaterial.uniforms.uGridSize.value = Math.max(config.gridSize, 1) * pr;
     camera.aspect = width / height;
+    camera.fov = fitFov(config.fov, camera.aspect);
     camera.updateProjectionMatrix();
   }
 
@@ -1203,10 +1208,12 @@ export function createDitheredObject(
   loadAsset();
 
   let inView = true;
+  let pageVisible =
+    typeof document === "undefined" || document.visibilityState !== "hidden";
   let loopRunning = false;
 
   function tick(time: number) {
-    if (!inView) {
+    if (!inView || !pageVisible) {
       lastTime = 0;
       stopLoop();
       return;
@@ -1241,7 +1248,7 @@ export function createDitheredObject(
   }
 
   function startLoop() {
-    if (loopRunning || !inView || disposed) return;
+    if (loopRunning || !inView || !pageVisible || disposed) return;
     loopRunning = true;
     renderer.setAnimationLoop(tick);
   }
@@ -1265,6 +1272,17 @@ export function createDitheredObject(
       : null;
   viewObserver?.observe(canvas);
 
+  const onVisibilityChange = () => {
+    pageVisible = document.visibilityState !== "hidden";
+    if (pageVisible) {
+      lastTime = 0;
+      startLoop();
+    } else {
+      stopLoop();
+    }
+  };
+  document.addEventListener("visibilitychange", onVisibilityChange);
+
   let lastTime = 0;
   let elapsed = Math.random() * 100;
 
@@ -1272,6 +1290,7 @@ export function createDitheredObject(
 
   return {
     setOptions(next: DitheredObjectOptions) {
+      next = resolveOptions(DEFAULTS, next);
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
         if (typeof value === "function") continue;
@@ -1304,6 +1323,7 @@ export function createDitheredObject(
       stopLoop();
       observer.disconnect();
       viewObserver?.disconnect();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       motionQuery.removeEventListener("change", onMotionChange);
       controls.dispose();
       clearModel();
