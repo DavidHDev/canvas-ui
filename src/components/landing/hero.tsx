@@ -45,7 +45,7 @@ export function Hero() {
           </Link>
           <Link
             href="/components"
-            className="inline-flex h-11 items-center justify-center rounded-control bg-muted/60 px-6 text-[15px] font-medium text-foreground transition-colors duration-150 hover:bg-muted active:scale-[0.98] sm:h-auto sm:border-0 sm:px-0 sm:hover:bg-transparent sm:hover:text-muted-foreground sm:active:scale-100"
+            className="inline-flex h-11 items-center justify-center rounded-control bg-muted/60 px-6 text-[15px] font-medium text-foreground transition-colors duration-150 hover:bg-muted active:scale-[0.98] sm:h-auto sm:border-0 sm:bg-transparent sm:px-0 sm:hover:bg-transparent sm:hover:text-muted-foreground sm:active:scale-100"
           >
             Browse components
           </Link>
