@@ -1,83 +1,240 @@
 "use client";
 
-import { color, hexToRgb, presets, scrub } from "@/components/demos/control-schema";
+import { useTheme } from "next-themes";
+
+import {
+  color,
+  custom,
+  presets,
+  radio,
+  scrub,
+  toggle,
+} from "@/components/demos/control-schema";
 import { DemoControls } from "@/components/demos/demo-controls";
 import { StageHint } from "@/components/demos/demo-stage";
 import { useDemoSurface, type DemoProps } from "@/components/demos/demo-surface";
 import { useDemoControls } from "@/hooks/use-demo-controls";
 import { Canvas } from "@/components/docs/live/Canvas";
-import { PhotoScene } from "@/demos/scenes";
+import { DocsScene } from "@/demos/scenes";
+import { CANVAS_PRESETS, type CanvasPreset } from "@/lib/Canvas/CanvasVanilla";
+
+const BASE = CANVAS_PRESETS.canvas;
+
+const NIGHT = { color: "#1c1a17", shadow: "#7a7364" };
+const BACKDROP = { light: "#e6e3dd", dark: "#050505" };
 
 const CONTROLS = {
-  strength: scrub("Painting", 1, { min: 0, max: 1, step: 0.05, group: "Canvas" }),
-  texture: scrub("Weave", 1, { min: 0, max: 1, step: 0.05, group: "Canvas" }),
-  threadSize: scrub("Thread size", 2, {
+  preset: custom<CanvasPreset>("canvas", { group: "Sheet" }),
+  layer: radio(
+    "Layer",
+    "foreground",
+    [
+      { value: "foreground", label: "Over" },
+      { value: "background", label: "Behind" },
+      { value: "page", label: "Printed" },
+    ],
+    { group: "Sheet" },
+  ),
+  insetX: scrub("Margin X", 0, {
+    min: 0,
+    max: 240,
+    step: 4,
+    decimals: 0,
+    group: "Sheet",
+    when: (values) => values.layer !== "foreground",
+  }),
+  insetY: scrub("Margin Y", 0, {
+    min: 0,
+    max: 240,
+    step: 4,
+    decimals: 0,
+    group: "Sheet",
+    when: (values) => values.layer !== "foreground",
+  }),
+  back: color("Backdrop", "", {
+    auto: { label: "Theme" },
+    group: "Sheet",
+    when: (values) =>
+      values.layer !== "foreground" &&
+      (Number(values.insetX) > 0 || Number(values.insetY) > 0),
+  }),
+  interactive: toggle("Cursor light", true, { group: "Sheet" }),
+  glow: scrub("Light strength", 0.15, {
+    min: 0,
+    max: 1,
+    step: 0.05,
+    group: "Sheet",
+    when: (values) => values.interactive === true,
+  }),
+  radius: scrub("Light size", 550, {
+    min: 80,
+    max: 800,
+    step: 10,
+    decimals: 0,
+    group: "Sheet",
+    when: (values) => values.interactive === true,
+  }),
+  weave: scrub("Weave", BASE.weave, { min: 0, max: 1, step: 0.05, group: "Surface" }),
+  weaveSize: scrub("Thread size", BASE.weaveSize, {
     min: 2,
     max: 12,
+    step: 0.5,
+    decimals: 1,
+    group: "Surface",
+  }),
+  weaveOpen: scrub("Open weave", BASE.weaveOpen, { min: 0, max: 1, step: 0.05, group: "Surface" }),
+  slub: scrub("Uneven threads", BASE.slub, { min: 0, max: 1, step: 0.05, group: "Surface" }),
+  roughness: scrub("Grain", BASE.roughness, { min: 0, max: 1, step: 0.05, group: "Surface" }),
+  fiber: scrub("Fibers", BASE.fiber, { min: 0, max: 1, step: 0.05, group: "Surface" }),
+  strength: scrub("Strength", BASE.strength, { min: 0, max: 1, step: 0.05, group: "Finish" }),
+  tint: scrub("Tint", BASE.tint, { min: 0, max: 1, step: 0.05, group: "Finish" }),
+  color: color("Sheet color", "", { auto: { label: "Material" }, group: "Finish" }),
+  shadow: color("Shadow color", "", { auto: { label: "Material" }, group: "Finish" }),
+  wrinkles: scrub("Wrinkles", BASE.wrinkles, {
+    min: 0,
+    max: 1,
+    step: 0.05,
+    group: "Surface",
+    advanced: true,
+  }),
+  crumples: scrub("Crumples", BASE.crumples, {
+    min: 0,
+    max: 1,
+    step: 0.05,
+    group: "Surface",
+    advanced: true,
+  }),
+  folds: scrub("Folds", BASE.folds, {
+    min: 0,
+    max: 1,
+    step: 0.05,
+    group: "Surface",
+    advanced: true,
+  }),
+  foldColumns: scrub("Fold columns", BASE.foldColumns, {
+    min: 1,
+    max: 8,
     step: 1,
     decimals: 0,
-    group: "Canvas",
-  }),
-  grain: scrub("Grain", 0.5, { min: 0, max: 1, step: 0.05, group: "Canvas" }),
-  halftone: scrub("Halftone", 0.1, { min: 0, max: 1, step: 0.05, group: "Canvas" }),
-  radius: scrub("Brush size", 0.08, { min: 0.02, max: 0.25, step: 0.01, group: "Brush" }),
-  relief: scrub("Paint relief", 0.45, { min: 0, max: 1, step: 0.05, group: "Brush" }),
-  gloss: scrub("Wet gloss", 0.35, { min: 0, max: 1, step: 0.05, group: "Brush" }),
-  bristle: scrub("Bristles", 0.4, { min: 0, max: 1, step: 0.05, group: "Brush" }),
-  dry: scrub("Dry time", 2.5, {
-    min: 0.3,
-    max: 8,
-    step: 0.1,
-    decimals: 1,
-    group: "Brush",
-  }),
-  tint: color("Paper color", "#d6cfbf", { group: "Paper" }),
-  tintStrength: scrub("Paper tint", 0, { min: 0, max: 1, step: 0.05, group: "Paper" }),
-  threadWidth: scrub("Seam width", 0.2, {
-    min: 0,
-    max: 0.4,
-    step: 0.01,
-    group: "Canvas",
+    group: "Surface",
     advanced: true,
   }),
-  dotSize: scrub("Halftone dot", 6, {
-    min: 2,
-    max: 10,
-    step: 0.5,
-    decimals: 1,
-    group: "Canvas",
-    advanced: true,
-  }),
-  followSpeed: scrub("Brush follow", 3, {
+  foldRows: scrub("Fold rows", BASE.foldRows, {
     min: 1,
-    max: 20,
-    step: 0.5,
-    decimals: 1,
-    group: "Brush",
+    max: 6,
+    step: 1,
+    decimals: 0,
+    group: "Surface",
+    advanced: true,
+  }),
+  stains: scrub("Stains", BASE.stains, { min: 0, max: 1, step: 0.05, group: "Age", advanced: true }),
+  burn: scrub("Burnt edges", BASE.burn, { min: 0, max: 1, step: 0.05, group: "Age", advanced: true }),
+  curl: scrub("Rolled ends", BASE.curl, {
+    min: 0,
+    max: 120,
+    step: 2,
+    decimals: 0,
+    group: "Age",
+    advanced: true,
+  }),
+  angle: scrub("Light angle", BASE.angle, {
+    min: 0,
+    max: 360,
+    step: 5,
+    decimals: 0,
+    group: "Finish",
+    advanced: true,
+  }),
+  distortion: scrub("Distortion", BASE.distortion, {
+    min: -1,
+    max: 1,
+    step: 0.05,
+    group: "Finish",
+    advanced: true,
+  }),
+  seed: scrub("Seed", BASE.seed, {
+    min: 0,
+    max: 1000,
+    step: 1,
+    decimals: 0,
+    group: "Surface",
     advanced: true,
   }),
 };
 
+type MaterialKey = keyof typeof CONTROLS;
+
+function material(preset: CanvasPreset) {
+  const values = CANVAS_PRESETS[preset];
+  const picked: Record<string, number | string> = { preset };
+  for (const key of Object.keys(CONTROLS) as MaterialKey[]) {
+    if (key in values && key !== "color" && key !== "shadow") {
+      picked[key] = values[key as keyof typeof values] as number;
+    }
+  }
+  return picked;
+}
+
 const PRESETS = presets(CONTROLS, [
-  { label: "Linen", values: { threadSize: 4, tintStrength: 0.45, grain: 0.3 } },
-  { label: "Halftone", values: { halftone: 0.85, dotSize: 5, grain: 0.2, texture: 0.4 } },
-  { label: "Thick oil", values: { relief: 0.9, gloss: 0.75, bristle: 0.85, radius: 0.13 } },
+  {
+    label: "Folded print",
+    values: {
+      ...material("paper"),
+      layer: "page",
+      insetX: 56,
+      insetY: 56,
+      folds: 1,
+      foldColumns: 4,
+      foldRows: 2,
+      roughness: 0.45,
+      fiber: 0.4,
+      wrinkles: 0.1,
+      distortion: 0.15,
+    },
+  },
+  { label: "Raw cotton", values: material("raw") },
+  { label: "Linen", values: material("linen") },
+  { label: "Burlap", values: material("burlap") },
+  { label: "Paper", values: material("paper") },
+  { label: "Scroll", values: material("scroll") },
 ]);
 
 export function CanvasDemo({ children }: DemoProps) {
+  const { resolvedTheme } = useTheme();
   const controls = useDemoControls(CONTROLS);
-  const surface = useDemoSurface(
-    children,
-    <PhotoScene slug="canvas" photo={1} />,
-  );
+  const surface = useDemoSurface(children, <DocsScene slug="canvas" photo={1} />);
 
-  const { tint, ...values } = controls.values;
-  const props = { ...values, tint: hexToRgb(tint) };
+  const { color: sheet, shadow, back, ...values } = controls.values;
+  const night = resolvedTheme === "dark" && values.layer === "background";
+  const props = {
+    ...values,
+    preset: values.preset as CanvasPreset,
+    back:
+      back ||
+      (values.insetX > 0 || values.insetY > 0
+        ? BACKDROP[resolvedTheme === "dark" ? "dark" : "light"]
+        : undefined),
+    color: sheet || (night ? NIGHT.color : undefined),
+    shadow: shadow || (night ? NIGHT.shadow : undefined),
+  };
+  const behind = values.layer === "background";
 
   return (
     <>
-      <Canvas {...props} {...surface.props} />
-      <StageHint label="Move your cursor to paint" touchLabel="Drag to paint" />
+      <Canvas
+        {...props}
+        {...surface.props}
+        className={[
+          surface.props.className,
+          behind ? "[&_[data-page-demo]]:bg-transparent" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      />
+      <StageHint
+        label="Move your cursor across the canvas"
+        touchLabel="Drag across the canvas"
+      />
       <DemoControls
         title="Canvas controls"
         controls={controls}

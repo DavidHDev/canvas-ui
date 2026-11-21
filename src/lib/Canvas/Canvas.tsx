@@ -11,20 +11,32 @@ import {
 import {
   createCanvas,
   supportsHtmlInCanvas,
+  type CanvasFit,
   type CanvasInstance,
+  type CanvasLayer,
   type CanvasOptions,
+  type CanvasPreset,
 } from "./CanvasVanilla";
 
 export interface CanvasProps extends CanvasOptions {
-  children: ReactNode;
+  children?: ReactNode;
+  fixed?: boolean;
   className?: string;
   style?: React.CSSProperties;
 }
 
 const emptySubscribe = () => () => {};
 
+const fill = {
+  position: "absolute",
+  inset: 0,
+  width: "100%",
+  height: "100%",
+} as const;
+
 export function Canvas({
   children,
+  fixed = false,
   className,
   style,
   ...options
@@ -41,15 +53,19 @@ export function Canvas({
     supportsHtmlInCanvas,
     () => false,
   );
-  const native = supported && !failed;
+  const hasContent = children !== undefined && children !== null;
+  const native =
+    supported && !failed && hasContent && options.layer === "page";
+  const behind = options.layer === undefined || options.layer === "background";
+  const padded = options.layer !== "foreground";
+  const insetX = padded ? Math.max(options.insetX ?? 0, 0) : 0;
+  const insetY = padded ? Math.max(options.insetY ?? 0, 0) : 0;
 
   useEffect(() => {
-    const source = sourceRef.current;
-    const content = contentRef.current;
     const output = outputRef.current;
-    if (!source || !content || !output) return;
+    if (!output) return;
     instanceRef.current = createCanvas(
-      { source, content, output },
+      { source: sourceRef.current, content: contentRef.current, output },
       initialOptions,
     );
     if (native && !instanceRef.current) setFailed(true);
@@ -63,61 +79,64 @@ export function Canvas({
     instanceRef.current?.setOptions(options);
   });
 
+  const content = hasContent ? (
+    <div
+      ref={contentRef}
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        overflow: "auto",
+        boxSizing: "border-box",
+        padding: insetX || insetY ? `${insetY}px ${insetX}px` : undefined,
+      }}
+    >
+      {children}
+    </div>
+  ) : null;
+
   return (
-    <div className={className} style={{ position: "relative", ...style }}>
-      <canvas
-        ref={sourceRef}
-        // @ts-expect-error experimental html-in-canvas attribute
-        layoutsubtree="true"
-        suppressHydrationWarning
-        style={
-          native
-            ? { position: "absolute", inset: 0, width: "100%", height: "100%" }
-            : { display: "none" }
-        }
-      >
-        {native ? (
-          <div
-            ref={contentRef}
-            style={{
-              position: "relative",
-              width: "100%",
-              height: "100%",
-              overflow: "auto",
-            }}
-          >
-            {children}
-          </div>
-        ) : null}
-      </canvas>
-      {!native ? (
-        <div
-          ref={contentRef}
-          style={{
-            position: "relative",
-            width: "100%",
-            height: "100%",
-            overflow: "auto",
-          }}
+    <div
+      className={className}
+      style={
+        fixed
+          ? {
+              position: "fixed",
+              inset: 0,
+              zIndex: behind ? -1 : 50,
+              pointerEvents: hasContent ? undefined : "none",
+              isolation: "isolate",
+              ...style,
+            }
+          : { position: "relative", isolation: "isolate", ...style }
+      }
+    >
+      {native ? (
+        <canvas
+          ref={sourceRef}
+          // @ts-expect-error experimental html-in-canvas attribute
+          layoutsubtree="true"
+          suppressHydrationWarning
+          style={fill}
         >
-          {children}
-        </div>
-      ) : null}
+          {content}
+        </canvas>
+      ) : (
+        content
+      )}
       <canvas
         ref={outputRef}
         aria-hidden
         style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
+          ...fill,
           pointerEvents: "none",
+          zIndex: behind && hasContent ? -1 : undefined,
         }}
       />
     </div>
   );
 }
 
-export type { CanvasInstance, CanvasOptions };
+export type { CanvasFit, CanvasInstance, CanvasLayer, CanvasOptions, CanvasPreset };
 
 export default Canvas;

@@ -14,7 +14,6 @@ import { createPortal } from "react-dom";
 
 import { ORDERED_COMPONENTS } from "@/components/common/component-groups";
 import { DURATION, EASE_OUT } from "@/components/common/motion-tokens";
-import { CATEGORY_META } from "@/data/components";
 import { cn } from "@/lib/utils";
 
 type Source = "keyboard" | "pointer";
@@ -82,13 +81,13 @@ const HINTS: Record<string, string> = {
   "ascii-sweep":
     "ascii sweep swap transition tabs text swap band glow terminal glyph scan",
   "asciify":
-    "ascii text characters filter cursor lens terminal glyph matrix",
+    "ascii text characters cursor trail overlay gradient glyph terminal matrix ripple click",
   "bend": "scroll cube fold",
   "blaze": "fire sparks smoke heat",
   "bubble":
     "droplet metaball glass refraction cursor trail liquid blob",
   "canvas":
-    "painting woven fabric texture paper halftone grain screen print",
+    "woven fabric texture paper linen burlap parchment scroll folds print material background overlay",
   "cloth": "fabric flag wind wave textile banner ripple",
   "clouds": "fog mist wind",
   "decrypt-reveal":
@@ -143,7 +142,7 @@ const COMPONENT_ENTRIES: SearchEntry[] = ORDERED_COMPONENTS.map((entry) => {
   return {
     href: entry.href,
     label: entry.name,
-    section: CATEGORY_META[entry.category].label,
+    section: "Components",
     hint: `${HINTS[slug] ?? ""} ${entry.description}`,
     isNew: entry.isNew,
   };

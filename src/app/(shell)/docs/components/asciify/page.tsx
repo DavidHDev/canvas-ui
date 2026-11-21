@@ -4,6 +4,7 @@ import { ComponentDoc } from "@/components/docs/component-doc";
 import { Footer } from "@/components/landing/footer";
 import type { ApiProp } from "@/components/docs/api-reference";
 import { getComponentSources } from "@/lib/registry";
+import { CodeBlock } from "@/components/docs/code-block";
 import { highlight } from "@/components/docs/highlight";
 import { AsciifyDemo } from "@/demos/asciify-demo";
 import { PageDemoPhoto } from "@/demos/scenes";
@@ -11,117 +12,215 @@ import { PageDemoPhoto } from "@/demos/scenes";
 export const metadata: Metadata = {
   title: "Asciify",
   description:
-    "Redraws visible content as ascii characters in a soft radius around the cursor, using HTML-in-Canvas where available and lightweight viewport snapshots in browsers such as Firefox. Works in any framework.",
+    "A cursor trail of soft ascii glyphs in a color gradient that drifts like smoke and ripples on click. Works over any page in every browser, and can redraw the page itself as glyphs with HTML-in-Canvas. Works in any framework.",
   alternates: { canonical: "/docs/components/asciify" },
 };
 
 const DESCRIPTION =
-  "A soft lens follows your cursor, redrawing the page beneath it as ascii characters.";
+  "A soft trail of ascii glyphs follows the cursor in a color gradient and ripples outward on click. Drop it over any page, or redraw the page itself as glyphs in Chrome 157 and later.";
+
+const USAGE = [
+  {
+    title: "Across a whole site",
+    body: "Leave out children and pass fixed. The trail follows the cursor over every page without touching your layout.",
+    fileName: "layout.tsx",
+    source: `<body>
+  {children}
+  <Asciify fixed />
+</body>`,
+  },
+  {
+    title: "Over one section",
+    body: "Wrap a hero or a card. Ambient keeps a few glyphs drifting before anyone moves the cursor.",
+    fileName: "hero.tsx",
+    source: `<Asciify ambient={0.6} colors={["#7c2d12", "#ea580c", "#fff7ed"]}>
+  <Hero />
+</Asciify>`,
+  },
+  {
+    title: "Redraw the page itself",
+    body: "With source=\"page\", glyphs take the colors of the content beneath the trail. It needs html-in-canvas (Chrome 157 and later) and falls back to the gradient elsewhere.",
+    fileName: "page.tsx",
+    source: `<Asciify source="page">
+  <Article />
+</Asciify>`,
+  },
+];
+
+const USAGE_MARKDOWN = [
+  "## Usage",
+  "",
+  ...USAGE.flatMap((entry) => [
+    `### ${entry.title}`,
+    "",
+    entry.body,
+    "",
+    "```tsx",
+    entry.source,
+    "```",
+    "",
+  ]),
+].join("\n");
 
 const API_REFERENCE: ApiProp[] = [
   {
-    name: "radius",
+    name: "source",
     description:
-      "Radius of the ascii lens around the cursor, relative to the screen height.",
-    type: "number",
-    defaultValue: "0.4",
+      "What the glyphs show: a color gradient that works in every browser, or the page beneath them. \"page\" needs html-in-canvas and falls back to the gradient.",
+    type: '"gradient" | "page"',
+    defaultValue: '"gradient"',
   },
   {
-    name: "softness",
+    name: "colors",
     description:
-      "Edge feather of the lens as a fraction of the radius (0 to 1).",
-    type: "number",
-    defaultValue: "1",
-  },
-  {
-    name: "scale",
-    description:
-      "Size of one glyph pixel in CSS pixels. Characters are 5x5 glyph pixels.",
-    type: "number",
-    defaultValue: "2",
-  },
-  {
-    name: "spacing",
-    description: "Empty glyph pixels around each character (0 to 3).",
-    type: "number",
-    defaultValue: "1",
-  },
-  {
-    name: "charset",
-    description:
-      "Built-in character ramp: real ascii glyphs, shade blocks, or binary digits.",
-    type: '"ascii" | "blocks" | "binary"',
-    defaultValue: '"ascii"',
-  },
-  {
-    name: "glyphs",
-    description:
-      "Custom ramp of packed 5x5 bitmaps (dark to bright), overrides charset.",
-    type: "number[]",
+      "Gradient colors from the trail's faint edge to its core, as CSS colors. Leave empty for a blue ramp that suits the background.",
+    type: "string[]",
     defaultValue: "[]",
   },
   {
-    name: "background",
+    name: "characters",
     description:
-      'Paper color behind the glyphs as [r, g, b] in 0-1 range, or "auto" to match the page background.',
-    type: '[number, number, number] | "auto"',
-    defaultValue: "[0, 0, 0]",
+      "Characters from sparse to dense. The first one is usually a space.",
+    type: "string",
+    defaultValue: '" .-=+xX0S8#@"',
   },
   {
-    name: "backgroundOpacity",
-    description: "Opacity of the background behind the glyphs (0 to 1).",
+    name: "fontFamily",
+    description:
+      "Font family the glyphs are drawn in.",
+    type: "string",
+    defaultValue: '"Geist Mono", monospace',
+  },
+  {
+    name: "cellSize",
+    description:
+      "Glyph cell height in CSS pixels.",
+    type: "number",
+    defaultValue: "12",
+  },
+  {
+    name: "radius",
+    description:
+      "Radius of the cursor trail in CSS pixels.",
+    type: "number",
+    defaultValue: "140",
+  },
+  {
+    name: "trail",
+    description:
+      "Seconds the trail takes to fade once the cursor has passed.",
+    type: "number",
+    defaultValue: "0.9",
+  },
+  {
+    name: "flow",
+    description:
+      "How much the trail drifts and billows like smoke (0 to 1).",
+    type: "number",
+    defaultValue: "0.5",
+  },
+  {
+    name: "click",
+    description:
+      "What a click does: a ring of glyphs, a burst at the cursor, or nothing.",
+    type: '"wave" | "burst" | "none"',
+    defaultValue: '"wave"',
+  },
+  {
+    name: "ambient",
+    description:
+      "Drifting glyphs across the whole surface, even when the cursor is away (0 to 1).",
     type: "number",
     defaultValue: "0",
+  },
+  {
+    name: "density",
+    description:
+      "Share of cells that draw a glyph (0 to 1).",
+    type: "number",
+    defaultValue: "0.75",
+  },
+  {
+    name: "opacity",
+    description:
+      "Glyph opacity (0 to 1).",
+    type: "number",
+    defaultValue: "1",
   },
   {
     name: "contrast",
     description:
-      "Contrast applied to character density before picking a glyph.",
+      "Contrast applied before a glyph is picked. Higher values reach the dense glyphs sooner.",
     type: "number",
     defaultValue: "1",
   },
   {
-    name: "brightness",
-    description: "Density offset applied before picking a glyph (-1 to 1).",
-    type: "number",
-    defaultValue: "0",
-  },
-  {
-    name: "invert",
-    description: "Invert character density inside the effect (0 to 1).",
-    type: "number",
-    defaultValue: "0",
-  },
-  {
-    name: "strength",
-    description: "Coverage of asciified cells inside the lens (0 to 1).",
-    type: "number",
-    defaultValue: "1",
-  },
-  {
-    name: "baseStrength",
+    name: "depth",
     description:
-      "Ascii coverage across the whole screen, outside the lens (0 to 1).",
+      "Share of glyphs drawn out of focus (0 to 1).",
     type: "number",
-    defaultValue: "0",
+    defaultValue: "0.3",
   },
   {
-    name: "followSpeed",
-    description: "How quickly the lens follows the cursor. Higher is snappier.",
+    name: "flicker",
+    description:
+      "How often visible glyphs re-roll (0 to 1).",
     type: "number",
-    defaultValue: "3",
+    defaultValue: "0.5",
   },
   {
     name: "glow",
-    description: "Soft phosphor glow around the text dots (0 to 1).",
+    description:
+      "Soft glow around the glyphs (0 to 1).",
     type: "number",
-    defaultValue: "0.75",
+    defaultValue: "0.6",
   },
   {
-    name: "aberration",
-    description: "Soft chromatic aberration toward the lens edge (0 to 1).",
+    name: "grain",
+    description:
+      "Film grain over the effect (0 to 1).",
     type: "number",
-    defaultValue: "0.75",
+    defaultValue: "0.15",
+  },
+  {
+    name: "veil",
+    description:
+      "How strongly the background color covers what's behind the glyphs (0 to 1).",
+    type: "number",
+    defaultValue: "0.35",
+  },
+  {
+    name: "background",
+    description:
+      "Background color as any CSS color, or \"auto\" to match the page. Also decides whether glyphs glow (dark) or print (light).",
+    type: "string",
+    defaultValue: '"auto"',
+  },
+  {
+    name: "keepText",
+    description:
+      "With source \"page\", leave text crisp and readable inside the trail.",
+    type: "boolean",
+    defaultValue: "true",
+  },
+  {
+    name: "fixed",
+    description:
+      "Cover the whole viewport as a fixed overlay. Use it without children to add the trail to a full site.",
+    type: "boolean",
+    defaultValue: "false",
+  },
+  {
+    name: "children",
+    description:
+      "Content to wrap. Leave it out to use Asciify as an overlay on whatever sits beneath it.",
+    type: "ReactNode",
+  },
+  {
+    name: "className",
+    description:
+      "Classes applied to the wrapper element.",
+    type: "string",
   },
 ];
 
@@ -136,6 +235,12 @@ export default async function AsciifyPage() {
       html: await highlight(file.source, file.lang),
     })),
   );
+  const usage = await Promise.all(
+    USAGE.map(async (entry) => ({
+      ...entry,
+      html: await highlight(entry.source, "tsx"),
+    })),
+  );
 
   return (
     <AsciifyDemo>
@@ -144,10 +249,38 @@ export default async function AsciifyPage() {
         description={DESCRIPTION}
         variants={[...variants]}
         installItem="asciify"
-        tags={["html-in-canvas"]}
-        requiresHtmlInCanvas
         apiReference={API_REFERENCE}
-        beforeInstall={<PageDemoPhoto photo={1} />}
+        usageMarkdown={USAGE_MARKDOWN}
+        beforeInstall={
+          <>
+            <PageDemoPhoto photo={1} />
+            <section className="mt-12" aria-label="Usage">
+              <h2
+                id="usage"
+                className="scroll-mt-24 text-xl font-medium tracking-tight"
+              >
+                Usage
+              </h2>
+              <div className="mt-3 flex flex-col gap-6">
+                {usage.map((entry) => (
+                  <div key={entry.title}>
+                    <h3 className="text-[15px] font-medium tracking-tight">
+                      {entry.title}
+                    </h3>
+                    <p className="mt-1 mb-3 max-w-xl text-[13px] leading-6 text-muted-foreground">
+                      {entry.body}
+                    </p>
+                    <CodeBlock
+                      html={entry.html}
+                      source={entry.source}
+                      fileName={entry.fileName}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          </>
+        }
       />
       <div className="mx-auto mt-24 w-full max-w-4xl">
         <Footer variant="docs" />

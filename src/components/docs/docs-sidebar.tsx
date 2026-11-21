@@ -19,7 +19,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-import { COMPONENT_GROUPS } from "@/components/common/component-groups";
+import { ORDERED_COMPONENTS } from "@/components/common/component-groups";
 import { DURATION, EASE_OUT } from "@/components/common/motion-tokens";
 import { SiteLogo } from "@/components/common/site-logo";
 import {
@@ -65,17 +65,16 @@ const SECTIONS: NavSection[] = [
   },
   {
     title: "Components",
-    items: [{ href: "/components", label: "Browse All" }],
+    count: ORDERED_COMPONENTS.length,
+    items: [
+      { href: "/components", label: "Browse All" },
+      ...ORDERED_COMPONENTS.map((entry) => ({
+        href: entry.href,
+        label: entry.name,
+        isNew: entry.isNew,
+      })),
+    ],
   },
-  ...COMPONENT_GROUPS.map((group) => ({
-    title: group.label,
-    count: group.items.length,
-    items: group.items.map((entry) => ({
-      href: entry.href,
-      label: entry.name,
-      isNew: entry.isNew,
-    })),
-  })),
 ];
 
 function useActiveIndicator(pathname: string) {

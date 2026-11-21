@@ -93,6 +93,27 @@ const API_REFERENCE: ApiProp[] = [
     defaultValue: "0.5",
   },
   {
+    name: "fade",
+    description:
+      "Fades the far end of each fold into the page background, for depth (0 to 1).",
+    type: "number",
+    defaultValue: "0.2",
+  },
+  {
+    name: "blur",
+    description:
+      "Blurs each fold as it turns away, like a shallow depth of field (0 to 1).",
+    type: "number",
+    defaultValue: "0.3",
+  },
+  {
+    name: "momentum",
+    description:
+      "Scrolling fast bends the edges further, and they ease back when you stop (0 to 1).",
+    type: "number",
+    defaultValue: "0.35",
+  },
+  {
     name: "className",
     description: "Classes applied to the wrapper element.",
     type: "string",

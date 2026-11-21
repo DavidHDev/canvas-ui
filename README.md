@@ -158,8 +158,8 @@ These draw your real, interactive HTML into the canvas. The full effect needs HT
 | Component                                                                 | What it does                            | Component                                                         | What it does                          |
 | ------------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------- | ------------------------------------- |
 | [**VHS**](https://canvasui.dev/docs/components/vhs)                       | Worn tape wave, chroma bleed, and grain | [**Glitch**](https://canvasui.dev/docs/components/glitch)         | Broadcast tearing with RGB splits     |
-| [**Retro Dither**](https://canvasui.dev/docs/components/retro-dither)     | Dither lens that pixelates the page     | [**Asciify**](https://canvasui.dev/docs/components/asciify)       | ASCII lens that follows the cursor    |
-| [**Decrypt Reveal**](https://canvasui.dev/docs/components/decrypt-reveal) | Cipher text decrypting at the cursor    | [**Glyph Rain**](https://canvasui.dev/docs/components/glyph-rain) | Falling glyphs that light up the page |
+| [**Retro Dither**](https://canvasui.dev/docs/components/retro-dither)     | Dither lens that pixelates the page     | [**Decrypt Reveal**](https://canvasui.dev/docs/components/decrypt-reveal) | Cipher text decrypting at the cursor |
+| [**Glyph Rain**](https://canvasui.dev/docs/components/glyph-rain)         | Falling glyphs that light up the page   |                                                                   |                                       |
 
 </details>
 
@@ -170,14 +170,35 @@ These draw your real, interactive HTML into the canvas. The full effect needs HT
 | --------------------------------------------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------- |
 | [**Particle Reveal**](https://canvasui.dev/docs/components/particle-reveal) | Particles merging into crisp UI       | [**Particle Scroll**](https://canvasui.dev/docs/components/particle-scroll) | Sand that reassembles on scroll        |
 | [**Shatter**](https://canvasui.dev/docs/components/shatter)                 | 3D glass shards that lift and refract | [**Grid**](https://canvasui.dev/docs/components/grid)                       | 3D tiles rippling around the cursor    |
-| [**Hex Float**](https://canvasui.dev/docs/components/hex-float)             | Floating hex tiles with cursor lift   | [**Canvas**](https://canvasui.dev/docs/components/canvas)                   | Woven canvas you drag wet paint across |
-| [**ASCII Sweep**](https://canvasui.dev/docs/components/ascii-sweep)         | Glowing ASCII band that swaps panels  |                                                                             |                                        |
+| [**Hex Float**](https://canvasui.dev/docs/components/hex-float)             | Floating hex tiles with cursor lift   | [**ASCII Sweep**](https://canvasui.dev/docs/components/ascii-sweep)         | Glowing ASCII band that swaps panels   |
 
 </details>
 
 ### Universal
 
-These draw their whole scene on the GPU, with no HTML-in-canvas needed, so they look the same in every modern browser. Object renderers are the first group, with more kinds of Universal effects on the way.
+These draw their whole scene on the GPU, with no HTML-in-canvas needed, so they look the same in every modern browser. Cursor effects, surfaces and object renderers are the first groups, with more kinds of Universal effects on the way.
+
+<details open>
+<summary><b>🖱️ Cursor effects</b></summary>
+
+Drop them over any page, or wrap one section.
+
+| Component                                                   | What it does                                          |
+| ----------------------------------------------------------- | ----------------------------------------------------- |
+| [**Asciify**](https://canvasui.dev/docs/components/asciify) | Soft ASCII trail that drifts and ripples on click     |
+
+</details>
+
+<details open>
+<summary><b>🧵 Surfaces</b></summary>
+
+Lay them over a page, put them behind content, or print an image or the page onto them.
+
+| Component                                                 | What it does                                                 |
+| --------------------------------------------------------- | ------------------------------------------------------------ |
+| [**Canvas**](https://canvasui.dev/docs/components/canvas) | Canvas, linen, paper and parchment, built on Paper Shaders   |
+
+</details>
 
 <details open>
 <summary><b>🧊 Object renderers</b></summary>

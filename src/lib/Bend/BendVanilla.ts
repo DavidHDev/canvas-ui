@@ -26,6 +26,12 @@ export interface BendOptions {
   tumble?: number;
   /** Pointer tilt strength (0 to 1). The face leans subtly toward the cursor. 0 disables. */
   tilt?: number;
+  /** Fades the far end of each fold into the page background, for depth (0 to 1). */
+  fade?: number;
+  /** Blurs each fold as it turns away, like a shallow depth of field (0 to 1). */
+  blur?: number;
+  /** Scrolling fast bends the edges further, and they ease back when you stop (0 to 1). */
+  momentum?: number;
   /** CSS rotation applied to the Bend host, used to keep pointer mapping aligned. */
   interactionRotation?: 0 | 90 | -90;
 }
@@ -54,6 +60,9 @@ const DEFAULTS: Required<BendOptions> = {
   bottom: true,
   tumble: 0.5,
   tilt: 0.5,
+  fade: 0.2,
+  blur: 0.3,
+  momentum: 0.35,
   interactionRotation: 0,
 };
 
@@ -95,11 +104,31 @@ uniform float uTiltX;
 uniform float uTiltY;
 uniform float uPhi;
 uniform float uRound;
+uniform float uFade;
+uniform float uBlur;
+uniform vec2 uContentSize;
 
-vec3 foldEdge (float sy, float amt) {
+vec4 depthBlur (vec2 uv, float lod, float radius) {
+  float sampleLod = lod + max(log2(max(radius, 1.0)) - 1.5, 0.0);
+  vec2 spread = radius * exp2(lod) / uContentSize;
+  vec2 hi = vec2(uMaxX, 1.0);
+  vec4 acc = vec4(0.0);
+  float total = 0.0;
+  for (int i = 0; i < 12; i++) {
+    float t = (float(i) + 0.5) / 12.0;
+    float a = float(i) * 2.39996;
+    vec2 offset = vec2(cos(a), sin(a)) * sqrt(t) * spread;
+    float w = exp(-2.0 * t);
+    acc += textureLod(uContent, clamp(uv + offset, vec2(0.0), hi), sampleLod) * w;
+    total += w;
+  }
+  return acc / total;
+}
+
+vec4 foldEdge (float sy, float amt) {
   float yf = 1.0 - uZone;
-  if (amt < 1e-4) return vec3(sy, 0.0, 1.0);
-  float theta = uAngle * amt;
+  if (amt < 1e-4) return vec4(sy, 0.0, 1.0, 0.0);
+  float theta = min(uAngle * amt, 2.9);
   if (uRound < 1e-4) {
     float s = sin(theta) * uDir;
     float c = cos(theta);
@@ -108,9 +137,9 @@ vec3 foldEdge (float sy, float amt) {
     float t = clamp(tRaw, 0.0, uZone);
     float z = max(t * s, -0.85 * uPersp);
     float alpha = 1.0 - smoothstep(uZone, uZone + 2.0 * uPxY, tRaw);
-    return vec3(yf + t, z, alpha);
+    return vec4(yf + t, z, alpha, step(1e-6, t) * theta);
   }
-  if (sy <= yf) return vec3(sy, 0.0, 1.0);
+  if (sy <= yf) return vec4(sy, 0.0, 1.0, 0.0);
   float R = min(uRound, uZone);
   float r = R / theta;
   float ca = cos(theta);
@@ -152,9 +181,9 @@ vec3 foldEdge (float sy, float amt) {
   }
   if (bestU < 0.0) {
     float alpha = 1.0 - smoothstep(maxSy - uPxY, maxSy + uPxY, sy);
-    return vec3(1.0, prevZ, alpha);
+    return vec4(1.0, prevZ, alpha, theta);
   }
-  return vec3(yf + bestU, bestZ, 1.0);
+  return vec4(yf + bestU, bestZ, 1.0, bestU <= R ? bestU / r : theta);
 }
 
 vec2 tipPlane (float sy, float phi) {
@@ -189,8 +218,9 @@ void main () {
   float inTop = step(1.0 - uZone, uv.y);
   float inBot = step(uv.y, uZone);
 
-  vec3 top = foldEdge(uv.y, uTopAmt);
-  vec3 bot = foldEdge(1.0 - uv.y, uBotAmt);
+  vec4 top = foldEdge(uv.y, uTopAmt);
+  vec4 bot = foldEdge(1.0 - uv.y, uBotAmt);
+  float bend = inTop * top.w + inBot * bot.w;
 
   float srcY = uv.y;
   srcY = mix(srcY, top.x, inTop);
@@ -210,9 +240,20 @@ void main () {
     clamp(srcX, 0.0005, uMaxX - 0.0005),
     clamp(srcY, 0.0005, 0.9995)
   );
-  vec4 base = texture(uContent, vec2(p.x, 1.0 - p.y));
+  vec2 suv = vec2(p.x, 1.0 - p.y);
+  vec2 gx = dFdx(suv) * uContentSize;
+  vec2 gy = dFdy(suv) * uContentSize;
+  float lod = max(0.0, log2(max(length(gx), length(gy))));
+  float blurDepth = clamp(bend / max(uAngle, 0.01), 0.0, 1.0);
+  float blurRadius = uBlur * 24.0 * pow(smoothstep(0.0, 1.0, blurDepth), 1.5);
+  vec4 base = blurRadius > 0.01 ? depthBlur(suv, lod, blurRadius) : textureLod(uContent, suv, lod);
 
-  outColor = vec4(mix(uBg, base.rgb, alpha * base.a), uCover);
+  vec3 color = base.rgb;
+  if (bend > 1e-4) {
+    float depth = clamp(bend / max(uAngle, 0.01), 0.0, 1.0);
+    color = mix(color, uBg, uFade * 0.9 * depth * depth);
+  }
+  outColor = vec4(mix(uBg, clamp(color, 0.0, 1.0), alpha * base.a), uCover);
 }`;
 
 export function supportsHtmlInCanvas(): boolean {
@@ -425,6 +466,11 @@ export function createBend(
   let tiltYTarget = 0;
   let tiltXCurrent = 0;
   let tiltYCurrent = 0;
+  let topVelocity = 0;
+  let bottomVelocity = 0;
+  let scrollSpeed = 0;
+  let lastScrollTop = 0;
+  let lastScrollTime = 0;
 
   function syncScroll() {
     const max = content.scrollHeight - content.clientHeight;
@@ -488,6 +534,13 @@ export function createBend(
       uniforms.uRound,
       Math.min(Math.max(config.rounding, 0) / h, zoneFrac),
     );
+    gl!.uniform1f(uniforms.uFade, Math.min(Math.max(config.fade, 0), 1));
+    gl!.uniform1f(uniforms.uBlur, Math.min(Math.max(config.blur, 0), 1));
+    gl!.uniform2f(
+      uniforms.uContentSize,
+      Math.max(source.width, 1),
+      Math.max(source.height, 1),
+    );
     gl!.bindFramebuffer(gl!.FRAMEBUFFER, null);
     gl!.viewport(0, 0, output.width, output.height);
     gl!.drawArrays(gl!.TRIANGLE_STRIP, 0, 4);
@@ -510,16 +563,47 @@ export function createBend(
     }
     const delta = Math.min((now - lastTime) / 1000, 1 / 30);
     lastTime = now;
+    scrollSpeed *= Math.exp(-delta / 0.12);
+    if (Math.abs(scrollSpeed) < 5) scrollSpeed = 0;
+    const boost = reducedMotion
+      ? 0
+      : Math.min(Math.max(config.momentum, 0), 1) *
+        Math.min(Math.abs(scrollSpeed) / 2500, 1) *
+        0.6;
+    const topGoal = topTarget * (1 + boost);
+    const bottomGoal = bottomTarget * (1 + boost);
     const tau = config.smoothing;
-    const k =
-      reducedMotion || tau <= 0
-        ? 1
-        : 1 - Math.exp(-delta / Math.max(tau, 1e-4));
-    topCurrent += (topTarget - topCurrent) * k;
-    bottomCurrent += (bottomTarget - bottomCurrent) * k;
-    if (Math.abs(topTarget - topCurrent) < 0.001) topCurrent = topTarget;
-    if (Math.abs(bottomTarget - bottomCurrent) < 0.001)
-      bottomCurrent = bottomTarget;
+    if (reducedMotion || tau <= 0) {
+      topCurrent = topGoal;
+      bottomCurrent = bottomGoal;
+      topVelocity = 0;
+      bottomVelocity = 0;
+    } else {
+      const omega = 1.8 / Math.max(tau, 1e-3);
+      const steps = Math.max(1, Math.ceil(delta * 240));
+      const dt = delta / steps;
+      for (let i = 0; i < steps; i++) {
+        topVelocity +=
+          (omega * omega * (topGoal - topCurrent) - 2 * omega * topVelocity) * dt;
+        topCurrent += topVelocity * dt;
+        bottomVelocity +=
+          (omega * omega * (bottomGoal - bottomCurrent) -
+            2 * omega * bottomVelocity) *
+          dt;
+        bottomCurrent += bottomVelocity * dt;
+      }
+      if (Math.abs(topGoal - topCurrent) < 0.0008 && Math.abs(topVelocity) < 0.002) {
+        topCurrent = topGoal;
+        topVelocity = 0;
+      }
+      if (
+        Math.abs(bottomGoal - bottomCurrent) < 0.0008 &&
+        Math.abs(bottomVelocity) < 0.002
+      ) {
+        bottomCurrent = bottomGoal;
+        bottomVelocity = 0;
+      }
+    }
 
     over *= Math.exp(-delta / 0.22);
     if (Math.abs(over) < 0.5) over = 0;
@@ -543,6 +627,9 @@ export function createBend(
     render();
     if (
       !contentDirty &&
+      scrollSpeed === 0 &&
+      topVelocity === 0 &&
+      bottomVelocity === 0 &&
       topCurrent === topTarget &&
       bottomCurrent === bottomTarget &&
       over === 0 &&
@@ -567,6 +654,15 @@ export function createBend(
   start();
 
   function onScroll() {
+    const now = performance.now();
+    const scrollTop = content.scrollTop;
+    if (now - lastScrollTime < 200) {
+      const instant =
+        (scrollTop - lastScrollTop) / Math.max((now - lastScrollTime) / 1000, 1 / 240);
+      scrollSpeed += (instant - scrollSpeed) * 0.5;
+    }
+    lastScrollTop = scrollTop;
+    lastScrollTime = now;
     syncScroll();
     if (htmlInCanvas) paintable.requestPaint!();
     if (hoverOn) updateHover(hoverClientX, hoverClientY);
@@ -660,7 +756,7 @@ export function createBend(
     const fold = (sy: number, amt: number): [number, number, number] => {
       const yf = 1 - zone;
       if (amt < 1e-4) return [sy, 0, 1];
-      const theta = angle * amt;
+      const theta = Math.min(angle * amt, 2.9);
       if (round < 1e-4) {
         const s = Math.sin(theta) * dirSign;
         const c = Math.cos(theta);

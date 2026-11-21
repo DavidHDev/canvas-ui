@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  useSlots,
+  watch,
+} from "vue";
 
 import {
   createAsciify,
@@ -8,45 +16,73 @@ import {
   type AsciifyOptions,
 } from "./AsciifyVanilla";
 
-const props = defineProps<AsciifyOptions>();
+const props = withDefaults(
+  defineProps<AsciifyOptions & { fixed?: boolean }>(),
+  { keepText: undefined, fixed: false },
+);
 
+const slots = useSlots();
 const sourceEl = ref<HTMLCanvasElement | null>(null);
 const contentEl = ref<HTMLDivElement | null>(null);
 const outputEl = ref<HTMLCanvasElement | null>(null);
-const native = ref(false);
+const supported = ref(false);
+const failed = ref(false);
+
+const hasContent = computed(() => Boolean(slots.default));
+const native = computed(
+  () =>
+    supported.value &&
+    !failed.value &&
+    hasContent.value &&
+    props.source === "page",
+);
+const rootStyle = computed(() =>
+  props.fixed
+    ? {
+        position: "fixed" as const,
+        inset: "0",
+        zIndex: "50",
+        pointerEvents: hasContent.value ? undefined : ("none" as const),
+      }
+    : { position: "relative" as const },
+);
 
 let instance: AsciifyInstance | null = null;
 let disposed = false;
+let ready = false;
+let generation = 0;
 
-onMounted(async () => {
-  native.value = supportsHtmlInCanvas();
+function options(): AsciifyOptions {
+  const { fixed, ...rest } = props;
+  void fixed;
+  return rest;
+}
+
+async function mount() {
+  const id = ++generation;
+  instance?.destroy();
+  instance = null;
   await nextTick();
-  if (disposed) return;
-  if (sourceEl.value && contentEl.value && outputEl.value) {
-    instance = createAsciify(
-      {
-        source: sourceEl.value,
-        content: contentEl.value,
-        output: outputEl.value,
-      },
-      props,
-    );
-    if (native.value && !instance) {
-      native.value = false;
-      await nextTick();
-      if (disposed) return;
-      if (sourceEl.value && contentEl.value && outputEl.value) {
-        instance = createAsciify(
-          {
-            source: sourceEl.value,
-            content: contentEl.value,
-            output: outputEl.value,
-          },
-          props,
-        );
-      }
-    }
-  }
+  if (disposed || id !== generation || !outputEl.value) return;
+  instance = createAsciify(
+    {
+      source: native.value ? sourceEl.value : null,
+      content: contentEl.value,
+      output: outputEl.value,
+    },
+    options(),
+  );
+  if (native.value && !instance) failed.value = true;
+}
+
+onMounted(() => {
+  supported.value = supportsHtmlInCanvas();
+  ready = true;
+  void mount();
+});
+
+watch(native, () => {
+  if (ready) void mount();
 });
 
 onBeforeUnmount(() => {
@@ -57,24 +93,20 @@ onBeforeUnmount(() => {
 
 watch(
   () => ({ ...props }),
-  (next) => instance?.setOptions(next),
+  () => instance?.setOptions(options()),
   { deep: true },
 );
 </script>
 
 <template>
-  <div style="position: relative">
+  <div :style="rootStyle">
     <canvas
+      v-if="native"
       ref="sourceEl"
       layoutsubtree="true"
-      :style="
-        native
-          ? 'position: absolute; inset: 0; width: 100%; height: 100%'
-          : 'display: none'
-      "
+      style="position: absolute; inset: 0; width: 100%; height: 100%"
     >
       <div
-        v-if="native"
         ref="contentEl"
         style="position: relative; width: 100%; height: 100%; overflow: auto"
       >
@@ -82,7 +114,7 @@ watch(
       </div>
     </canvas>
     <div
-      v-if="!native"
+      v-else-if="hasContent"
       ref="contentEl"
       style="position: relative; width: 100%; height: 100%; overflow: auto"
     >

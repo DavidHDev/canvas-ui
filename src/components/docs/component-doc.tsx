@@ -13,11 +13,10 @@ import { InstallNote, InstallTabs } from "@/components/docs/install-tabs";
 import { getDemoSource } from "@/lib/demo-source";
 import { getComponentDependencies, getComponentSources } from "@/lib/registry";
 import {
-  categoryHref,
   getComponent,
   ORDERED_COMPONENTS,
 } from "@/components/common/component-groups";
-import { CATEGORY_META, type ComponentEntry } from "@/data/components";
+import { SUPPORT_META, type ComponentEntry } from "@/data/components";
 import { cn } from "@/lib/utils";
 
 export interface ComponentDocProps {
@@ -64,11 +63,10 @@ export async function ComponentDoc({
   const webgpuVariants = await getWebGPUVariants(installItem);
   const hasWebGPU = webgpuVariants.length > 0;
   const entry = getComponent(`/docs/components/${installItem}`);
+  const support = entry ? SUPPORT_META[entry.support] : null;
   const chips = Array.from(
     new Set([...(tags ?? []), ...(hasWebGPU ? ["webgl", "webgpu"] : [])]),
-  ).filter(
-    (tag) => !(entry?.category === "live-html" && tag === "html-in-canvas"),
-  );
+  ).filter((tag) => !support?.labels.includes(tag));
 
   return (
     <article data-wide-page="" className="mx-auto w-full max-w-4xl">
@@ -94,16 +92,17 @@ export async function ComponentDoc({
       <p className="mt-3 max-w-xl text-base leading-7 text-pretty text-muted-foreground">
         {description}
       </p>
-      {entry || chips.length > 0 ? (
+      {support || chips.length > 0 ? (
         <div className="mt-4 flex flex-wrap gap-1.5">
-          {entry ? (
-            <Link
-              href={categoryHref(entry.category)}
-              className="chip pressable font-medium text-foreground/80 transition-[color,background-color,transform] duration-150 ease-out hover:bg-muted hover:text-foreground"
+          {support?.labels.map((label) => (
+            <span
+              key={label}
+              title={support.title}
+              className="chip font-medium text-foreground/80"
             >
-              {CATEGORY_META[entry.category].label}
-            </Link>
-          ) : null}
+              {label}
+            </span>
+          ))}
           {chips.map((tag) => (
             <span key={tag} className="chip">
               {tag}

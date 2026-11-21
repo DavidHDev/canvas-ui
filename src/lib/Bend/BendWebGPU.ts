@@ -36,6 +36,12 @@ export interface BendOptions {
   tumble?: number;
   /** Pointer tilt strength (0 to 1). The face leans subtly toward the cursor. 0 disables. */
   tilt?: number;
+  /** Fades the far end of each fold into the page background, for depth (0 to 1). */
+  fade?: number;
+  /** Blurs each fold as it turns away, like a shallow depth of field (0 to 1). */
+  blur?: number;
+  /** Scrolling fast bends the edges further, and they ease back when you stop (0 to 1). */
+  momentum?: number;
   /** CSS rotation applied to the Bend host, used to keep pointer mapping aligned. */
   interactionRotation?: 0 | 90 | -90;
 }
@@ -64,6 +70,9 @@ const DEFAULTS: Required<BendOptions> = {
   bottom: true,
   tumble: 0.5,
   tilt: 0.5,
+  fade: 0.2,
+  blur: 0.3,
+  momentum: 0.35,
   interactionRotation: 0,
 };
 
@@ -146,16 +155,18 @@ struct Params {
   tiltY: f32,
   phi: f32,
   round: f32,
+  fade: f32,
+  blur: f32,
 }
 
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var uContent: texture_2d<f32>;
 @group(0) @binding(2) var uSampler: sampler;
 
-fn foldEdge(sy: f32, amt: f32) -> vec3f {
+fn foldEdge(sy: f32, amt: f32) -> vec4f {
   let yf = 1.0 - params.zone;
-  if (amt < 1e-4) { return vec3f(sy, 0.0, 1.0); }
-  let theta = params.angle * amt;
+  if (amt < 1e-4) { return vec4f(sy, 0.0, 1.0, 0.0); }
+  let theta = min(params.angle * amt, 2.9);
   if (params.round < 1e-4) {
     let s = sin(theta) * params.dir;
     let c = cos(theta);
@@ -164,9 +175,9 @@ fn foldEdge(sy: f32, amt: f32) -> vec3f {
     let t = clamp(tRaw, 0.0, params.zone);
     let z = max(t * s, -0.85 * params.persp);
     let alpha = 1.0 - smoothstep(params.zone, params.zone + 2.0 * params.pxY, tRaw);
-    return vec3f(yf + t, z, alpha);
+    return vec4f(yf + t, z, alpha, step(1e-6, t) * theta);
   }
-  if (sy <= yf) { return vec3f(sy, 0.0, 1.0); }
+  if (sy <= yf) { return vec4f(sy, 0.0, 1.0, 0.0); }
   let R = min(params.round, params.zone);
   let r = R / theta;
   let ca = cos(theta);
@@ -208,9 +219,26 @@ fn foldEdge(sy: f32, amt: f32) -> vec3f {
   }
   if (bestU < 0.0) {
     let alpha = 1.0 - smoothstep(maxSy - params.pxY, maxSy + params.pxY, sy);
-    return vec3f(1.0, prevZ, alpha);
+    return vec4f(1.0, prevZ, alpha, theta);
   }
-  return vec3f(yf + bestU, bestZ, 1.0);
+  return vec4f(yf + bestU, bestZ, 1.0, select(theta, bestU / r, bestU <= R));
+}
+
+fn depthBlur(uv: vec2f, lod: f32, radius: f32) -> vec4f {
+  let sampleLod = lod + max(log2(max(radius, 1.0)) - 1.5, 0.0);
+  let stepUv = radius * exp2(lod) / params.contentSize;
+  let hi = vec2f(params.maxX, 1.0);
+  var acc = vec4f(0.0);
+  var total = 0.0;
+  for (var i = 0; i < 12; i++) {
+    let t = (f32(i) + 0.5) / 12.0;
+    let a = f32(i) * 2.39996;
+    let offset = vec2f(cos(a), sin(a)) * sqrt(t) * stepUv;
+    let w = exp(-2.0 * t);
+    acc += textureSampleLevel(uContent, uSampler, clamp(uv + offset, vec2f(0.0), hi), sampleLod) * w;
+    total += w;
+  }
+  return acc / total;
 }
 
 fn tipPlane(sy: f32, phi: f32) -> vec2f {
@@ -247,6 +275,7 @@ fn tipPlane(sy: f32, phi: f32) -> vec2f {
 
   let top = foldEdge(uv.y, params.topAmt);
   let bot = foldEdge(1.0 - uv.y, params.botAmt);
+  let bend = inTop * top.w + inBot * bot.w;
 
   var srcY = uv.y;
   srcY = mix(srcY, top.x, inTop);
@@ -270,8 +299,18 @@ fn tipPlane(sy: f32, phi: f32) -> vec2f {
   let dx = dpdx(sampleUv) * params.contentSize;
   let dy = dpdy(sampleUv) * params.contentSize;
   let lod = max(0.0, log2(max(length(dx), length(dy))));
-  let base = textureSampleLevel(uContent, uSampler, sampleUv, lod);
-  let rgb = mix(params.bg, base.rgb, alpha * base.a) * params.cover;
+  let blurDepth = clamp(bend / max(params.angle, 0.01), 0.0, 1.0);
+  let blurRadius = params.blur * 24.0 * pow(smoothstep(0.0, 1.0, blurDepth), 1.5);
+  var base = textureSampleLevel(uContent, uSampler, sampleUv, lod);
+  if (blurRadius > 0.01) {
+    base = depthBlur(sampleUv, lod, blurRadius);
+  }
+  var color = base.rgb;
+  if (bend > 1e-4) {
+    let depth = clamp(bend / max(params.angle, 0.01), 0.0, 1.0);
+    color = mix(color, params.bg, params.fade * 0.9 * depth * depth);
+  }
+  let rgb = mix(params.bg, clamp(color, vec3f(0.0), vec3f(1.0)), alpha * base.a) * params.cover;
 
   return vec4f(rgb, params.cover);
 }`;
@@ -444,6 +483,11 @@ export function createBend(
   let tiltYTarget = 0;
   let tiltXCurrent = 0;
   let tiltYCurrent = 0;
+  let topVelocity = 0;
+  let bottomVelocity = 0;
+  let scrollSpeed = 0;
+  let lastScrollTop = 0;
+  let lastScrollTime = 0;
 
   function syncScroll() {
     const max = content.scrollHeight - content.clientHeight;
@@ -613,6 +657,8 @@ export function createBend(
         tiltY: tiltYCurrent,
         phi: phiCurrent,
         round: Math.min(Math.max(config.rounding, 0) / h, zoneFrac),
+        fade: Math.min(Math.max(config.fade, 0), 1),
+        blur: Math.min(Math.max(config.blur, 0), 1),
       },
     });
     gpuFrame(gpu, (f) => f.pass(screen!, fx!));
@@ -644,16 +690,47 @@ export function createBend(
     }
     const delta = Math.min((now - lastTime) / 1000, 1 / 30);
     lastTime = now;
+    scrollSpeed *= Math.exp(-delta / 0.12);
+    if (Math.abs(scrollSpeed) < 5) scrollSpeed = 0;
+    const boost = reducedMotion
+      ? 0
+      : Math.min(Math.max(config.momentum, 0), 1) *
+        Math.min(Math.abs(scrollSpeed) / 2500, 1) *
+        0.6;
+    const topGoal = topTarget * (1 + boost);
+    const bottomGoal = bottomTarget * (1 + boost);
     const tau = config.smoothing;
-    const k =
-      reducedMotion || tau <= 0
-        ? 1
-        : 1 - Math.exp(-delta / Math.max(tau, 1e-4));
-    topCurrent += (topTarget - topCurrent) * k;
-    bottomCurrent += (bottomTarget - bottomCurrent) * k;
-    if (Math.abs(topTarget - topCurrent) < 0.001) topCurrent = topTarget;
-    if (Math.abs(bottomTarget - bottomCurrent) < 0.001)
-      bottomCurrent = bottomTarget;
+    if (reducedMotion || tau <= 0) {
+      topCurrent = topGoal;
+      bottomCurrent = bottomGoal;
+      topVelocity = 0;
+      bottomVelocity = 0;
+    } else {
+      const omega = 1.8 / Math.max(tau, 1e-3);
+      const steps = Math.max(1, Math.ceil(delta * 240));
+      const dt = delta / steps;
+      for (let i = 0; i < steps; i++) {
+        topVelocity +=
+          (omega * omega * (topGoal - topCurrent) - 2 * omega * topVelocity) * dt;
+        topCurrent += topVelocity * dt;
+        bottomVelocity +=
+          (omega * omega * (bottomGoal - bottomCurrent) -
+            2 * omega * bottomVelocity) *
+          dt;
+        bottomCurrent += bottomVelocity * dt;
+      }
+      if (Math.abs(topGoal - topCurrent) < 0.0008 && Math.abs(topVelocity) < 0.002) {
+        topCurrent = topGoal;
+        topVelocity = 0;
+      }
+      if (
+        Math.abs(bottomGoal - bottomCurrent) < 0.0008 &&
+        Math.abs(bottomVelocity) < 0.002
+      ) {
+        bottomCurrent = bottomGoal;
+        bottomVelocity = 0;
+      }
+    }
 
     over *= Math.exp(-delta / 0.22);
     if (Math.abs(over) < 0.5) over = 0;
@@ -677,6 +754,9 @@ export function createBend(
     render();
     if (
       !contentDirty &&
+      scrollSpeed === 0 &&
+      topVelocity === 0 &&
+      bottomVelocity === 0 &&
       topCurrent === topTarget &&
       bottomCurrent === bottomTarget &&
       over === 0 &&
@@ -731,6 +811,15 @@ export function createBend(
     });
 
   function onScroll() {
+    const now = performance.now();
+    const scrollTop = content.scrollTop;
+    if (now - lastScrollTime < 200) {
+      const instant =
+        (scrollTop - lastScrollTop) / Math.max((now - lastScrollTime) / 1000, 1 / 240);
+      scrollSpeed += (instant - scrollSpeed) * 0.5;
+    }
+    lastScrollTop = scrollTop;
+    lastScrollTime = now;
     syncScroll();
     if (htmlInCanvas) paintable.requestPaint!();
     if (hoverOn) updateHover(hoverClientX, hoverClientY);
@@ -824,7 +913,7 @@ export function createBend(
     const fold = (sy: number, amt: number): [number, number, number] => {
       const yf = 1 - zone;
       if (amt < 1e-4) return [sy, 0, 1];
-      const theta = angle * amt;
+      const theta = Math.min(angle * amt, 2.9);
       if (round < 1e-4) {
         const s = Math.sin(theta) * dirSign;
         const c = Math.cos(theta);

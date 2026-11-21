@@ -13,20 +13,30 @@ import * as WebGL from "@/lib/Asciify/AsciifyVanilla";
 import * as WebGPU from "@/lib/Asciify/AsciifyWebGPU";
 import { useLiveRenderer } from "@/components/docs/live-renderer";
 
-type AsciifyCharset = WebGL.AsciifyCharset;
+type AsciifyClick = WebGL.AsciifyClick;
 type AsciifyInstance = WebGL.AsciifyInstance;
 type AsciifyOptions = WebGL.AsciifyOptions;
+type AsciifySource = WebGL.AsciifySource;
 
 export interface AsciifyProps extends AsciifyOptions {
-  children: ReactNode;
+  children?: ReactNode;
+  fixed?: boolean;
   className?: string;
   style?: React.CSSProperties;
 }
 
 const emptySubscribe = () => () => {};
 
+const fill = {
+  position: "absolute",
+  inset: 0,
+  width: "100%",
+  height: "100%",
+} as const;
+
 export function Asciify({
   children,
+  fixed = false,
   className,
   style,
   ...options
@@ -52,15 +62,15 @@ export function Asciify({
     supportsHtmlInCanvas,
     () => false,
   );
-  const native = supported && !failed;
+  const hasContent = children !== undefined && children !== null;
+  const native =
+    supported && !failed && hasContent && options.source === "page";
 
   useEffect(() => {
-    const source = sourceRef.current;
-    const content = contentRef.current;
     const output = outputRef.current;
-    if (!source || !content || !output) return;
+    if (!output) return;
     instanceRef.current = createAsciify(
-      { source, content, output },
+      { source: sourceRef.current, content: contentRef.current, output },
       initialOptions,
     );
     if (native && !instanceRef.current) setFailed(true);
@@ -74,61 +84,57 @@ export function Asciify({
     instanceRef.current?.setOptions(options);
   });
 
+  const content = hasContent ? (
+    <div
+      ref={contentRef}
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        overflow: "auto",
+      }}
+    >
+      {children}
+    </div>
+  ) : null;
+
   return (
-    <div key={renderer} className={className} style={{ position: "relative", ...style }}>
-      <canvas
-        ref={sourceRef}
-        // @ts-expect-error experimental html-in-canvas attribute
-        layoutsubtree="true"
-        suppressHydrationWarning
-        style={
-          native
-            ? { position: "absolute", inset: 0, width: "100%", height: "100%" }
-            : { display: "none" }
-        }
-      >
-        {native ? (
-          <div
-            ref={contentRef}
-            style={{
-              position: "relative",
-              width: "100%",
-              height: "100%",
-              overflow: "auto",
-            }}
-          >
-            {children}
-          </div>
-        ) : null}
-      </canvas>
-      {!native ? (
-        <div
-          ref={contentRef}
-          style={{
-            position: "relative",
-            width: "100%",
-            height: "100%",
-            overflow: "auto",
-          }}
+    <div key={renderer}
+      className={className}
+      style={
+        fixed
+          ? {
+              position: "fixed",
+              inset: 0,
+              zIndex: 50,
+              pointerEvents: hasContent ? undefined : "none",
+              ...style,
+            }
+          : { position: "relative", ...style }
+      }
+    >
+      {native ? (
+        <canvas
+          ref={sourceRef}
+          // @ts-expect-error experimental html-in-canvas attribute
+          layoutsubtree="true"
+          suppressHydrationWarning
+          style={fill}
         >
-          {children}
-        </div>
-      ) : null}
+          {content}
+        </canvas>
+      ) : (
+        content
+      )}
       <canvas
         ref={outputRef}
         aria-hidden
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          pointerEvents: "none",
-        }}
+        style={{ ...fill, pointerEvents: "none" }}
       />
     </div>
   );
 }
 
-export type { AsciifyCharset, AsciifyInstance, AsciifyOptions };
+export type { AsciifyClick, AsciifyInstance, AsciifyOptions, AsciifySource };
 
 export default Asciify;

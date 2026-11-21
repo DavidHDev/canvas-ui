@@ -3,7 +3,7 @@
 import { Check, Copy } from "@/components/icons";
 import { useState } from "react";
 
-import { CATEGORY_META, COMPONENTS } from "@/data/components";
+import { COMPONENTS, SUPPORT_META } from "@/data/components";
 import { photoSrcSet, photoUrl } from "@/lib/demo-photo";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +47,7 @@ function Tags({ slug, className }: { slug: string; className?: string }) {
   const entry = entryFor(slug);
   return (
     <div className={cn("flex flex-wrap gap-1.5", className)}>
-      {[CATEGORY_META[entry.category].label, "WebGL", "WebGPU"].map((tag) => (
+      {[SUPPORT_META[entry.support].labels[0], "WebGL", "WebGPU"].map((tag) => (
         <span key={tag} className="chip">
           {tag}
         </span>

@@ -56,13 +56,20 @@ export function useDemoScrollbarGutter() {
     const el = contentEl;
     if (!el) return;
     const root = document.documentElement;
+    let scroller: HTMLElement | null = null;
+    for (let node = el.parentElement; node; node = node.parentElement) {
+      const overflow = getComputedStyle(node).overflowY;
+      if (overflow === "auto" || overflow === "scroll") {
+        scroller = node;
+        break;
+      }
+    }
     const update = () => {
       if (!el.isConnected) return;
-      const gutter = Math.max(
-        0,
-        Math.round(root.clientWidth - el.getBoundingClientRect().width),
-      );
-      root.style.setProperty("--demo-sbw", `${gutter}px`);
+      const gutter = scroller
+        ? scroller.offsetWidth - scroller.clientWidth
+        : root.clientWidth - el.getBoundingClientRect().width;
+      root.style.setProperty("--demo-sbw", `${Math.max(0, Math.round(gutter))}px`);
     };
     update();
     const observer = new ResizeObserver(update);
@@ -494,11 +501,9 @@ type SchemaValuesOf<S extends ControlSchema> = DemoPreset<S>["values"];
 
 function Advanced({
   count,
-  aside,
   children,
 }: {
   count: number;
-  aside?: ReactNode;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -522,7 +527,6 @@ function Advanced({
           Advanced
           <span className="text-muted-foreground/70 tabular-nums">{count}</span>
         </button>
-        {aside}
       </div>
       <div
         className="grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none"
@@ -606,19 +610,20 @@ function ControlsBody<S extends ControlSchema>({
 
   return (
     <div className="@container flex flex-col gap-4">
-      {hasPresets ? (
-        <PresetPicker controls={controls} presets={presets} onApply={onReset} />
-      ) : null}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+        {hasPresets ? (
+          <PresetPicker controls={controls} presets={presets} onApply={onReset} />
+        ) : null}
+        {actions}
+      </div>
 
       <GroupGrid groups={primary} renderRow={renderRow} />
 
       {advancedKeys.length > 0 ? (
-        <Advanced count={advancedKeys.length} aside={actions}>
+        <Advanced count={advancedKeys.length}>
           <GroupGrid groups={advanced} renderRow={renderRow} />
         </Advanced>
-      ) : (
-        <div className="-mt-1 flex items-center">{actions}</div>
-      )}
+      ) : null}
     </div>
   );
 }

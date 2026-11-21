@@ -40,6 +40,9 @@ const CONTROLS = {
     decimals: 0,
     group: "Fold",
   }),
+  fade: scrub("Depth fade", 0.2, { min: 0, max: 1, step: 0.05, group: "Look" }),
+  blur: scrub("Depth blur", 0.3, { min: 0, max: 1, step: 0.05, group: "Look" }),
+  momentum: scrub("Momentum", 0.35, { min: 0, max: 1, step: 0.05, group: "Motion" }),
   top: toggle("Top edge", true, { group: "Edges" }),
   bottom: toggle("Bottom edge", true, { group: "Edges" }),
   tilt: scrub("Cursor tilt", 0.5, { min: 0, max: 1, step: 0.05, group: "Edges" }),
@@ -76,8 +79,12 @@ const CONTROLS = {
 
 const PRESETS = presets(CONTROLS, [
   { label: "Cube", values: { angle: 90, rounding: 0, zone: 200 } },
-  { label: "Gentle", values: { angle: 40, rounding: 320, zone: 160 } },
-  { label: "Outward", values: { direction: "out", angle: 60 } },
+  { label: "Gentle", values: { angle: 40, rounding: 320, zone: 160, fade: 0 } },
+  { label: "Outward", values: { direction: "out", angle: 60, fade: 0.45 } },
+  {
+    label: "Drum",
+    values: { angle: 130, zone: 300, rounding: 300, fade: 0.45, blur: 0.6, momentum: 0.6 },
+  },
 ]);
 
 export function BendDemo({ children }: { children: ReactNode }) {

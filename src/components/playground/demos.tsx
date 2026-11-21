@@ -58,7 +58,7 @@ export const PLAYGROUND_DEMOS: PlaygroundDemo[] = [
   {
     slug: "asciify",
     name: "Asciify",
-    description: "An ascii lens that follows your cursor.",
+    description: "A trail of soft ascii glyphs that follows your cursor.",
     kind: "wrap",
     Component: load(() =>
       import("@/demos/asciify-demo").then((m) => m.AsciifyDemo),
@@ -92,7 +92,7 @@ export const PLAYGROUND_DEMOS: PlaygroundDemo[] = [
   {
     slug: "canvas",
     name: "Canvas",
-    description: "The page painted onto canvas, with a brush for a cursor.",
+    description: "Woven canvas, paper or parchment over, behind, or under your page.",
     kind: "wrap",
     Component: load(() =>
       import("@/demos/canvas-demo").then((m) => m.CanvasDemo),

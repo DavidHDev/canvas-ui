@@ -26,7 +26,7 @@ const COMPONENTS: Record<string, ComponentDef> = {
   asciify: {
     base: "Asciify",
     description:
-      "Redraws your page as live ascii characters in a soft radius around the cursor, with real glyph, shade block, and binary ramps. The HTML stays interactive in Chromium and Firefox.",
+      "Draws a soft trail of ascii glyphs in a color gradient behind the cursor that drifts like smoke and ripples outward on click. Works over any page in every browser; with html-in-canvas it can redraw the page itself as glyphs. No dependencies.",
   },
   bend: {
     base: "Bend",
@@ -51,7 +51,7 @@ const COMPONENTS: Record<string, ComponentDef> = {
   canvas: {
     base: "Canvas",
     description:
-      "Paints your page onto woven artist canvas, with fiber texture, paper tint, grain, a dotted halftone screen, and a soft intro crossfade. Text stays crisp and readable. The HTML stays interactive. No dependencies.",
+      "Woven canvas, linen, burlap, paper and parchment textures you can lay over a page, put behind content, print an image onto, or print the page itself onto with html-in-canvas. A soft cursor light rakes across the weave. Built on Paper Shaders' paper texture. No dependencies.",
   },
   cloth: {
     base: "Cloth",

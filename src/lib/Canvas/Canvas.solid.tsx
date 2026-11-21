@@ -14,8 +14,11 @@ import {
 import {
   createCanvas,
   supportsHtmlInCanvas,
+  type CanvasFit,
   type CanvasInstance,
+  type CanvasLayer,
   type CanvasOptions,
+  type CanvasPreset,
 } from "./CanvasVanilla";
 
 declare module "solid-js" {
@@ -27,22 +30,55 @@ declare module "solid-js" {
 }
 
 export interface CanvasProps extends CanvasOptions {
-  children: JSX.Element;
+  children?: JSX.Element;
+  fixed?: boolean;
   class?: string;
   style?: JSX.CSSProperties;
 }
 
+const fill = {
+  position: "absolute",
+  inset: "0",
+  width: "100%",
+  height: "100%",
+} as const;
+
 export function Canvas(props: CanvasProps) {
-  const [local, options] = splitProps(props, ["children", "class", "style"]);
+  const [local, options] = splitProps(props, [
+    "children",
+    "fixed",
+    "class",
+    "style",
+  ]);
   const content = children(() => local.children);
   const [mounted, setMounted] = createSignal(false);
   const [supported, setSupported] = createSignal(false);
   const [failed, setFailed] = createSignal(false);
-  const native = () => supported() && !failed();
+  const hasContent = () => {
+    const resolved = content();
+    if (Array.isArray(resolved)) return resolved.length > 0;
+    return resolved !== undefined && resolved !== null;
+  };
+  const native = () =>
+    supported() && !failed() && hasContent() && options.layer === "page";
+  const behind = () =>
+    options.layer === undefined || options.layer === "background";
+  const insetX = () =>
+    options.layer === "foreground" ? 0 : Math.max(options.insetX ?? 0, 0);
+  const insetY = () =>
+    options.layer === "foreground" ? 0 : Math.max(options.insetY ?? 0, 0);
+  const contentStyle = (): JSX.CSSProperties => ({
+    position: "relative",
+    width: "100%",
+    height: "100%",
+    overflow: "auto",
+    "box-sizing": "border-box",
+    padding: insetX() || insetY() ? `${insetY()}px ${insetX()}px` : undefined,
+  });
 
-  let sourceEl!: HTMLCanvasElement;
   let outputEl!: HTMLCanvasElement;
   let instance: CanvasInstance | null = null;
+  const [sourceEl, setSourceEl] = createSignal<HTMLCanvasElement>();
   const [contentEl, setContentEl] = createSignal<HTMLDivElement>();
 
   onMount(() => {
@@ -51,12 +87,19 @@ export function Canvas(props: CanvasProps) {
   });
 
   createEffect(() => {
-    const contentRoot = contentEl();
-    if (!mounted() || !contentRoot) return;
+    if (!mounted()) return;
     const useNative = native();
+    const source = sourceEl();
+    const contentRoot = contentEl();
+    if (useNative && (!source || !contentRoot)) return;
+    if (!useNative && hasContent() && !contentRoot) return;
     const initialOptions = untrack(() => ({ ...options }));
     const next = createCanvas(
-      { source: sourceEl, content: contentRoot, output: outputEl },
+      {
+        source: useNative ? source : null,
+        content: contentRoot ?? null,
+        output: outputEl,
+      },
       initialOptions,
     );
     instance = next;
@@ -72,45 +115,29 @@ export function Canvas(props: CanvasProps) {
   });
 
   return (
-    <div class={local.class} style={{ position: "relative", ...local.style }}>
-      <canvas
-        ref={sourceEl}
-        attr:layoutsubtree="true"
-        style={
-          native()
-            ? {
-                position: "absolute",
-                inset: "0",
-                width: "100%",
-                height: "100%",
-              }
-            : { display: "none" }
-        }
-      >
-        {native() ? (
-          <div
-            ref={setContentEl}
-            style={{
-              position: "relative",
-              width: "100%",
-              height: "100%",
-              overflow: "auto",
-            }}
-          >
+    <div
+      class={local.class}
+      style={
+        local.fixed
+          ? {
+              position: "fixed",
+              inset: "0",
+              "z-index": behind() ? "-1" : "50",
+              "pointer-events": hasContent() ? undefined : "none",
+              isolation: "isolate",
+              ...local.style,
+            }
+          : { position: "relative", isolation: "isolate", ...local.style }
+      }
+    >
+      {native() ? (
+        <canvas ref={setSourceEl} attr:layoutsubtree="true" style={fill}>
+          <div ref={setContentEl} style={contentStyle()}>
             {content()}
           </div>
-        ) : null}
-      </canvas>
-      {!native() ? (
-        <div
-          ref={setContentEl}
-          style={{
-            position: "relative",
-            width: "100%",
-            height: "100%",
-            overflow: "auto",
-          }}
-        >
+        </canvas>
+      ) : hasContent() ? (
+        <div ref={setContentEl} style={contentStyle()}>
           {content()}
         </div>
       ) : null}
@@ -118,17 +145,15 @@ export function Canvas(props: CanvasProps) {
         ref={outputEl}
         aria-hidden="true"
         style={{
-          position: "absolute",
-          inset: "0",
-          width: "100%",
-          height: "100%",
+          ...fill,
           "pointer-events": "none",
+          "z-index": behind() && hasContent() ? "-1" : undefined,
         }}
       />
     </div>
   );
 }
 
-export type { CanvasInstance, CanvasOptions };
+export type { CanvasFit, CanvasInstance, CanvasLayer, CanvasOptions, CanvasPreset };
 
 export default Canvas;
