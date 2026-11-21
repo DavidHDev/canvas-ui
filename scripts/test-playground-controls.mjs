@@ -11,6 +11,7 @@ const stubs = {
     import { createContext, useLayoutEffect } from "react";
     export const DemoControlsTargetContext = createContext(null);
     export const ColorRow = () => null;
+    export const SwitchRow = () => null;
     const setContent = () => {};
     export const useDemoScrollbarGutter = () => setContent;
     export function DemoControls({ controls, title }) {
@@ -174,15 +175,18 @@ try {
   assert.equal((await values()).radius, 1.5);
   assert.equal(new URL(page.url()).searchParams.get("radius"), "1.5");
 
-  await load("?radius=0.75&color=abcdef&rainbow=true&tracking=keep");
+  await load("?radius=0.75&color=abcdef&rainbow=true&prism=true&blur=1.5&continuous=true&tracking=keep");
   assert.equal((await values()).radius, 0.75);
+  assert.equal((await values()).prism, true);
+  assert.equal((await values()).blur, 1.5);
+  assert.equal((await values()).continuous, true);
   await page.locator("#same-component").click();
-  await waitForQuery({ radius: "1.5", color: "abcdef", rainbow: "true", tracking: "keep" });
+  await waitForQuery({ radius: "1.5", color: "abcdef", rainbow: "true", prism: "true", blur: "1.5", continuous: "true", tracking: "keep" });
   assert.equal((await values()).radius, 1.5);
   assert.equal(await page.locator("#active").textContent(), "liquid");
 
   await page.locator("#particle").click();
-  await waitForQuery({ c: "particle-reveal", radius: null, color: null, rainbow: null, tracking: "keep" });
+  await waitForQuery({ c: "particle-reveal", radius: null, color: null, rainbow: null, prism: null, blur: null, continuous: null, tracking: "keep" });
   assert.equal((await values()).radius, 500);
   const particleRenders = await page.evaluate(() => window.controlRenders.filter(render => render.title === "Particle Reveal controls"));
   assert.ok(particleRenders.length > 0);

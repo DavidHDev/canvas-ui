@@ -32,6 +32,13 @@ const API_REFERENCE: ApiProp[] = [
     defaultValue: "0.3",
   },
   {
+    name: "continuous",
+    description:
+      "Connect pointer positions with continuous strokes in every color mode, including the DOM overlay fallback.",
+    type: "boolean",
+    defaultValue: "false",
+  },
+  {
     name: "curl",
     description: "Rotational force added back into the flow.",
     type: "number",
@@ -45,9 +52,16 @@ const API_REFERENCE: ApiProp[] = [
   },
   {
     name: "distortion",
-    description: "How strongly the flow warps the content.",
+    description: "How strongly the flow warps the content. Independent of blur.",
     type: "number",
     defaultValue: "0.4",
+  },
+  {
+    name: "blur",
+    description:
+      "Directional blur strength in every color mode. 0 disables it; 1 is the base strength. Requires captured content.",
+    type: "number",
+    defaultValue: "0",
   },
   {
     name: "blend",
@@ -85,14 +99,21 @@ const API_REFERENCE: ApiProp[] = [
   {
     name: "color",
     description:
-      "Trail color as [r, g, b] in 0-1 range. Ignored when rainbow is on.",
+      "Trail color as [r, g, b] in 0-1 range. Ignored when rainbow or prism is on.",
     type: "[number, number, number]",
     defaultValue: "[0.145, 0.239, 0.867]",
   },
   {
     name: "rainbow",
     description:
-      "Color the trail from the flow direction instead of a fixed color.",
+      "Color the trail from the flow direction. Ignored when prism is on.",
+    type: "boolean",
+    defaultValue: "false",
+  },
+  {
+    name: "prism",
+    description:
+      "Add iridescent oil-film colors, overriding rainbow and color.",
     type: "boolean",
     defaultValue: "false",
   },

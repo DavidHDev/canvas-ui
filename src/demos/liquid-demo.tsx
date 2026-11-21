@@ -8,7 +8,7 @@ import {
   scrub,
   toggle,
 } from "@/components/demos/control-schema";
-import { ColorRow, DemoControls } from "@/components/demos/demo-controls";
+import { ColorRow, DemoControls, SwitchRow } from "@/components/demos/demo-controls";
 import { StageHint } from "@/components/demos/demo-stage";
 import { useDemoSurface, type DemoProps } from "@/components/demos/demo-surface";
 import { useDemoControls } from "@/hooks/use-demo-controls";
@@ -16,6 +16,7 @@ import { Liquid } from "@/components/docs/live/Liquid";
 import { DocsScene } from "@/demos/scenes";
 
 const CONTROLS = {
+  prism: toggle("Prism", false, { group: "Look" }),
   color: color("Trail color", "#425bff", { group: "Look" }),
   rainbow: toggle("Rainbow trail", false, { group: "Look" }),
   intensity: scrub("Color strength", 2, {
@@ -124,12 +125,13 @@ export function LiquidDemo({ children }: DemoProps) {
     <DocsScene slug="liquid" photo={2} />,
   );
 
-  const { color, rainbow, quality, ...values } = controls.values;
+  const { color, rainbow, prism, quality, ...values } = controls.values;
   const props = {
     ...values,
     ...RESOLUTION[quality],
     color: hexToRgb(color),
     rainbow,
+    prism,
   };
 
   return (
@@ -142,8 +144,17 @@ export function LiquidDemo({ children }: DemoProps) {
         presets={PRESETS}
         snippet={{ component: "Liquid", props }}
         rows={{
+          rainbow: (
+            <div inert={prism} className={prism ? "pointer-events-none opacity-40" : ""}>
+              <SwitchRow
+                label="Rainbow trail"
+                checked={rainbow}
+                onCheckedChange={(next) => setValue("rainbow", next)}
+              />
+            </div>
+          ),
           color: (
-            <div className={rainbow ? "pointer-events-none opacity-40" : ""}>
+            <div inert={rainbow || prism} className={rainbow || prism ? "pointer-events-none opacity-40" : ""}>
               <ColorRow
                 label="Trail color"
                 value={color}
