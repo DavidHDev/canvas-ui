@@ -22,16 +22,22 @@ export interface LiquidOptions {
   radius?: number;
   /** Force multiplier applied on pointer movement. */
   force?: number;
+  /** Connect pointer positions with continuous strokes in every color mode. */
+  continuous?: boolean;
   /** Strength of the color tint left by the flow. */
   intensity?: number;
   /** How strongly the flow warps the content. */
   distortion?: number;
+  /** Directional blur strength in every color mode. 0 disables it. Requires captured content. */
+  blur?: number;
   /** How much of the fluid color blends over the content. */
   blend?: number;
-  /** Trail color as [r, g, b] in 0-1 range. Ignored when rainbow is on. */
+  /** Trail color as [r, g, b] in 0-1 range. Ignored when rainbow or prism is on. */
   color?: [number, number, number];
-  /** Color the trail from the flow direction instead of a fixed color. */
+  /** Color the trail from the flow direction. Ignored when prism is on. */
   rainbow?: boolean;
+  /** Add iridescent oil-film colors, overriding rainbow and color. */
+  prism?: boolean;
 }
 
 export interface LiquidElements {
@@ -57,11 +63,14 @@ const DEFAULTS: Required<LiquidOptions> = {
   curl: 1.9,
   radius: 0.3,
   force: 1.1,
+  continuous: false,
   intensity: 2,
   distortion: 0.4,
+  blur: 0,
   blend: 5,
   color: [0.145, 0.239, 0.867],
   rainbow: false,
+  prism: false,
 };
 
 const DT = 1 / 60;
@@ -107,9 +116,11 @@ uniform sampler2D uContent;
 uniform sampler2D uFluid;
 uniform vec3 uColor;
 uniform float uDistortion;
+uniform float uBlur;
 uniform float uIntensity;
 uniform float uBlend;
 uniform float uRainbow;
+uniform float uPrism;
 uniform float uHasContent;
 vec3 toLinear (vec3 c) {
   return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
@@ -117,8 +128,61 @@ vec3 toLinear (vec3 c) {
 vec3 toSrgb (vec3 c) {
   return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
 }
+vec3 prismColor (vec3 base, vec2 velocity, vec3 interference, float mask, float film) {
+  vec3 color = base + interference * mask * 12.5;
+  vec3 pastel = sin(vec3(
+    (velocity.x - velocity.y) * 26.0 + 0.2,
+    (velocity.x + velocity.y) * 31.0 + 2.3,
+    (velocity.y - velocity.x) * 29.0 + 4.1
+  )) * 0.5 + 0.5;
+  pastel = mix(vec3(0.98), pastel, 0.20);
+  return mix(color, color * pastel + vec3(0.018, 0.025, 0.030) * film, film * 0.28);
+}
+float prismNoise (vec2 p) {
+  return fract(sin(dot(p, vec2(41.7, 289.3))) * 45758.5453);
+}
+vec4 sampleContent (vec2 uv, vec2 velocity) {
+  if (uBlur <= 0.0) return texture(uContent, vec2(uv.x, 1.0 - uv.y));
+  vec2 size = vec2(textureSize(uContent, 0));
+  // Sample nine taps along the flow.
+  // A blur strength of 1 corresponds to 15 pixels per tap at full flow.
+  vec2 stepUv = velocity * uBlur * 15.0 / size;
+  vec2 pixel = vUv * size;
+  vec2 jitter = vec2(prismNoise(pixel + vec2(17.0, 29.0)), prismNoise(pixel.yx + vec2(29.0, 17.0)));
+  // Center the blur on the warped position so distortion stays independent.
+  uv += (jitter - 4.5) * stepUv;
+  vec2 edge = 0.5 / size;
+  vec4 content = vec4(0.0);
+  for (int i = 0; i < 9; i++) {
+    vec2 coord = clamp(vec2(uv.x, 1.0 - uv.y), edge, 1.0 - edge);
+    vec4 sampleColor = texture(uContent, coord);
+    content += vec4(sampleColor.rgb * sampleColor.a, sampleColor.a);
+    uv += stepUv;
+  }
+  content /= 9.0;
+  return vec4(content.rgb / max(content.a, 1e-5), content.a);
+}
 void main () {
   vec3 fluid = texture(uFluid, vUv).rgb;
+  // Bound accumulated impulses before computing color phases and blur.
+  float weight = 1.0 - exp(-abs(fluid.b) * 0.1);
+  vec2 velocity = -clamp(fluid.rg * 0.0064, -1.0, 1.0) * weight;
+  vec2 uv = vUv - fluid.rg * uDistortion * 0.001;
+  if (uPrism == 1.0) {
+    vec3 interference = sin(vec3(velocity.x + velocity.y) * 40.0 + vec3(0.0, 1.0, 2.0));
+    float mask = (1.0 - smoothstep(-0.9, 0.4, weight)) * max(abs(velocity.x), abs(velocity.y));
+    float film = smoothstep(0.015, 0.42, weight) * (1.0 - smoothstep(0.78, 1.0, weight));
+    if (uHasContent < 0.5) {
+      vec3 tint = interference * 0.5 + 0.5;
+      float overlay = (1.0 - exp(-(mask * 12.5 + film * 0.08) * uIntensity)) * 0.82;
+      outColor = vec4(tint * overlay, overlay);
+      return;
+    }
+    vec4 content = sampleContent(uv, velocity);
+    vec3 color = mix(content.rgb, prismColor(content.rgb, velocity, interference, mask, film), uBlend * uIntensity * 0.1);
+    outColor = vec4(clamp(color, 0.0, 1.0) * content.a, content.a);
+    return;
+  }
   if (uHasContent < 0.5) {
     float mag = length(fluid);
     vec3 tint = uRainbow == 1.0
@@ -128,8 +192,7 @@ void main () {
     outColor = vec4(toSrgb(clamp(tint, 0.0, 1.0)) * overlay, overlay);
     return;
   }
-  vec2 uv = vUv - fluid.rg * uDistortion * 0.001;
-  vec4 content = texture(uContent, vec2(uv.x, 1.0 - uv.y));
+  vec4 content = sampleContent(uv, velocity);
   content.rgb = toLinear(content.rgb);
   vec3 tint = uRainbow == 1.0 ? fluid : uColor * length(fluid);
   vec4 fluidColor = vec4(tint, 1.0);
@@ -146,10 +209,14 @@ uniform sampler2D uTarget;
 uniform float uAspect;
 uniform vec3 uColor;
 uniform vec2 uPoint;
+uniform vec2 uFrom;
 uniform float uRadius;
 void main () {
   vec2 p = vUv - uPoint;
   p.x *= uAspect;
+  vec2 segment = (uFrom - uPoint) * vec2(uAspect, 1.0);
+  float t = clamp(dot(p, segment) / max(dot(segment, segment), 1e-8), 0.0, 1.0);
+  p -= segment * t;
   vec3 splat = exp(-dot(p, p) / uRadius) * uColor;
   vec3 base = texture(uTarget, vUv).xyz;
   outColor = vec4(base + splat, 1.0);
@@ -636,7 +703,7 @@ export function createLiquid(
     return unit;
   }
 
-  function applySplat(x: number, y: number, dx: number, dy: number) {
+  function applySplat(x: number, y: number, dx: number, dy: number, fromX = x, fromY = y) {
     const aspect = output.clientWidth / Math.max(output.clientHeight, 1);
     const radius = config.radius / 100;
 
@@ -647,6 +714,7 @@ export function createLiquid(
     );
     gl!.uniform1f(splatProgram.uniforms.uAspect, aspect);
     gl!.uniform2f(splatProgram.uniforms.uPoint, x, y);
+    gl!.uniform2f(splatProgram.uniforms.uFrom, config.continuous ? fromX : x, config.continuous ? fromY : y);
     gl!.uniform3f(splatProgram.uniforms.uColor, dx, dy, 10);
     gl!.uniform1f(splatProgram.uniforms.uRadius, radius);
     blit(fluidTargets.velocity.write);
@@ -786,16 +854,22 @@ export function createLiquid(
       srgbToLinear(config.color[2]),
     );
     gl!.uniform1f(displayProgram.uniforms.uDistortion, config.distortion);
+    gl!.uniform1f(displayProgram.uniforms.uBlur, config.blur);
     gl!.uniform1f(displayProgram.uniforms.uIntensity, config.intensity);
     gl!.uniform1f(displayProgram.uniforms.uBlend, config.blend);
     gl!.uniform1f(displayProgram.uniforms.uRainbow, config.rainbow ? 1 : 0);
+    gl!.uniform1f(displayProgram.uniforms.uPrism, config.prism ? 1 : 0);
     gl!.uniform1f(displayProgram.uniforms.uHasContent, htmlInCanvas ? 1 : 0);
     blit(null);
   }
 
   const MAX_PENDING_SPLATS = 64;
+  const MAX_SPLATS_PER_FRAME = 8;
   type Splat = [number, number, number, number];
+  type PointerSplat = [...Splat, number, number];
   const queued: Splat[] = [];
+  // Keep the latest pointer position without replaying a drag over later frames.
+  const pointerSplats = new Map<number, PointerSplat>();
 
   let raf = 0;
   let lastTime = performance.now();
@@ -818,13 +892,25 @@ export function createLiquid(
     }
     const delta = Math.min((now - lastTime) / 1000, 1 / 30);
     lastTime = now;
-    if (queued.length > 0) {
+    if (queued.length > 0 || pointerSplats.size > 0) {
       idleAt = now + idleDelayMs();
-      while (queued.length > 0) applySplat(...queued.shift()!);
+      let remaining = MAX_SPLATS_PER_FRAME;
+      // Reserve one slot so continuous pointer motion cannot starve API calls.
+      const pointerBudget = remaining - (queued.length > 0 ? 1 : 0);
+      let appliedPointers = 0;
+      for (const [id, splat] of pointerSplats) {
+        if (appliedPointers >= pointerBudget) break;
+        pointerSplats.delete(id);
+        applySplat(...splat);
+        appliedPointers++;
+        remaining--;
+      }
+      const count = Math.min(queued.length, remaining);
+      for (let i = 0; i < count; i++) applySplat(...queued.shift()!);
     }
     step(delta);
     render();
-    if (now >= idleAt && !contentDirty && queued.length === 0) {
+    if (now >= idleAt && !contentDirty && queued.length === 0 && pointerSplats.size === 0) {
       running = false;
       return;
     }
@@ -857,10 +943,25 @@ export function createLiquid(
     queued.push(splat);
   }
 
+  function enqueuePointerSplat(id: number, splat: Splat, fromX = splat[0], fromY = splat[1]) {
+    const previous = pointerSplats.get(id);
+    if (previous) {
+      splat[2] += previous[2];
+      splat[3] += previous[3];
+      // Preserve the start while coalescing this frame's pointer events.
+      fromX = previous[4];
+      fromY = previous[5];
+    } else if (pointerSplats.size >= MAX_SPLATS_PER_FRAME) {
+      pointerSplats.delete(pointerSplats.keys().next().value!);
+    }
+    pointerSplats.set(id, [...splat, fromX, fromY]);
+  }
+
   function suspend() {
     cancelAnimationFrame(raf);
     running = false;
     pointers.clear();
+    pointerSplats.clear();
   }
 
   function onVisibilityChange() {
@@ -882,10 +983,13 @@ export function createLiquid(
     }
     const previous = pointers.get(event.pointerId);
     pointers.set(event.pointerId, { x: px, y: py });
-    if (!previous) return;
+    if (!previous) {
+      if (config.continuous) pointerSplats.delete(event.pointerId);
+      return;
+    }
     const dx = (px - previous.x) * config.force;
     const dy = -(py - previous.y) * config.force;
-    enqueueSplat([px / rect.width, 1 - py / rect.height, dx, dy]);
+    enqueuePointerSplat(event.pointerId, [px / rect.width, 1 - py / rect.height, dx, dy], previous.x / rect.width, 1 - previous.y / rect.height);
     start();
   }
 
@@ -896,7 +1000,8 @@ export function createLiquid(
     const y = event.clientY - rect.top;
     if (x < 0 || x > rect.width || y < 0 || y > rect.height) return;
     pointers.set(event.pointerId, { x, y });
-    enqueueSplat([x / rect.width, 1 - y / rect.height, 1, 1]);
+    if (config.continuous) pointerSplats.delete(event.pointerId);
+    enqueuePointerSplat(event.pointerId, [x / rect.width, 1 - y / rect.height, 1, 1]);
     start();
   }
 
