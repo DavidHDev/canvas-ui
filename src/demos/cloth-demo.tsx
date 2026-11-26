@@ -8,10 +8,11 @@ import {
   presets,
   radio,
   scrub,
+  toggle,
 } from "@/components/demos/control-schema";
 import { DemoControls } from "@/components/demos/demo-controls";
 import { StageHint } from "@/components/demos/demo-stage";
-import type { DemoProps } from "@/components/demos/demo-surface";
+import { PageDemoSignup, type DemoProps } from "@/components/demos/demo-surface";
 import { useDemoControls } from "@/hooks/use-demo-controls";
 import { Cloth } from "@/components/docs/live/Cloth";
 import { PhotoScene } from "@/demos/scenes";
@@ -19,62 +20,53 @@ import { PhotoScene } from "@/demos/scenes";
 const AUTO_COLOR = "auto";
 
 const CONTROLS = {
-  wind: scrub("Wind", 3, { min: 0, max: 5, step: 0.05, group: "Fabric" }),
-  amplitude: scrub("Fold height", 30, {
-    min: 0,
-    max: 60,
-    step: 1,
-    decimals: 0,
-    group: "Fabric",
-  }),
-  drape: scrub("Billow", 40, { min: 0, max: 50, step: 1, decimals: 0, group: "Fabric" }),
   pin: radio(
-    "Pinned edge",
+    "Hangs from",
     "top",
     [
       { value: "top", label: "Top" },
-      { value: "bottom", label: "Bottom" },
+      { value: "corners", label: "Corners" },
       { value: "left", label: "Left" },
-      { value: "right", label: "Right" },
+      { value: "none", label: "Nothing" },
     ],
     { group: "Fabric" },
   ),
-  brush: scrub("Brush strength", 2.05, { min: 0, max: 3, step: 0.05, group: "Touch" }),
-  brushSize: scrub("Brush size", 150, {
-    min: 30,
-    max: 260,
-    step: 5,
-    decimals: 0,
-    group: "Touch",
-  }),
-  damping: scrub("Settle", 1, { min: 0.2, max: 4, step: 0.05, group: "Touch" }),
-  light: scrub("Lighting", 0.5, { min: 0, max: 1, step: 0.05, group: "Look" }),
-  shadow: scrub("Shadow", 0.25, { min: 0, max: 1, step: 0.05, group: "Look" }),
+  wind: scrub("Wind", 0.25, { min: 0, max: 1, step: 0.05, group: "Fabric" }),
+  stiffness: scrub("Stiffness", 0.5, { min: 0, max: 1, step: 0.05, group: "Fabric" }),
+  settle: scrub("Settle", 0.3, { min: 0, max: 1, step: 0.05, group: "Fabric" }),
+  drag: toggle("Drag", true, { group: "Touch" }),
+  float: toggle("Float", false, { group: "Touch" }),
+  brush: scrub("Brush", 0.4, { min: 0, max: 1, step: 0.05, group: "Touch" }),
+  light: scrub("Light", 0.6, { min: 0, max: 1, step: 0.05, group: "Look" }),
+  sheen: scrub("Sheen", 0.35, { min: 0, max: 1, step: 0.05, group: "Look" }),
+  weave: scrub("Weave", 0.3, { min: 0, max: 1, step: 0.05, group: "Look" }),
+  shadow: scrub("Shadow", 0.4, { min: 0, max: 1, step: 0.05, group: "Look" }),
   backing: color("Backing", AUTO_COLOR, { auto: { label: "Auto" }, group: "Look" }),
-  speed: scrub("Speed", 0.5, { min: 0, max: 3, step: 0.05, group: "Fabric", advanced: true }),
-  sheen: scrub("Sheen", 0.1, { min: 0, max: 1, step: 0.05, group: "Look", advanced: true }),
-  cornerRadius: scrub("Corners", 20, {
+  cornerRadius: scrub("Corners", 16, {
     min: 0,
-    max: 160,
-    step: 2,
+    max: 80,
+    step: 1,
     decimals: 0,
     group: "Look",
     advanced: true,
   }),
-  perspective: scrub("Perspective", 1200, {
-    min: 400,
+  perspective: scrub("Perspective", 1400, {
+    min: 500,
     max: 4000,
     step: 50,
     decimals: 0,
     group: "Look",
     advanced: true,
   }),
+  speed: scrub("Speed", 1, { min: 0.2, max: 2, step: 0.05, group: "Fabric", advanced: true }),
 };
 
 const PRESETS = presets(CONTROLS, [
-  { label: "Breeze", values: { wind: 1.2, amplitude: 16, drape: 18 } },
-  { label: "Storm", values: { wind: 5, amplitude: 52, drape: 50, speed: 1 } },
-  { label: "Silk", values: { sheen: 0.7, light: 0.85, damping: 0.5, amplitude: 22 } },
+  { label: "Linen", values: { stiffness: 0.5, weave: 0.35, sheen: 0.3, wind: 0.25 } },
+  { label: "Silk", values: { stiffness: 0.08, weave: 0.1, sheen: 0.85, light: 0.75, wind: 0.4 } },
+  { label: "Canvas", values: { stiffness: 0.95, weave: 0.7, sheen: 0.1, wind: 0.15 } },
+  { label: "Banner", values: { pin: "corners", wind: 0.55, stiffness: 0.35 } },
+  { label: "Floating", values: { pin: "none", wind: 0.15, settle: 0.5 } },
 ]);
 
 function usePageScrollSync(inner: HTMLElement | null) {
@@ -85,7 +77,22 @@ function usePageScrollSync(inner: HTMLElement | null) {
     const scroller = inner.parentElement;
     if (!scroller) return;
     const sync = () => {
-      scroller.scrollTop = window.scrollY;
+      if (Math.abs(scroller.scrollTop - window.scrollY) > 1) {
+        scroller.scrollTop = window.scrollY;
+      }
+    };
+    /* scrolls that start inside the panel (the signup button, tabbing to a
+       link) move the page too once they finish, unless the page is past the
+       panel's end; moving the page mid-scroll would cancel a smooth one */
+    let settle = 0;
+    const pull = () => {
+      window.clearTimeout(settle);
+      settle = window.setTimeout(() => {
+        const end = scroller.scrollHeight - scroller.clientHeight - 1;
+        if (Math.abs(scroller.scrollTop - window.scrollY) <= 1) return;
+        if (scroller.scrollTop >= end && window.scrollY > scroller.scrollTop) return;
+        window.scrollTo(0, scroller.scrollTop);
+      }, 120);
     };
     const measure = () => {
       setOverflowPx(Math.max(0, scroller.scrollHeight - scroller.clientHeight));
@@ -96,10 +103,13 @@ function usePageScrollSync(inner: HTMLElement | null) {
     observer.observe(inner);
     observer.observe(scroller);
     window.addEventListener("scroll", sync, { passive: true });
+    scroller.addEventListener("scroll", pull, { passive: true });
     window.addEventListener("resize", measure);
     return () => {
       observer.disconnect();
       window.removeEventListener("scroll", sync);
+      scroller.removeEventListener("scroll", pull);
+      window.clearTimeout(settle);
       window.removeEventListener("resize", measure);
     };
   }, [inner]);
@@ -132,6 +142,7 @@ export function ClothDemo({ children }: DemoProps) {
             >
               <div ref={setInner} className="min-h-full bg-background px-8 pt-10 pb-12">
                 {children}
+                <PageDemoSignup />
               </div>
             </Cloth>
           </div>
@@ -143,10 +154,7 @@ export function ClothDemo({ children }: DemoProps) {
           </Cloth>
         </div>
       )}
-      <StageHint
-        label="Move your cursor across the fabric"
-        touchLabel="Drag across the fabric"
-      />
+      <StageHint label="Grab the fabric and drag it" touchLabel="Drag the fabric" />
       <DemoControls
         title="Cloth controls"
         controls={controls}

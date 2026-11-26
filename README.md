@@ -126,7 +126,7 @@ These draw your real, interactive HTML into the canvas. The full effect needs HT
 | Component                                                 | What it does                         | Component                                                             | What it does                           |
 | --------------------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------- | -------------------------------------- |
 | [**Liquid**](https://canvasui.dev/docs/components/liquid) | Pointer-driven fluid simulation      | [**Ripple**](https://canvasui.dev/docs/components/ripple)             | Water ripples from every click         |
-| [**Cloth**](https://canvasui.dev/docs/components/cloth)   | Fabric rippling in the wind          | [**Droplets**](https://canvasui.dev/docs/components/droplets)         | Rain running down the screen           |
+| [**Cloth**](https://canvasui.dev/docs/components/cloth)   | Fabric you can grab, fold and fling  | [**Droplets**](https://canvasui.dev/docs/components/droplets)         | Rain running down the screen           |
 | [**Bubble**](https://canvasui.dev/docs/components/bubble) | Metaball droplet trailing the cursor | [**Displacement**](https://canvasui.dev/docs/components/displacement) | Grid that ripples away from the cursor |
 
 </details>
@@ -136,7 +136,7 @@ These draw your real, interactive HTML into the canvas. The full effect needs HT
 
 | Component                                                           | What it does                        | Component                                                         | What it does                        |
 | ------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------- | ----------------------------------- |
-| [**Blaze**](https://canvasui.dev/docs/components/blaze)             | Sparks, smoke, and heat distortion  | [**Flame Wrap**](https://canvasui.dev/docs/components/flame-wrap) | Border of fire around any element   |
+| [**Blaze**](https://canvasui.dev/docs/components/blaze)             | Firelight, smoke, embers, heat haze | [**Flame Wrap**](https://canvasui.dev/docs/components/flame-wrap) | Border of fire around any element   |
 | [**Force Field**](https://canvasui.dev/docs/components/force-field) | Energy shield with click shockwaves | [**Laser**](https://canvasui.dev/docs/components/laser)           | Beam that reveals content on scroll |
 
 </details>

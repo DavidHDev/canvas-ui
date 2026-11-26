@@ -449,6 +449,10 @@ export interface DemoSurface {
   props: { className: string; style: CSSProperties; children: ReactNode };
 }
 
+export function PageDemoSignup() {
+  return null;
+}
+
 export function PageDemoContent({ children }: { children: ReactNode }) {
   return <div className="min-h-full bg-background">{children}</div>;
 }

@@ -14,18 +14,28 @@ import * as WebGPU from "@/lib/Clouds/CloudsWebGPU";
 import { useLiveRenderer } from "@/components/docs/live-renderer";
 
 type CloudsInstance = WebGL.CloudsInstance;
+type CloudsLayer = WebGL.CloudsLayer;
 type CloudsOptions = WebGL.CloudsOptions;
 
 export interface CloudsProps extends CloudsOptions {
-  children: ReactNode;
+  children?: ReactNode;
+  fixed?: boolean;
   className?: string;
   style?: React.CSSProperties;
 }
 
 const emptySubscribe = () => () => {};
 
+const fill = {
+  position: "absolute",
+  inset: 0,
+  width: "100%",
+  height: "100%",
+} as const;
+
 export function Clouds({
   children,
+  fixed = false,
   className,
   style,
   ...options
@@ -51,15 +61,16 @@ export function Clouds({
     supportsHtmlInCanvas,
     () => false,
   );
-  const native = supported && !failed;
+  const hasContent = children !== undefined && children !== null;
+  const layer = options.layer ?? "page";
+  const native = supported && !failed && hasContent && layer === "page";
+  const behind = layer === "background";
 
   useEffect(() => {
-    const source = sourceRef.current;
-    const content = contentRef.current;
     const output = outputRef.current;
-    if (!source || !content || !output) return;
+    if (!output) return;
     instanceRef.current = createClouds(
-      { source, content, output },
+      { source: sourceRef.current, content: contentRef.current, output },
       initialOptions,
     );
     if (native && !instanceRef.current) setFailed(true);
@@ -73,61 +84,62 @@ export function Clouds({
     instanceRef.current?.setOptions(options);
   });
 
+  const content = hasContent ? (
+    <div
+      ref={contentRef}
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        overflow: "auto",
+      }}
+    >
+      {children}
+    </div>
+  ) : null;
+
   return (
-    <div key={renderer} className={className} style={{ position: "relative", ...style }}>
-      <canvas
-        ref={sourceRef}
-        // @ts-expect-error experimental html-in-canvas attribute
-        layoutsubtree="true"
-        suppressHydrationWarning
-        style={
-          native
-            ? { position: "absolute", inset: 0, width: "100%", height: "100%" }
-            : { display: "none" }
-        }
-      >
-        {native ? (
-          <div
-            ref={contentRef}
-            style={{
-              position: "relative",
-              width: "100%",
-              height: "100%",
-              overflow: "auto",
-            }}
-          >
-            {children}
-          </div>
-        ) : null}
-      </canvas>
-      {!native ? (
-        <div
-          ref={contentRef}
-          style={{
-            position: "relative",
-            width: "100%",
-            height: "100%",
-            overflow: "auto",
-          }}
+    <div key={renderer}
+      className={className}
+      style={
+        fixed
+          ? {
+              position: "fixed",
+              inset: 0,
+              zIndex: behind ? -1 : 50,
+              pointerEvents: hasContent ? undefined : "none",
+              isolation: "isolate",
+              ...style,
+            }
+          : { position: "relative", isolation: "isolate", ...style }
+      }
+    >
+      {native ? (
+        <canvas
+          ref={sourceRef}
+          // @ts-expect-error experimental html-in-canvas attribute
+          layoutsubtree="true"
+          suppressHydrationWarning
+          style={fill}
         >
-          {children}
-        </div>
-      ) : null}
+          {content}
+        </canvas>
+      ) : (
+        content
+      )}
       <canvas
         ref={outputRef}
         aria-hidden
         style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
+          ...fill,
           pointerEvents: "none",
+          zIndex: behind && hasContent ? -1 : undefined,
         }}
       />
     </div>
   );
 }
 
-export type { CloudsInstance, CloudsOptions };
+export type { CloudsInstance, CloudsLayer, CloudsOptions };
 
 export default Clouds;

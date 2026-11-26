@@ -14,9 +14,9 @@
 
 - [Asciify](https://canvasui.dev/docs/components/asciify): A soft lens that follows the cursor and redraws live HTML beneath it as ascii characters
 - [Bend](https://canvasui.dev/docs/components/bend): Folds the top and bottom of live HTML over straight virtual edges, like scrolling on the face of a cube
-- [Blaze](https://canvasui.dev/docs/components/blaze): Fire sparks, smoke, and heat distortion rising over live HTML
+- [Blaze](https://canvasui.dev/docs/components/blaze): Firelight, smoke and embers rising behind or over any page, with heat haze bending live HTML
 - [Bubble](https://canvasui.dev/docs/components/bubble): A glassy droplet that trails the cursor as blending metaballs and refracts the live page beneath it
-- [Cloth](https://canvasui.dev/docs/components/cloth): Hangs live HTML on a piece of fabric rippling in the wind, with softly lit folds; cursor strokes send waves across the cloth
+- [Cloth](https://canvasui.dev/docs/components/cloth): Hangs live HTML on a piece of fabric you can grab, fold and fling; it sways in the wind, falls back into place and stays interactive across folds
 - [Clouds](https://canvasui.dev/docs/components/clouds): Theme-aware mist that blurs and refracts live HTML, parted by cursor wind
 - [Dithered Object](https://canvasui.dev/docs/components/dithered-object): Any GLB/glTF model floating in a studio scene, rendered through a 1-bit Bayer dither (three.js)
 - [Droplets](https://canvasui.dev/docs/components/droplets): Rain droplets that run down the screen and refract live HTML

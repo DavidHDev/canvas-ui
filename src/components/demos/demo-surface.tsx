@@ -15,9 +15,15 @@ export interface DemoSurface {
   props: { className: string; style: CSSProperties; children: ReactNode };
 }
 
+/** The docs signup that a full-page demo covers up, for demos that lay out
+    their own page content instead of using PageDemoContent. */
+export function PageDemoSignup() {
+  const onDocs = usePathname()?.startsWith("/docs") ?? false;
+  return onDocs ? <NewsletterInline /> : null;
+}
+
 export function PageDemoContent({ children }: { children: ReactNode }) {
   const setContentEl = useDemoScrollbarGutter();
-  const onDocs = usePathname()?.startsWith("/docs") ?? false;
   return (
     <div
       ref={setContentEl}
@@ -25,7 +31,7 @@ export function PageDemoContent({ children }: { children: ReactNode }) {
       className="min-h-full bg-background px-5 pt-24 pb-10 sm:px-8 lg:pt-16 lg:pr-8 lg:pl-72"
     >
       {children}
-      {onDocs ? <NewsletterInline /> : null}
+      <PageDemoSignup />
     </div>
   );
 }

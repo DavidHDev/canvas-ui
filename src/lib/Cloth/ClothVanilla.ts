@@ -3,37 +3,39 @@ import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "..
 import { createRectCache } from "../rect-cache";
 import { resolveOptions } from "../options";
 
-export type ClothPin = "top" | "bottom" | "left" | "right";
+export type ClothPin = "top" | "corners" | "left" | "right" | "bottom" | "none";
 
 export interface ClothOptions {
-  /** Edge the cloth hangs from. The opposite side swings free. */
+  /** Where the cloth hangs from: a whole edge, its two top corners, or nothing at all (it floats and eases back flat). */
   pin?: ClothPin;
-  /** Wind force driving the fabric (0 lets the waves die down). */
+  /** Wind blowing through the fabric (0 to 1). */
   wind?: number;
-  /** Playback speed of the cloth motion. */
-  speed?: number;
-  /** Height of the fabric folds in CSS pixels. */
-  amplitude?: number;
-  /** How many CSS pixels the cloth billows toward the viewer on a gust. */
-  drape?: number;
-  /** Strength of the waves the cursor brushes across the fabric (0 disables). */
+  /** How stiff the fabric is, from silk (0) to canvas (1). */
+  stiffness?: number;
+  /** How firmly the cloth pulls itself back flat after you let go (0 to 1). */
+  settle?: number;
+  /** Grab the cloth and drag it around. Text selection, links, buttons and inputs still work as usual. */
+  drag?: boolean;
+  /** The cloth stays wherever you drag and fold it instead of falling back. Wind is ignored while floating. */
+  float?: boolean;
+  /** How much the fabric follows the cursor as it brushes past (0 to 1). */
   brush?: number;
-  /** Radius of the cursor's influence in CSS pixels. */
-  brushSize?: number;
-  /** How quickly waves settle (higher calms the fabric faster). */
-  damping?: number;
-  /** Strength of the directional lighting on the folds (0 to 1). */
+  /** Strength of the light and shade across the folds (0 to 1). */
   light?: number;
-  /** Strength of the soft sheen on fold crests (0 to 1). */
+  /** Soft sheen on the fabric where it turns toward the light (0 to 1). */
   sheen?: number;
-  /** Opacity of the contact shadow under the fabric (0 to 1). */
+  /** Visibility of the woven thread texture (0 to 1). */
+  weave?: number;
+  /** Opacity of the shadow the cloth casts on the wall behind it (0 to 1). */
   shadow?: number;
   /** Corner radius of the fabric in CSS pixels. */
   cornerRadius?: number;
-  /** Fabric color behind transparent content as RGB in the 0 to 1 range, or "auto" to sample the page background. */
+  /** Fabric color behind transparent content and on the back side, as RGB in the 0 to 1 range, or "auto" to sample the page background. */
   backing?: [number, number, number] | "auto";
-  /** Perspective focal length in CSS pixels. Lower exaggerates the 3D depth. */
+  /** Perspective focal length in CSS pixels. Lower exaggerates the depth. */
   perspective?: number;
+  /** Simulation speed multiplier. */
+  speed?: number;
 }
 
 export interface ClothElements {
@@ -50,20 +52,50 @@ export interface ClothInstance {
 
 const DEFAULTS: Required<ClothOptions> = {
   pin: "top",
-  wind: 3,
-  speed: 0.5,
-  amplitude: 30,
-  drape: 40,
-  brush: 2.05,
-  brushSize: 150,
-  damping: 1,
-  light: 0.5,
-  sheen: 0.1,
-  shadow: 0.25,
-  cornerRadius: 20,
+  wind: 0.25,
+  stiffness: 0.5,
+  settle: 0.3,
+  drag: true,
+  float: false,
+  brush: 0.4,
+  light: 0.6,
+  sheen: 0.35,
+  weave: 0.3,
+  shadow: 0.4,
+  cornerRadius: 16,
   backing: "auto",
-  perspective: 1200,
+  perspective: 1400,
+  speed: 1,
 };
+
+/* Simulation. The cloth is a grid of particles joined by springs that hold
+   their length (along the grid, across its diagonals and two apart for
+   bending), integrated with Verlet and relaxed several times per step.
+   Tethers to the pinned edge keep it from sagging, so the page on it never
+   stretches. Folding is never written down: grab one point and the rest
+   follows because the springs will not give. */
+const CELL = 26;
+const MAX_NODES = 1500;
+const STEP = 1 / 120;
+const ITERATIONS = 10;
+const GRAVITY = 1400;
+const CREASE = 0.5;
+const SUBDIVIDE = 4;
+const BASE_BLEED = 72;
+const MAX_BLEED = 960;
+const COLLIDE = 0.7;
+const SHADOW_SCALE = 1 / 3;
+const WEAVE_PX = 3.2;
+
+const NEIGHBOURS = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+] as const;
+
+const INTERACTIVE =
+  "a, button, input, textarea, select, label, summary, video, audio, [contenteditable=''], [contenteditable='true'], [role='button'], [role='link'], [role='slider'], [role='tab'], [role='checkbox'], [role='switch']";
 
 type PaintableCanvas = HTMLCanvasElement & {
   onpaint?: (() => void) | null;
@@ -74,146 +106,292 @@ type ElementImageContext = CanvasRenderingContext2D & {
   drawElementImage?: (element: Element, x: number, y: number) => void;
 };
 
+const SURFACE = `
+uniform sampler2D uPos;
+uniform sampler2D uNrm;
+uniform ivec2 uGrid;
+
+vec4 weights (float t) {
+  float t2 = t * t;
+  float t3 = t2 * t;
+  return 0.5 * vec4(-t3 + 2.0 * t2 - t, 3.0 * t3 - 5.0 * t2 + 2.0, -3.0 * t3 + 4.0 * t2 + t, t3 - t2);
+}
+
+vec4 node (sampler2D tex, ivec2 c) {
+  ivec2 last = uGrid - 1;
+  ivec2 inside = clamp(c, ivec2(0), last);
+  vec4 value = texelFetch(tex, inside, 0);
+  ivec2 over = c - inside;
+  if (over.x != 0 || over.y != 0) {
+    value = 2.0 * value - texelFetch(tex, clamp(inside - over, ivec2(0), last), 0);
+  }
+  return value;
+}
+
+vec4 rowAt (sampler2D tex, ivec2 o, int dy, vec4 wx) {
+  return wx.x * node(tex, o + ivec2(-1, dy))
+    + wx.y * node(tex, o + ivec2(0, dy))
+    + wx.z * node(tex, o + ivec2(1, dy))
+    + wx.w * node(tex, o + ivec2(2, dy));
+}
+
+vec4 surface (sampler2D tex, vec2 g) {
+  vec2 base = floor(g);
+  vec2 f = g - base;
+  ivec2 o = ivec2(base);
+  vec4 wx = weights(f.x);
+  vec4 wy = weights(f.y);
+  return wy.x * rowAt(tex, o, -1, wx)
+    + wy.y * rowAt(tex, o, 0, wx)
+    + wy.z * rowAt(tex, o, 1, wx)
+    + wy.w * rowAt(tex, o, 2, wx);
+}
+`;
+
+const SDF = `
+float fabricDist (vec2 p, vec2 size, float radius) {
+  vec2 halfSize = size * 0.5;
+  float r = min(radius, min(halfSize.x, halfSize.y));
+  vec2 q = abs(p - halfSize) - (halfSize - vec2(r));
+  return length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - r;
+}
+`;
+
 const CLOTH_VERT = `#version 300 es
 precision highp float;
+precision highp sampler2D;
 layout(location = 0) in vec2 aGrid;
-layout(location = 1) in vec4 aData;
-layout(location = 2) in vec2 aOffset;
-uniform vec2 uRes;
+${SURFACE}
+uniform vec2 uCell;
+uniform vec2 uCenter;
+uniform float uFocal;
 uniform vec2 uOut;
 uniform float uBleed;
-uniform float uFocal;
-out vec2 vUv;
+uniform sampler2D uBroad;
+out vec2 vRest;
+out vec3 vWorld;
 out vec3 vNormal;
-out float vFold;
-out vec2 vLocal;
+out vec3 vBroad;
+out float vCavity;
 
 void main () {
-  vUv = aGrid;
-  float z = aData.x;
-  vec2 nxy = aData.yz;
-  vNormal = vec3(nxy, sqrt(max(1.0 - dot(nxy, nxy), 0.04)));
-  vFold = aData.w;
-
-  vLocal = aGrid * uRes;
-  vec2 px = vLocal + aOffset + vec2(uBleed);
-  vec2 ndc = (px / uOut) * 2.0 - 1.0;
-  ndc.y = -ndc.y;
-  float w = (uFocal - z) / uFocal;
-  gl_Position = vec4(ndc, -z / uFocal, w);
-}`;
-
-const SDF_SNIPPET = `
-float fabricDist (vec2 p, vec2 size, float radius) {
-  vec2 half_ = size * 0.5;
-  float r = min(radius, min(half_.x, half_.y));
-  vec2 q = abs(p - half_) - (half_ - vec2(r));
-  return length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - r;
+  vec3 p = surface(uPos, aGrid).xyz;
+  vec4 n = surface(uNrm, aGrid);
+  vBroad = surface(uBroad, aGrid).xyz;
+  float k = uFocal / max(uFocal - p.z, 1.0);
+  vec2 screen = uCenter + (p.xy - uCenter) * k + vec2(uBleed);
+  vec2 ndc = screen / uOut * 2.0 - 1.0;
+  vRest = aGrid * uCell;
+  vWorld = p;
+  vNormal = n.xyz;
+  vCavity = n.w;
+  gl_Position = vec4(ndc.x, -ndc.y, clamp(-p.z / (uFocal * 1.5), -0.999, 0.999), 1.0);
 }`;
 
 const CLOTH_FRAG = `#version 300 es
 precision highp float;
-in vec2 vUv;
+in vec2 vRest;
+in vec3 vWorld;
 in vec3 vNormal;
-in float vFold;
-in vec2 vLocal;
+in vec3 vBroad;
+in float vCavity;
 out vec4 outColor;
 uniform sampler2D uContent;
+uniform vec2 uSize;
 uniform float uMaxX;
+uniform vec3 uBacking;
+uniform float uRadius;
 uniform float uLight;
 uniform float uSheen;
-uniform vec3 uBacking;
-uniform vec2 uRes;
-uniform float uRadius;
+uniform float uWeave;
 uniform float uDark;
-${SDF_SNIPPET}
+uniform vec2 uCenter;
+uniform float uFocal;
+${SDF}
+float diffuseOf (vec3 n, vec3 l) {
+  return max((dot(n, l) + 0.3) / 1.3, 0.04);
+}
 
 void main () {
-  vec2 uv = clamp(vUv, vec2(0.001), vec2(uMaxX - 0.001, 0.999));
-  vec4 tex = texture(uContent, uv);
-  vec3 fabric = mix(uBacking, tex.rgb, tex.a);
+  float d = fabricDist(vRest, uSize, uRadius);
+  float alpha = clamp(0.5 - d / max(fwidth(d), 0.001), 0.0, 1.0);
+  if (alpha <= 0.002) discard;
+
+  vec2 uv = clamp(vRest / uSize, vec2(0.0005), vec2(uMaxX - 0.0005, 0.9995));
+  vec4 page = texture(uContent, uv);
+  vec3 face = mix(uBacking, page.rgb, page.a);
 
   vec3 n = normalize(vNormal);
-  vec3 lightDir = normalize(vec3(-0.3, 0.42, 0.86));
-  float diffFlat = 0.58 + 0.42 * lightDir.z;
-  float diff = 0.58 + 0.42 * dot(n, lightDir);
-  float shade = mix(1.0, (diff / diffFlat) * vFold, uLight);
-  vec3 lit = fabric * shade;
+  vec3 broad = normalize(vBroad);
+  vec3 view = normalize(vec3(uCenter - vWorld.xy, uFocal - vWorld.z));
+  bool back = dot(n, view) < 0.0;
+  if (back) {
+    n = -n;
+    broad = -broad;
+    face = mix(uBacking * 0.94, face, 0.1);
+  }
 
-  vec3 halfway = normalize(lightDir + vec3(0.0, 0.0, 1.0));
-  float specFlat = pow(halfway.z, 34.0);
-  float spec =
-    max(pow(max(dot(n, halfway), 0.0), 34.0) - specFlat, 0.0) /
-    (1.0 - specFlat);
-  lit += uSheen * spec * mix(vec3(1.0), fabric, 0.35);
+  vec2 thread = vRest * (6.2831853 / ${WEAVE_PX.toFixed(2)});
+  float detail = clamp(1.6 - max(fwidth(thread.x), fwidth(thread.y)) * 0.9, 0.0, 1.0) * uWeave;
+  float over = step(0.0, sin(thread.x * 0.5) * sin(thread.y * 0.5));
+  vec2 bump = vec2(cos(thread.x) * mix(0.35, 1.0, over), cos(thread.y) * mix(1.0, 0.35, over)) * 0.2 * detail;
+  vec3 woven = normalize(n + vec3(bump, 0.0));
+  vec3 wovenBroad = normalize(broad + vec3(bump, 0.0));
+  face *= 1.0 + detail * 0.04 * cos(thread.x) * cos(thread.y);
 
-  float broadFlat = pow(halfway.z, 6.0);
-  float broad =
-    max(pow(max(dot(n, halfway), 0.0), 6.0) - broadFlat, 0.0) /
-    (1.0 - broadFlat);
-  lit += uDark * uLight * 0.3 * broad * vec3(1.0);
+  /* Light the folds, not the page: shading is measured against the cloth's
+     broad orientation, so a sheet tipped by the wind keeps its colors and
+     only creases, curls and the back side change. */
+  vec3 lightDir = normalize(vec3(-0.42, -0.55, 0.72));
+  float fold = diffuseOf(woven, lightDir) / diffuseOf(wovenBroad, lightDir);
+  float tilt = diffuseOf(broad, lightDir) / diffuseOf(vec3(0.0, 0.0, 1.0), lightDir);
+  float shade = fold * mix(1.0, tilt, 0.35);
+  shade *= clamp(1.0 - vCavity * 0.7, 0.6, 1.0);
+  if (shade > 1.0) shade = 1.0 + (shade - 1.0) * 0.25;
+  shade = mix(1.0, shade, uLight);
+  if (back) shade *= mix(1.0, 0.92, uLight);
 
-  float d = fabricDist(vLocal, uRes, uRadius);
+  vec3 color = face * shade;
 
-  float hemT = smoothstep(0.0, 6.0, -d);
-  lit *= mix(1.0, mix(0.93, 1.0, hemT), uLight * (1.0 - uDark));
-  lit += vec3(uDark * uLight * 0.08 * (1.0 - hemT));
+  vec3 halfway = normalize(lightDir + view);
+  float spec = max(pow(max(dot(woven, halfway), 0.0), 40.0) - pow(max(dot(broad, halfway), 0.0), 40.0), 0.0);
+  float rim = max(pow(1.0 - max(dot(n, view), 0.0), 3.0) - pow(1.0 - max(dot(broad, view), 0.0), 3.0), 0.0);
+  color += uSheen * (spec * 0.35 + rim * 0.35 * (0.4 + 0.6 * max(dot(n, lightDir), 0.0)))
+    * mix(vec3(1.0), face, 0.3) * mix(1.0, 0.8, uDark);
 
-  float alpha = clamp(0.5 - d, 0.0, 1.0);
-  outColor = vec4(clamp(lit, 0.0, 1.0), 1.0) * alpha;
+  float hem = smoothstep(0.0, 4.0, -d);
+  color *= mix(1.0, mix(0.92, 1.0, hem), uLight * (1.0 - 0.6 * uDark));
+
+  outColor = vec4(clamp(color, 0.0, 1.0) * alpha, alpha);
 }`;
 
 const SHADOW_VERT = `#version 300 es
 precision highp float;
+precision highp sampler2D;
 layout(location = 0) in vec2 aGrid;
-layout(location = 1) in vec4 aData;
-layout(location = 2) in vec2 aOffset;
-uniform vec2 uRes;
+${SURFACE}
+uniform vec2 uCell;
 uniform vec2 uOut;
 uniform float uBleed;
-out vec2 vLocal;
+uniform vec2 uShift;
+out vec2 vRest;
 out float vLift;
 
 void main () {
-  float z = aData.x;
-  vLift = z;
-  vLocal = aGrid * uRes;
-  vec2 px =
-    vLocal + aOffset + vec2(uBleed) + vec2(10.0, 14.0) + vec2(0.3, 0.42) * z;
-  vec2 ndc = (px / uOut) * 2.0 - 1.0;
-  ndc.y = -ndc.y;
-  gl_Position = vec4(ndc, 0.0, 1.0);
+  vec3 p = surface(uPos, aGrid).xyz;
+  float lift = max(p.z, 0.0);
+  vec2 screen = p.xy + uShift * (lift + 6.0) + vec2(uBleed);
+  vec2 ndc = screen / uOut * 2.0 - 1.0;
+  vRest = aGrid * uCell;
+  vLift = lift;
+  gl_Position = vec4(ndc.x, -ndc.y, 0.0, 1.0);
 }`;
 
 const SHADOW_FRAG = `#version 300 es
 precision highp float;
-in vec2 vLocal;
+in vec2 vRest;
 in float vLift;
 out vec4 outColor;
-uniform float uShadow;
-uniform vec2 uRes;
+uniform vec2 uSize;
 uniform float uRadius;
-uniform float uDark;
-${SDF_SNIPPET}
-
+${SDF}
 void main () {
-  float d = fabricDist(vLocal, uRes, uRadius);
-  float a = uShadow * smoothstep(0.0, 30.0, -d);
-
-  a *= mix(1.0, 0.55, clamp(vLift / 50.0, 0.0, 1.0));
-
-  a *= mix(1.0, 0.55, uDark);
-  vec3 tint = vec3(uDark);
-  outColor = vec4(tint * a, a);
+  float d = fabricDist(vRest, uSize, uRadius);
+  float a = clamp(0.5 - d, 0.0, 1.0) * mix(1.0, 0.45, clamp(vLift / 260.0, 0.0, 1.0));
+  outColor = vec4(a);
 }`;
 
-const SEG = 96;
-const NODES = SEG + 1;
-const DT = 1 / 120;
-const WAVE_SPEED = 30;
-const STIFFNESS = 0.55;
-const FORCE_GAIN = 5.0;
-const BLEED = 48;
+const QUAD_VERT = `#version 300 es
+layout(location = 0) in vec2 aPos;
+out vec2 vUv;
+void main () {
+  vUv = aPos * 0.5 + 0.5;
+  gl_Position = vec4(aPos, 0.0, 1.0);
+}`;
+
+const BLUR_FRAG = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 outColor;
+uniform sampler2D uTex;
+uniform vec2 uStep;
+void main () {
+  float total = texture(uTex, vUv).a * 0.2270;
+  total += (texture(uTex, vUv + uStep * 1.3846).a + texture(uTex, vUv - uStep * 1.3846).a) * 0.3162;
+  total += (texture(uTex, vUv + uStep * 3.2308).a + texture(uTex, vUv - uStep * 3.2308).a) * 0.0703;
+  outColor = vec4(total);
+}`;
+
+const SHADE_FRAG = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 outColor;
+uniform sampler2D uTex;
+uniform float uShadow;
+void main () {
+  float a = texture(uTex, vUv).a * uShadow;
+  outColor = vec4(0.0, 0.0, 0.0, a);
+}`;
+
+const HOVER_ATTR = "data-canvasui-hover";
+const CONTENT_ATTR = "data-canvasui-content";
+const CURSOR_ATTR = "data-canvasui-cursor";
+const NATIVE_ATTR = "data-canvasui-cursor-native";
+const HOVER_REWRITE = `:is([${HOVER_ATTR}], :hover:where(:not([${CONTENT_ATTR}], [${CONTENT_ATTR}] *)))`;
+const CURSOR_KEYWORDS = new Set(
+  "auto default none context-menu help pointer progress wait cell crosshair text vertical-text alias copy move no-drop not-allowed grab grabbing all-scroll col-resize row-resize n-resize e-resize s-resize w-resize ne-resize nw-resize se-resize sw-resize ew-resize ns-resize nesw-resize nwse-resize zoom-in zoom-out".split(" "),
+);
+
+/* Hover follows the drawn page, not the flat layout: every :hover rule is
+   rewritten so that inside the cloth it matches an attribute the engine
+   sets on the element under the pointer, while hover elsewhere is
+   untouched. The same rewrite Bend uses, so they share one pass. */
+function patchHoverRules() {
+  if (typeof document === "undefined") return;
+  if (document.documentElement.dataset.canvasuiHoverRules !== "") {
+    document.documentElement.dataset.canvasuiHoverRules = "";
+    const walk = (rules: CSSRuleList) => {
+      for (const rule of Array.from(rules)) {
+        if (rule instanceof CSSStyleRule) {
+          if (rule.selectorText.includes(":hover")) {
+            try {
+              rule.selectorText = rule.selectorText.replace(/:hover\b/g, HOVER_REWRITE);
+            } catch {}
+          }
+          if (rule.cssRules.length) walk(rule.cssRules);
+        } else if ("cssRules" in rule) {
+          try {
+            walk((rule as CSSGroupingRule).cssRules);
+          } catch {}
+        }
+      }
+    };
+    for (const sheet of Array.from(document.styleSheets)) {
+      try {
+        walk(sheet.cssRules);
+      } catch {}
+    }
+    const style = document.createElement("style");
+    style.textContent = `[${CONTENT_ATTR}][${CURSOR_ATTR}], [${CONTENT_ATTR}][${CURSOR_ATTR}] * { cursor: var(--canvasui-cursor) !important; }`;
+    document.head.appendChild(style);
+  }
+  /* The cursor is forced on the one element under the real pointer. Its
+     children are pinned to the cursor they had before, so the change stops
+     there instead of restyling everything below it (a whole page under the
+     cloth took ~10ms per change). The rules sit in the first, lowest layer so
+     any page rule still wins, and skip the elements the browser gives their
+     own cursor. */
+  if (!document.documentElement.hasAttribute("data-canvasui-cursor-rules")) {
+    document.documentElement.setAttribute("data-canvasui-cursor-rules", "");
+    const style = document.createElement("style");
+    const own = ":any-link, button, input, textarea, select, option, label";
+    style.textContent = `@layer canvasui-cursor {\n${Array.from(
+      CURSOR_KEYWORDS,
+      (cursor) => `:where([${NATIVE_ATTR}="${cursor}"]) > :where(:not(${own})) { cursor: ${cursor}; }`,
+    ).join("\n")}\n}`;
+    document.head.prepend(style);
+  }
+}
 
 export function supportsHtmlInCanvas(): boolean {
   if (typeof document === "undefined" || isHtmlInCanvasBlocked()) return false;
@@ -226,23 +404,56 @@ export function supportsHtmlInCanvas(): boolean {
   );
 }
 
+/** Smooth value noise for the wind's gusts. */
+function windNoise(x: number, y: number) {
+  return (
+    Math.sin(x * 1.7 + Math.sin(y * 1.3) * 1.1) * 0.5 +
+    Math.sin(y * 2.3 - x * 0.9 + 1.7) * 0.3 +
+    Math.sin((x + y) * 3.1 + 0.4) * 0.2
+  );
+}
+
 export function createCloth(
   elements: ClothElements,
   options: ClothOptions = {},
 ): ClothInstance | null {
+  try {
+    return initializeCloth(elements, options);
+  } catch (error) {
+    console.error("Cloth initialization failed:", error);
+    return null;
+  }
+}
+
+type Target = {
+  texture: WebGLTexture;
+  framebuffer: WebGLFramebuffer;
+  width: number;
+  height: number;
+};
+
+function initializeCloth(
+  elements: ClothElements,
+  options: ClothOptions,
+): ClothInstance | null {
   const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
   const { source, content, output } = elements;
   const wrapper = (output.parentElement ?? output) as HTMLElement;
-  output.style.top = `${-BLEED}px`;
-  output.style.left = `${-BLEED}px`;
-  output.style.right = `${-BLEED}px`;
-  output.style.bottom = `${-BLEED}px`;
-  output.style.width = `calc(100% + ${BLEED * 2}px)`;
-  output.style.height = `calc(100% + ${BLEED * 2}px)`;
+  let bleed = 0;
+  function styleBleed(next: number) {
+    bleed = next;
+    output.style.top = `${-bleed}px`;
+    output.style.left = `${-bleed}px`;
+    output.style.right = `${-bleed}px`;
+    output.style.bottom = `${-bleed}px`;
+    output.style.width = `calc(100% + ${bleed * 2}px)`;
+    output.style.height = `calc(100% + ${bleed * 2}px)`;
+  }
+  styleBleed(BASE_BLEED);
 
   const gl = output.getContext("webgl2", {
     alpha: true,
-    depth: false,
+    depth: true,
     stencil: false,
     antialias: true,
     premultipliedAlpha: true,
@@ -258,98 +469,91 @@ export function createCloth(
     typeof sourceCtx.drawElementImage === "function" &&
     typeof paintable.requestPaint === "function",
   );
+  if (!htmlInCanvas) return null;
 
-  if (htmlInCanvas) prepareHtmlInCanvas(source, content);
+  prepareHtmlInCanvas(source, content);
 
   let wake = () => {};
   let capture = () => {};
-
-  if (htmlInCanvas) {
-    paintable.onpaint = () => capture();
-  }
+  paintable.onpaint = () => capture();
 
   function compile(type: number, text: string): WebGLShader {
     const shader = gl!.createShader(type)!;
     gl!.shaderSource(shader, text);
     gl!.compileShader(shader);
     if (!gl!.getShaderParameter(shader, gl!.COMPILE_STATUS)) {
-      console.error("Cloth shader error:", gl!.getShaderInfoLog(shader));
+      const message = gl!.getShaderInfoLog(shader) || "Unknown shader error";
+      gl!.deleteShader(shader);
+      throw new Error(message);
     }
     return shader;
   }
 
+  const shaders: WebGLShader[] = [];
+  const programs: WebGLProgram[] = [];
+
   function link(vertText: string, fragText: string) {
     const vert = compile(gl!.VERTEX_SHADER, vertText);
     const frag = compile(gl!.FRAGMENT_SHADER, fragText);
+    shaders.push(vert, frag);
     const program = gl!.createProgram()!;
     gl!.attachShader(program, vert);
     gl!.attachShader(program, frag);
     gl!.linkProgram(program);
+    if (!gl!.getProgramParameter(program, gl!.LINK_STATUS)) {
+      const message = gl!.getProgramInfoLog(program) || "Unknown link error";
+      gl!.deleteProgram(program);
+      throw new Error(message);
+    }
+    programs.push(program);
     const uniforms: Record<string, WebGLUniformLocation> = {};
     const count = gl!.getProgramParameter(program, gl!.ACTIVE_UNIFORMS);
     for (let i = 0; i < count; i++) {
       const info = gl!.getActiveUniform(program, i)!;
       uniforms[info.name] = gl!.getUniformLocation(program, info.name)!;
     }
-    return { program, vert, frag, uniforms };
+    return { program, uniforms };
   }
 
-  const cloth = link(CLOTH_VERT, CLOTH_FRAG);
-  const shadow = link(SHADOW_VERT, SHADOW_FRAG);
+  const clothPass = link(CLOTH_VERT, CLOTH_FRAG);
+  const shadowPass = link(SHADOW_VERT, SHADOW_FRAG);
+  const blurPass = link(QUAD_VERT, BLUR_FRAG);
+  const shadePass = link(QUAD_VERT, SHADE_FRAG);
 
-  const gridVerts = new Float32Array(NODES * NODES * 2);
-  for (let y = 0; y < NODES; y++) {
-    for (let x = 0; x < NODES; x++) {
-      const i = (y * NODES + x) * 2;
-      gridVerts[i] = x / SEG;
-      gridVerts[i + 1] = y / SEG;
-    }
-  }
-  const gridIndices = new Uint32Array(SEG * SEG * 6);
-  let offset = 0;
-  for (let y = 0; y < SEG; y++) {
-    for (let x = 0; x < SEG; x++) {
-      const a = y * NODES + x;
-      const b = a + 1;
-      const c = a + NODES;
-      const d = c + 1;
-      gridIndices[offset++] = a;
-      gridIndices[offset++] = c;
-      gridIndices[offset++] = b;
-      gridIndices[offset++] = b;
-      gridIndices[offset++] = c;
-      gridIndices[offset++] = d;
-    }
-  }
-
-  const clothVao = gl.createVertexArray();
-  gl.bindVertexArray(clothVao);
-  const gridBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, gridBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, gridVerts, gl.STATIC_DRAW);
+  const quadVao = gl.createVertexArray()!;
+  gl.bindVertexArray(quadVao);
+  const quadBuffer = gl.createBuffer()!;
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
+    gl.STATIC_DRAW,
+  );
   gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-  const dataBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, dataBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, NODES * NODES * 4 * 4, gl.DYNAMIC_DRAW);
-  gl.enableVertexAttribArray(1);
-  gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 0, 0);
-  const offsetBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, offsetBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, NODES * NODES * 2 * 4, gl.DYNAMIC_DRAW);
-  gl.enableVertexAttribArray(2);
-  gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 0, 0);
-  const indexBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, gridIndices, gl.STATIC_DRAW);
-  gl.bindVertexArray(null);
 
-  const contentTexture = gl.createTexture()!;
-  gl.bindTexture(gl.TEXTURE_2D, contentTexture);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const meshVao = gl.createVertexArray()!;
+  gl.bindVertexArray(meshVao);
+  const meshBuffer = gl.createBuffer()!;
+  gl.bindBuffer(gl.ARRAY_BUFFER, meshBuffer);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  const indexBuffer = gl.createBuffer()!;
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+  gl.bindVertexArray(null);
+  let indexCount = 0;
+
+  function createTexture(filter: number): WebGLTexture {
+    const texture = gl!.createTexture()!;
+    gl!.bindTexture(gl!.TEXTURE_2D, texture);
+    gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_MIN_FILTER, filter);
+    gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_MAG_FILTER, filter);
+    gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_WRAP_S, gl!.CLAMP_TO_EDGE);
+    gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_WRAP_T, gl!.CLAMP_TO_EDGE);
+    return texture;
+  }
+
+  const contentTexture = createTexture(gl.LINEAR);
   gl.texImage2D(
     gl.TEXTURE_2D,
     0,
@@ -361,263 +565,929 @@ export function createCloth(
     gl.UNSIGNED_BYTE,
     new Uint8Array([0, 0, 0, 0]),
   );
+  const posTexture = createTexture(gl.NEAREST);
+  const nrmTexture = createTexture(gl.NEAREST);
+  const broadTexture = createTexture(gl.NEAREST);
+
+  function createTarget(): Target {
+    return {
+      texture: createTexture(gl!.LINEAR),
+      framebuffer: gl!.createFramebuffer()!,
+      width: 0,
+      height: 0,
+    };
+  }
+
+  function sizeTarget(target: Target, width: number, height: number) {
+    if (target.width === width && target.height === height) return;
+    target.width = width;
+    target.height = height;
+    gl!.bindTexture(gl!.TEXTURE_2D, target.texture);
+    gl!.texImage2D(
+      gl!.TEXTURE_2D,
+      0,
+      gl!.RGBA,
+      width,
+      height,
+      0,
+      gl!.RGBA,
+      gl!.UNSIGNED_BYTE,
+      null,
+    );
+    gl!.bindFramebuffer(gl!.FRAMEBUFFER, target.framebuffer);
+    gl!.framebufferTexture2D(
+      gl!.FRAMEBUFFER,
+      gl!.COLOR_ATTACHMENT0,
+      gl!.TEXTURE_2D,
+      target.texture,
+      0,
+    );
+    gl!.bindFramebuffer(gl!.FRAMEBUFFER, null);
+  }
+
+  const shadowTargets = [createTarget(), createTarget()];
 
   let contentMaxX = 1;
 
   capture = () => {
-    if (!htmlInCanvas) return;
     try {
       sourceCtx!.reset();
       drawHtmlInCanvas(source, sourceCtx!, content);
       gl!.bindTexture(gl!.TEXTURE_2D, contentTexture);
-      gl!.texImage2D(
-        gl!.TEXTURE_2D,
-        0,
-        gl!.RGBA,
-        gl!.RGBA,
-        gl!.UNSIGNED_BYTE,
-        source,
-      );
+      gl!.texImage2D(gl!.TEXTURE_2D, 0, gl!.RGBA, gl!.RGBA, gl!.UNSIGNED_BYTE, source);
       sourceCtx!.reset();
       wake();
     } catch {}
   };
 
-  function syncCanvasSize() {
-    const dpr = getCanvasPixelRatio(output, gl!);
-    const width = Math.max(1, Math.round(output.clientWidth * dpr));
-    const height = Math.max(1, Math.round(output.clientHeight * dpr));
-    if (output.width !== width || output.height !== height) {
-      output.width = width;
-      output.height = height;
+  /* ── the cloth ── */
+  let cols = 0;
+  let rows = 0;
+  let count = 0;
+  let width = 0;
+  let height = 0;
+  let cellX = 1;
+  let cellY = 1;
+  let pos = new Float32Array(0);
+  let prev = new Float32Array(0);
+  let rest = new Float32Array(0);
+  let invMass = new Float32Array(0);
+  let normals = new Float32Array(0);
+  let rough = new Float32Array(0);
+  let broad = new Float32Array(0);
+  let baseLength = new Float32Array(0);
+  let packed = new Float32Array(0);
+  let linkA = new Int32Array(0);
+  let linkB = new Int32Array(0);
+  let linkLength = new Float32Array(0);
+  let linkKind = new Uint8Array(0);
+  let tether = new Int32Array(0);
+  let tetherLength = new Float32Array(0);
+  let gravityX = 0;
+  let gravityY = 0;
+
+  function buildCloth() {
+    width = Math.max(wrapper.clientWidth, 1);
+    height = Math.max(wrapper.clientHeight, 1);
+    cols = Math.max(8, Math.round(width / CELL) + 1);
+    rows = Math.max(8, Math.round(height / CELL) + 1);
+    const over = (cols * rows) / MAX_NODES;
+    if (over > 1) {
+      const shrink = Math.sqrt(over);
+      cols = Math.max(8, Math.floor(cols / shrink));
+      rows = Math.max(8, Math.floor(rows / shrink));
     }
-    contentMaxX = Math.min(
-      1,
-      Math.max(0.05, content.clientWidth / Math.max(wrapper.clientWidth, 1)),
-    );
-    if (htmlInCanvas) {
-      const sourceWidth = Math.max(1, Math.round(source.clientWidth * dpr));
-      const sourceHeight = Math.max(1, Math.round(source.clientHeight * dpr));
-      if (source.width !== sourceWidth || source.height !== sourceHeight) {
-        source.width = sourceWidth;
-        source.height = sourceHeight;
+    count = cols * rows;
+    cellX = width / (cols - 1);
+    cellY = height / (rows - 1);
+    pos = new Float32Array(count * 3);
+    rest = new Float32Array(count * 3);
+    invMass = new Float32Array(count).fill(1);
+    normals = new Float32Array(count * 4);
+    rough = new Float32Array(count * 4);
+    broad = new Float32Array(count * 4);
+    packed = new Float32Array(count * 4);
+    for (let j = 0; j < rows; j++) {
+      for (let i = 0; i < cols; i++) {
+        const n = (j * cols + i) * 3;
+        rest[n] = i * cellX;
+        rest[n + 1] = j * cellY;
+        rest[n + 2] = 0;
       }
-      paintable.requestPaint!();
+    }
+    pos.set(rest);
+    prev = new Float32Array(rest);
+
+    const a: number[] = [];
+    const b: number[] = [];
+    const kind: number[] = [];
+    const id = (i: number, j: number) => j * cols + i;
+    const add = (p: number, q: number, k: number) => {
+      a.push(p);
+      b.push(q);
+      kind.push(k);
+    };
+    for (let j = 0; j < rows; j++) {
+      for (let i = 0; i < cols; i++) {
+        if (i < cols - 1) add(id(i, j), id(i + 1, j), 0);
+        if (j < rows - 1) add(id(i, j), id(i, j + 1), 0);
+        if (i < cols - 1 && j < rows - 1) {
+          add(id(i, j), id(i + 1, j + 1), 0);
+          add(id(i + 1, j), id(i, j + 1), 0);
+        }
+        if (i < cols - 2) add(id(i, j), id(i + 2, j), 1);
+        if (j < rows - 2) add(id(i, j), id(i, j + 2), 1);
+      }
+    }
+    linkA = Int32Array.from(a);
+    linkB = Int32Array.from(b);
+    linkKind = Uint8Array.from(kind);
+    linkLength = new Float32Array(a.length);
+    for (let c = 0; c < a.length; c++) {
+      const p = a[c] * 3;
+      const q = b[c] * 3;
+      linkLength[c] = Math.hypot(rest[q] - rest[p], rest[q + 1] - rest[p + 1]);
+    }
+    baseLength = new Float32Array(linkLength);
+    hashMask = (1 << Math.ceil(Math.log2(count * 2))) - 1;
+    hashHead = new Int32Array(hashMask + 1);
+    hashNext = new Int32Array(count);
+    const quads = (cols - 1) * (rows - 1);
+    quadHead = new Int32Array(hashMask + 1);
+    quadNext = new Int32Array(quads * 8);
+    quadOf = new Int32Array(quads * 8);
+    quadSeen = new Int32Array(quads);
+    quadStamp = 0;
+
+    const verts: number[] = [];
+    const sx = (cols - 1) * SUBDIVIDE + 1;
+    const sy = (rows - 1) * SUBDIVIDE + 1;
+    for (let j = 0; j < sy; j++) {
+      for (let i = 0; i < sx; i++) verts.push(i / SUBDIVIDE, j / SUBDIVIDE);
+    }
+    const indices = new Uint32Array((sx - 1) * (sy - 1) * 6);
+    let o = 0;
+    for (let j = 0; j < sy - 1; j++) {
+      for (let i = 0; i < sx - 1; i++) {
+        const p = j * sx + i;
+        indices[o++] = p;
+        indices[o++] = p + sx;
+        indices[o++] = p + 1;
+        indices[o++] = p + 1;
+        indices[o++] = p + sx;
+        indices[o++] = p + sx + 1;
+      }
+    }
+    indexCount = indices.length;
+    gl!.bindVertexArray(meshVao);
+    gl!.bindBuffer(gl!.ARRAY_BUFFER, meshBuffer);
+    gl!.bufferData(gl!.ARRAY_BUFFER, new Float32Array(verts), gl!.STATIC_DRAW);
+    gl!.bindBuffer(gl!.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl!.bufferData(gl!.ELEMENT_ARRAY_BUFFER, indices, gl!.STATIC_DRAW);
+    gl!.bindVertexArray(null);
+
+    for (const texture of [posTexture, nrmTexture, broadTexture]) {
+      gl!.bindTexture(gl!.TEXTURE_2D, texture);
+      gl!.texImage2D(
+        gl!.TEXTURE_2D,
+        0,
+        gl!.RGBA32F,
+        cols,
+        rows,
+        0,
+        gl!.RGBA,
+        gl!.FLOAT,
+        null,
+      );
+    }
+
+    held = -1;
+    applyPins();
+    computeNormals();
+  }
+
+  function applyPins() {
+    invMass.fill(1);
+    tether = new Int32Array(count).fill(-1);
+    tetherLength = new Float32Array(count);
+    const pin = config.pin;
+    const pinned: number[] = [];
+    for (let j = 0; j < rows; j++) {
+      for (let i = 0; i < cols; i++) {
+        const edge =
+          (pin === "top" && j === 0) ||
+          (pin === "bottom" && j === rows - 1) ||
+          (pin === "left" && i === 0) ||
+          (pin === "right" && i === cols - 1) ||
+          (pin === "corners" && j === 0 && (i === 0 || i === cols - 1));
+        if (edge) pinned.push(j * cols + i);
+      }
+    }
+    for (const n of pinned) {
+      invMass[n] = 0;
+      const k = n * 3;
+      pos[k] = prev[k] = rest[k];
+      pos[k + 1] = prev[k + 1] = rest[k + 1];
+      pos[k + 2] = prev[k + 2] = 0;
+    }
+    if (pinned.length) {
+      for (let n = 0; n < count; n++) {
+        if (invMass[n] === 0) continue;
+        let best = -1;
+        let bestDistance = Infinity;
+        for (const p of pinned) {
+          const d = Math.hypot(rest[n * 3] - rest[p * 3], rest[n * 3 + 1] - rest[p * 3 + 1]);
+          if (d < bestDistance) {
+            bestDistance = d;
+            best = p;
+          }
+        }
+        tether[n] = best;
+        tetherLength[n] = bestDistance;
+      }
+    }
+    gravityX = pin === "left" ? 1 : pin === "right" ? -1 : 0;
+    gravityY =
+      pin === "top" || pin === "corners" ? 1 : pin === "bottom" ? -1 : 0;
+  }
+
+  function computeNormals() {
+    let shortest = Math.min(cellX, cellY);
+    if (!(shortest > 0)) shortest = 1;
+    for (let j = 0; j < rows; j++) {
+      const up = Math.max(j - 1, 0);
+      const down = Math.min(j + 1, rows - 1);
+      for (let i = 0; i < cols; i++) {
+        const left = Math.max(i - 1, 0);
+        const right = Math.min(i + 1, cols - 1);
+        const n = j * cols + i;
+        const k = n * 3;
+        const r = (j * cols + right) * 3;
+        const l = (j * cols + left) * 3;
+        const u = (up * cols + i) * 3;
+        const d = (down * cols + i) * 3;
+        const ax = pos[r] - pos[l];
+        const ay = pos[r + 1] - pos[l + 1];
+        const az = pos[r + 2] - pos[l + 2];
+        const bx = pos[d] - pos[u];
+        const by = pos[d + 1] - pos[u + 1];
+        const bz = pos[d + 2] - pos[u + 2];
+        let nx = ay * bz - az * by;
+        let ny = az * bx - ax * bz;
+        let nz = ax * by - ay * bx;
+        const length = Math.hypot(nx, ny, nz) || 1;
+        nx /= length;
+        ny /= length;
+        nz /= length;
+        let cx = 0;
+        let cy = 0;
+        let cz = 0;
+        let neighbours = 0;
+        for (const m of [r, l, u, d]) {
+          if (m === k) continue;
+          cx += pos[m];
+          cy += pos[m + 1];
+          cz += pos[m + 2];
+          neighbours++;
+        }
+        let cavity = 0;
+        if (neighbours) {
+          cavity =
+            ((cx / neighbours - pos[k]) * nx +
+              (cy / neighbours - pos[k + 1]) * ny +
+              (cz / neighbours - pos[k + 2]) * nz) /
+            shortest;
+        }
+        const o = n * 4;
+        rough[o] = nx;
+        rough[o + 1] = ny;
+        rough[o + 2] = nz;
+        rough[o + 3] = Math.max(-1, Math.min(1, cavity * 2.2));
+      }
+    }
+    for (let j = 0; j < rows; j++) {
+      for (let i = 0; i < cols; i++) {
+        const o = (j * cols + i) * 4;
+        let sx = rough[o] * 2;
+        let sy = rough[o + 1] * 2;
+        let sz = rough[o + 2] * 2;
+        let sc = rough[o + 3] * 2;
+        let weight = 2;
+        for (const [di, dj] of NEIGHBOURS) {
+          const a = i + di;
+          const b = j + dj;
+          if (a < 0 || b < 0 || a >= cols || b >= rows) continue;
+          const m = (b * cols + a) * 4;
+          sx += rough[m];
+          sy += rough[m + 1];
+          sz += rough[m + 2];
+          sc += rough[m + 3];
+          weight++;
+        }
+        const length = Math.hypot(sx, sy, sz) || 1;
+        normals[o] = sx / length;
+        normals[o + 1] = sy / length;
+        normals[o + 2] = sz / length;
+        normals[o + 3] = sc / weight;
+      }
+    }
+    const span = 3;
+    for (let j = 0; j < rows; j++) {
+      const up = (Math.max(j - span, 0) * cols) * 3;
+      const down = (Math.min(j + span, rows - 1) * cols) * 3;
+      for (let i = 0; i < cols; i++) {
+        const left = (j * cols + Math.max(i - span, 0)) * 3;
+        const right = (j * cols + Math.min(i + span, cols - 1)) * 3;
+        const u = up + i * 3;
+        const d = down + i * 3;
+        const ax = pos[right] - pos[left];
+        const ay = pos[right + 1] - pos[left + 1];
+        const az = pos[right + 2] - pos[left + 2];
+        const bx = pos[d] - pos[u];
+        const by = pos[d + 1] - pos[u + 1];
+        const bz = pos[d + 2] - pos[u + 2];
+        const nx = ay * bz - az * by;
+        const ny = az * bx - ax * bz;
+        const nz = ax * by - ay * bx;
+        const length = Math.hypot(nx, ny, nz) || 1;
+        const o = (j * cols + i) * 4;
+        broad[o] = nx / length;
+        broad[o + 1] = ny / length;
+        broad[o + 2] = nz / length;
+        broad[o + 3] = 0;
+      }
     }
   }
 
-  let hCur = new Float32Array(NODES * NODES);
-  let hPrev = new Float32Array(NODES * NODES);
-  let hNext = new Float32Array(NODES * NODES);
-  const vertexData = new Float32Array(NODES * NODES * 4);
-  const offsetData = new Float32Array(NODES * NODES * 2);
-  const zField = new Float32Array(NODES * NODES);
-  const rowForce = new Float32Array(NODES);
-  const colForce = new Float32Array(NODES);
-  const hangCurve = new Float32Array(NODES);
-  for (let a = 0; a < NODES; a++) {
-    hangCurve[a] = Math.pow(a / SEG, 1.3);
+  /* ── the hand ── */
+  let held = -1;
+  let heldMass = 1;
+  let holdZ = 0;
+  let lift = 0;
+  let recover = 0;
+  const target = { x: 0, y: 0, z: 0 };
+  const follow = { x: 0, y: 0, z: 0 };
+  let patch: { node: number; weight: number; dx: number; dy: number; dz: number }[] = [];
+  const pointer = { x: -1e5, y: -1e5, vx: 0, vy: 0, inside: false, time: 0, energy: 0 };
+  let pending: { id: number; x: number; y: number } | null = null;
+  let dragged = false;
+
+  function focal() {
+    return Math.max(config.perspective, 300);
   }
 
-  let simTime = Math.random() * 60;
-  let gust = 0.5;
-  let fieldEnergy = 1;
-
-  const pointer = { x: -1e5, y: -1e5, inside: false };
-  const touch = { x: -1e5, y: -1e5, vx: 0, vy: 0, s: 0 };
-
-  function axisFor(x: number, y: number): [number, number] {
-    if (config.pin === "top") return [y, x];
-    if (config.pin === "bottom") return [SEG - y, x];
-    if (config.pin === "left") return [x, y];
-    return [SEG - x, y];
+  function project(n: number) {
+    const k = n * 3;
+    const f = focal();
+    const scale = f / Math.max(f - pos[k + 2], 1);
+    return {
+      x: width / 2 + (pos[k] - width / 2) * scale,
+      y: height / 2 + (pos[k + 1] - height / 2) * scale,
+    };
   }
 
-  function stepSim(dt: number) {
-    const speed = Math.max(config.speed, 0);
-    simTime += dt * speed;
-    const t = simTime;
-    const windAmp = FORCE_GAIN * Math.max(config.wind, 0) * gust;
-
-    const kb1 = (Math.PI * 2) / (SEG / 1.5);
-    const kb2 = (Math.PI * 2) / (SEG / 3.8);
-    const ka = (Math.PI * 2) / (SEG / 2.2);
-    const w1 = WAVE_SPEED * kb1;
-    const w2 = WAVE_SPEED * kb2;
-    const drift = 1.8 * Math.sin(0.23 * t);
-    for (let b = 0; b < NODES; b++) {
-      rowForce[b] =
-        Math.sin(kb1 * b - w1 * t + drift) +
-        0.45 * Math.sin(kb2 * b + w2 * t * 0.8 + 3.0);
+  function pick(x: number, y: number) {
+    let best = -1;
+    let bestDistance = Infinity;
+    let bestZ = -Infinity;
+    const reach = Math.max(cellX, cellY) * 1.2;
+    for (let n = 0; n < count; n++) {
+      const p = project(n);
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (d > reach) continue;
+      const z = pos[n * 3 + 2];
+      if (z > bestZ + 4 || (Math.abs(z - bestZ) <= 4 && d < bestDistance)) {
+        best = n;
+        bestDistance = d;
+        bestZ = z;
+      }
     }
-    for (let a = 0; a < NODES; a++) {
-      colForce[a] = (0.7 + 0.3 * Math.sin(ka * a - 1.7 * t)) * hangCurve[a];
+    return best;
+  }
+
+  /* Where the hand wants the held point: the pointer, unprojected onto a
+     plane facing the camera at the held point's depth. Past a reach from
+     where that point sits on the flat cloth the pull turns to rubber. */
+  function aim(x: number, y: number) {
+    if (held < 0) return;
+    const f = focal();
+    const depth = holdZ + lift;
+    const scale = (f - depth) / f;
+    let tx = width / 2 + (x - width / 2) * scale;
+    let ty = height / 2 + (y - height / 2) * scale;
+    let tz = depth;
+    const k = held * 3;
+    const dx = tx - rest[k];
+    const dy = ty - rest[k + 1];
+    const dz = tz - rest[k + 2];
+    const d = Math.hypot(dx, dy, dz);
+    const reach = Math.max(140, Math.min(width, height) * 0.45);
+    if (d > reach) {
+      const f2 = (reach + (d - reach) * 0.25) / d;
+      tx = rest[k] + dx * f2;
+      ty = rest[k + 1] + dy * f2;
+      tz = rest[k + 2] + dz * f2;
+    }
+    target.x = tx;
+    target.y = ty;
+    target.z = tz;
+  }
+
+  function grab(x: number, y: number) {
+    const node = pick(x, y);
+    if (node < 0) return false;
+    held = node;
+    heldMass = invMass[node];
+    const k = node * 3;
+    holdZ = Math.max(pos[k + 2], 0);
+    lift = 0;
+    follow.x = pos[k];
+    follow.y = pos[k + 1];
+    follow.z = pos[k + 2];
+    const radius = Math.max(cellX, cellY) * 2.4;
+    patch = [];
+    for (let n = 0; n < count; n++) {
+      if (invMass[n] === 0 || n === node) continue;
+      const m = n * 3;
+      const d = Math.hypot(rest[m] - rest[k], rest[m + 1] - rest[k + 1]);
+      if (d > radius) continue;
+      patch.push({
+        node: n,
+        weight: Math.exp(-((d / radius) ** 2) * 3) * 0.5,
+        dx: pos[m] - pos[k],
+        dy: pos[m + 1] - pos[k + 1],
+        dz: pos[m + 2] - pos[k + 2],
+      });
+    }
+    /* heavy but not fixed: the hand leads, yet the cloth can still hold
+       the point back, so a hard pull never draws it out into a spike */
+    if (heldMass > 0) invMass[node] = 0.12;
+    aim(x, y);
+    return true;
+  }
+
+  function release() {
+    if (held < 0) return;
+    invMass[held] = heldMass;
+    held = -1;
+    patch = [];
+    if (!config.float) recover = 1;
+  }
+
+  /* ── self-collision ──
+     Points that are not neighbours on the grid keep a cloth's thickness
+     apart, found through a spatial hash, so a fold lies on top of the
+     cloth instead of passing through it and knotting. */
+  let hashMask = 0;
+  let hashHead = new Int32Array(0);
+  let hashNext = new Int32Array(0);
+
+  function cellKey(x: number, y: number, z: number) {
+    return ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) & hashMask;
+  }
+
+  function collide(radius: number) {
+    const inv = 1 / radius;
+    const r2 = radius * radius;
+    hashHead.fill(-1);
+    for (let n = 0; n < count; n++) {
+      const k = n * 3;
+      const key = cellKey(
+        Math.floor(pos[k] * inv),
+        Math.floor(pos[k + 1] * inv),
+        Math.floor(pos[k + 2] * inv),
+      );
+      hashNext[n] = hashHead[key];
+      hashHead[key] = n;
+    }
+    for (let n = 0; n < count; n++) {
+      const k = n * 3;
+      const cx = Math.floor(pos[k] * inv);
+      const cy = Math.floor(pos[k + 1] * inv);
+      const cz = Math.floor(pos[k + 2] * inv);
+      const ni = n % cols;
+      const nj = (n - ni) / cols;
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            for (let m = hashHead[cellKey(cx + dx, cy + dy, cz + dz)]; m >= 0; m = hashNext[m]) {
+              if (m <= n) continue;
+              const mi = m % cols;
+              const mj = (m - mi) / cols;
+              if (Math.abs(mi - ni) <= 2 && Math.abs(mj - nj) <= 2) continue;
+              const q = m * 3;
+              const ex = pos[q] - pos[k];
+              const ey = pos[q + 1] - pos[k + 1];
+              const ez = pos[q + 2] - pos[k + 2];
+              const d2 = ex * ex + ey * ey + ez * ez;
+              if (d2 >= r2 || d2 === 0) continue;
+              const wn = invMass[n];
+              const wm = invMass[m];
+              const total = wn + wm;
+              if (total === 0) continue;
+              const d = Math.sqrt(d2);
+              const push = (radius - d) / (d * total);
+              pos[k] -= ex * push * wn;
+              pos[k + 1] -= ey * push * wn;
+              pos[k + 2] -= ez * push * wn;
+              pos[q] += ex * push * wm;
+              pos[q + 1] += ey * push * wm;
+              pos[q + 2] += ez * push * wm;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /* ── layering ──
+     Points alone leave a hole in every cell that another layer can slip
+     through, and a gust or a pull would push it through. So each point
+     also keeps a thickness clear of the other layers' triangles, on the
+     side it was on before the step. The push runs along the wall's normal,
+     so folds stack instead of sliding apart, and a layer lying on the wall
+     lifts the one on top rather than giving way. */
+  let quadHead = new Int32Array(0);
+  let quadNext = new Int32Array(0);
+  let quadOf = new Int32Array(0);
+  let quadSeen = new Int32Array(0);
+  let quadStamp = 0;
+
+  function displaced(n: number) {
+    const k = n * 3;
+    return Math.hypot(pos[k] - rest[k], pos[k + 1] - rest[k + 1]);
+  }
+
+  /* Keeps point n on its side of triangle abc; false if n is not over it. */
+  function press(n: number, a: number, b: number, c: number, thickness: number) {
+    const k = n * 3;
+    const ka = a * 3;
+    const kb = b * 3;
+    const kc = c * 3;
+    const ax = pos[ka];
+    const ay = pos[ka + 1];
+    const e0x = pos[kb] - ax;
+    const e0y = pos[kb + 1] - ay;
+    const e1x = pos[kc] - ax;
+    const e1y = pos[kc + 1] - ay;
+    const den = e0x * e1y - e1x * e0y;
+    if (Math.abs(den) < 1e-6) return false;
+    const px = pos[k] - ax;
+    const py = pos[k + 1] - ay;
+    const u = (px * e1y - e1x * py) / den;
+    const v = (e0x * py - px * e0y) / den;
+    const w = 1 - u - v;
+    if (u < 0 || v < 0 || w < 0) return false;
+    /* a triangle turned edge-on to the wall is left to the point contact */
+    const e0z = pos[kb + 2] - pos[ka + 2];
+    const e1z = pos[kc + 2] - pos[ka + 2];
+    const cx = e0y * e1z - e0z * e1y;
+    const cy = e0z * e1x - e0x * e1z;
+    if (den * den < 0.09 * (cx * cx + cy * cy + den * den)) return true;
+    const gap = pos[k + 2] - (w * pos[ka + 2] + u * pos[kb + 2] + v * pos[kc + 2]);
+    const before = prev[k + 2] - (w * prev[ka + 2] + u * prev[kb + 2] + v * prev[kc + 2]);
+    /* layers that meet level: the one that travelled further lies on top */
+    const side =
+      before > 0.5
+        ? 1
+        : before < -0.5
+          ? -1
+          : displaced(n) >= w * displaced(a) + u * displaced(b) + v * displaced(c)
+            ? 1
+            : -1;
+    const depth = thickness - side * gap;
+    if (depth <= 0) return true;
+    const up = side > 0;
+    /* nothing is pushed into the wall */
+    const wp = up || pos[k + 2] > 0 ? invMass[n] : 0;
+    const wa = !up || pos[ka + 2] > 0 ? invMass[a] : 0;
+    const wb = !up || pos[kb + 2] > 0 ? invMass[b] : 0;
+    const wc = !up || pos[kc + 2] > 0 ? invMass[c] : 0;
+    const total = wp + w * w * wa + u * u * wb + v * v * wc;
+    if (total < 1e-6) return true;
+    const s = (Math.min(depth, thickness * 2) / total) * side;
+    pos[k + 2] += s * wp;
+    pos[ka + 2] -= s * w * wa;
+    pos[kb + 2] -= s * u * wb;
+    pos[kc + 2] -= s * v * wc;
+    if (up) {
+      let short = 0;
+      for (const [m, weight] of [[ka, w], [kb, u], [kc, v]]) {
+        if (pos[m + 2] < 0) {
+          short -= pos[m + 2] * weight;
+          pos[m + 2] = 0;
+        }
+      }
+      if (wp > 0) pos[k + 2] += short;
+    } else if (pos[k + 2] < 0) {
+      const short = -pos[k + 2];
+      pos[k + 2] = 0;
+      if (wa + wb + wc > 0) {
+        pos[ka + 2] += wa > 0 ? short : 0;
+        pos[kb + 2] += wb > 0 ? short : 0;
+        pos[kc + 2] += wc > 0 ? short : 0;
+      }
+    }
+    return true;
+  }
+
+  function layer(thickness: number) {
+    const inv = 1 / Math.max(cellX, cellY);
+    const across = cols - 1;
+    const quads = across * (rows - 1);
+    const capacity = quadNext.length;
+    quadHead.fill(-1);
+    let used = 0;
+    for (let q = 0; q < quads && used < capacity; q++) {
+      const qi = q % across;
+      const a = ((q - qi) / across) * cols + qi;
+      const corners = [a, a + 1, a + cols, a + cols + 1];
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const m of corners) {
+        const x = pos[m * 3];
+        const y = pos[m * 3 + 1];
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+      const x0 = Math.floor(minX * inv);
+      const x1 = Math.floor(maxX * inv);
+      const y0 = Math.floor(minY * inv);
+      const y1 = Math.floor(maxY * inv);
+      if ((x1 - x0 + 1) * (y1 - y0 + 1) > 16) continue;
+      for (let gy = y0; gy <= y1; gy++) {
+        for (let gx = x0; gx <= x1 && used < capacity; gx++) {
+          const key = ((gx * 73856093) ^ (gy * 19349663)) & hashMask;
+          quadOf[used] = q;
+          quadNext[used] = quadHead[key];
+          quadHead[key] = used++;
+        }
+      }
+    }
+    if (quadStamp > 1e9) {
+      quadStamp = 0;
+      quadSeen.fill(0);
+    }
+    for (let n = 0; n < count; n++) {
+      const k = n * 3;
+      const ni = n % cols;
+      const nj = (n - ni) / cols;
+      const key =
+        ((Math.floor(pos[k] * inv) * 73856093) ^ (Math.floor(pos[k + 1] * inv) * 19349663)) & hashMask;
+      const stamp = ++quadStamp;
+      for (let e = quadHead[key]; e >= 0; e = quadNext[e]) {
+        const q = quadOf[e];
+        if (quadSeen[q] === stamp) continue;
+        quadSeen[q] = stamp;
+        const qi = q % across;
+        const qj = (q - qi) / across;
+        /* its own neighbourhood bends freely */
+        if (qi >= ni - 3 && qi <= ni + 2 && qj >= nj - 3 && qj <= nj + 2) continue;
+        const a = qj * cols + qi;
+        if (!press(n, a, a + 1, a + cols, thickness)) {
+          press(n, a + 1, a + cols + 1, a + cols, thickness);
+        }
+      }
+    }
+  }
+
+  /* ── the loop ── */
+  let windTime = Math.random() * 100;
+  let settledFrames = 0;
+
+  function step(h: number) {
+    const floating = config.float;
+    const wind = reducedMotion || floating ? 0 : Math.max(config.wind, 0);
+    const bend = 0.04 + Math.min(Math.max(config.stiffness, 0), 1) * 0.6;
+    const settle = Math.min(Math.max(config.settle, 0), 1);
+    const home = floating
+      ? 0
+      : (config.pin === "none" ? 6 + settle * 30 : settle * 8) *
+        (held >= 0 ? 0.05 : 1 + recover * 3);
+    const gravity = floating ? 0 : GRAVITY;
+    const drag = floating && held < 0 ? 0.9 : 0.985;
+    const brush = Math.min(Math.max(config.brush, 0), 1) * pointer.energy;
+    const thickness = COLLIDE * Math.min(cellX, cellY);
+    const maxMove = thickness * 0.45;
+    const h2 = h * h;
+    windTime += h;
+    recover *= Math.exp(-h * 1.2);
+    const t = windTime;
+    const gust =
+      0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t * 0.37)) * (0.6 + 0.4 * Math.sin(t * 0.91 + 1.3));
+    const windStrength = wind * 900 * gust;
+    const f = focal();
+    const brushRadius = 110;
+
+    for (let n = 0; n < count; n++) {
+      if (invMass[n] === 0) continue;
+      const k = n * 3;
+      const x = pos[k];
+      const y = pos[k + 1];
+      const z = pos[k + 2];
+      let ax = gravityX * gravity;
+      let ay = gravityY * gravity;
+      let az = 0;
+      if (windStrength > 0) {
+        const wx = windStrength * 0.22 * Math.sin(t * 0.27 + y * 0.004);
+        const wz =
+          windStrength * (0.7 + 0.45 * windNoise(rest[k] * 0.0035 + t * 0.55, rest[k + 1] * 0.0035 - t * 0.21));
+        const o = n * 4;
+        const nx = normals[o];
+        const ny = normals[o + 1];
+        const nz = normals[o + 2];
+        const along = nx * wx + nz * wz;
+        ax += along * nx + wx * 0.08;
+        ay += along * ny;
+        az += along * nz + wz * 0.08;
+      }
+      if (brush > 0.001) {
+        const scale = f / Math.max(f - z, 1);
+        const sx = width / 2 + (x - width / 2) * scale;
+        const sy = height / 2 + (y - height / 2) * scale;
+        const dx = sx - pointer.x;
+        const dy = sy - pointer.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < brushRadius * brushRadius * 4) {
+          const g = Math.exp(-d2 / (brushRadius * brushRadius)) * brush;
+          ax += pointer.vx * 9 * g;
+          ay += pointer.vy * 9 * g;
+          az += Math.hypot(pointer.vx, pointer.vy) * 4 * g;
+        }
+      }
+      ax += (rest[k] - x) * home;
+      ay += (rest[k + 1] - y) * home;
+      az += (rest[k + 2] - z) * home;
+      let vx = (x - prev[k]) * drag + ax * h2;
+      let vy = (y - prev[k + 1]) * drag + ay * h2;
+      let vz = (z - prev[k + 2]) * drag + az * h2;
+      const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
+      if (speed > maxMove) {
+        const s = maxMove / speed;
+        vx *= s;
+        vy *= s;
+        vz *= s;
+      }
+      prev[k] = x;
+      prev[k + 1] = y;
+      prev[k + 2] = z;
+      pos[k] = x + vx;
+      pos[k + 1] = y + vy;
+      pos[k + 2] = z + vz;
     }
 
-    const c2 = WAVE_SPEED * WAVE_SPEED;
-    const dt2 = dt * dt;
-    const decay = Math.exp(-Math.min(Math.max(config.damping, 0.05), 8) * dt);
-    for (let y = 0; y < NODES; y++) {
-      const up = Math.max(y - 1, 0) * NODES;
-      const down = Math.min(y + 1, SEG) * NODES;
-      const row = y * NODES;
-      for (let x = 0; x < NODES; x++) {
-        const i = row + x;
-        const l = row + Math.max(x - 1, 0);
-        const r = row + Math.min(x + 1, SEG);
-        const h = hCur[i];
-        const lap = hCur[l] + hCur[r] + hCur[up + x] + hCur[down + x] - 4 * h;
-        const [a, b] = axisFor(x, y);
-        const force = windAmp * rowForce[b] * colForce[a];
-        const acc = c2 * lap - STIFFNESS * h + force;
-        const next = 2 * h - hPrev[i] + dt2 * acc;
-        let value = h + (next - h) * decay;
-        if (value > 3.5) value = 3.5;
-        else if (value < -3.5) value = -3.5;
-        hNext[i] = value;
+    if (held >= 0) {
+      lift += (60 - lift) * Math.min(h * 10, 1);
+      const ex = target.x - follow.x;
+      const ey = target.y - follow.y;
+      const ez = target.z - follow.z;
+      const gap = Math.sqrt(ex * ex + ey * ey + ez * ez);
+      const reach = gap > maxMove ? maxMove / gap : 1;
+      follow.x += ex * reach;
+      follow.y += ey * reach;
+      follow.z += ez * reach;
+      const k = held * 3;
+      pos[k] += (follow.x - pos[k]) * 0.7;
+      pos[k + 1] += (follow.y - pos[k + 1]) * 0.7;
+      pos[k + 2] += (follow.z - pos[k + 2]) * 0.7;
+      for (const p of patch) {
+        const m = p.node * 3;
+        pos[m] += (pos[k] + p.dx - pos[m]) * p.weight;
+        pos[m + 1] += (pos[k + 1] + p.dy - pos[m + 1]) * p.weight;
+        pos[m + 2] += (pos[k + 2] + p.dz - pos[m + 2]) * p.weight;
       }
     }
 
-    for (let b = 0; b < NODES; b++) {
-      let x = b;
-      let y = 0;
-      if (config.pin === "bottom") y = SEG;
-      else if (config.pin === "left") {
-        x = 0;
-        y = b;
-      } else if (config.pin === "right") {
-        x = SEG;
-        y = b;
+    const links = linkA.length;
+    for (let it = 0; it < ITERATIONS; it++) {
+      for (let c = 0; c < links; c++) {
+        const p = linkA[c];
+        const q = linkB[c];
+        const wp = invMass[p];
+        const wq = invMass[q];
+        const total = wp + wq;
+        if (total === 0) continue;
+        const a = p * 3;
+        const b = q * 3;
+        const dx = pos[b] - pos[a];
+        const dy = pos[b + 1] - pos[a + 1];
+        const dz = pos[b + 2] - pos[a + 2];
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-6;
+        let length = linkLength[c];
+        let stiff = 1;
+        if (linkKind[c] === 1) {
+          const floor = baseLength[c] * CREASE;
+          if (d < floor) length = floor;
+          else stiff = bend;
+        }
+        const s = (stiff * (d - length)) / (d * total);
+        pos[a] += dx * s * wp;
+        pos[a + 1] += dy * s * wp;
+        pos[a + 2] += dz * s * wp;
+        pos[b] -= dx * s * wq;
+        pos[b + 1] -= dy * s * wq;
+        pos[b + 2] -= dz * s * wq;
       }
-      hNext[y * NODES + x] = 0;
-    }
-
-    const spent = hPrev;
-    hPrev = hCur;
-    hCur = hNext;
-    hNext = spent;
-  }
-
-  function touchImprint(delta: number, width: number, height: number) {
-    if (config.brush <= 0 || touch.s < 0.01) return;
-    const cellW = width / SEG;
-    const cellH = height / SEG;
-    const radius = Math.max(config.brushSize, 12);
-    const rx = radius / cellW;
-    const ry = radius / cellH;
-    const gx = touch.x / cellW;
-    const gy = touch.y / cellH;
-    const bx0 = Math.max(Math.ceil(gx - 2.5 * rx), 0);
-    const bx1 = Math.min(Math.floor(gx + 2.5 * rx), SEG);
-    const by0 = Math.max(Math.ceil(gy - 2.5 * ry), 0);
-    const by1 = Math.min(Math.floor(gy + 2.5 * ry), SEG);
-    const lift = 1.1 * Math.min(config.brush, 3) * touch.s;
-    const rate = Math.min(delta * 4, 1);
-    for (let y = by0; y <= by1; y++) {
-      const oy = (y - gy) / ry;
-      const row = y * NODES;
-      for (let x = bx0; x <= bx1; x++) {
-        const ox = (x - gx) / rx;
-        const g = Math.exp(-(ox * ox + oy * oy));
-        if (g < 0.02) continue;
-        const i = row + x;
-        const pull = rate * g;
-        const goal = lift * g;
-        hCur[i] += (goal - hCur[i]) * pull;
-        hPrev[i] += (goal - hPrev[i]) * pull;
+      if (it === (ITERATIONS >> 1)) {
+        collide(thickness);
+        layer(thickness);
       }
     }
-  }
 
-  function foreshorten(
-    axisStride: number,
-    lineStride: number,
-    ds: number,
-    anchor: number,
-    comp: number,
-  ) {
-    const ds2 = ds * ds;
-    for (let l = 0; l < NODES; l++) {
-      const base = l * lineStride;
-      offsetData[(base + anchor * axisStride) * 2 + comp] = 0;
-      let cum = 0;
-      for (let k = anchor + 1; k < NODES; k++) {
-        const i = base + k * axisStride;
-        const dz = zField[i] - zField[i - axisStride];
-        cum += ds - Math.sqrt(Math.max(ds2 - dz * dz, 0));
-        offsetData[i * 2 + comp] = -cum;
+    for (let n = 0; n < count; n++) {
+      const k = n * 3;
+      const anchor = tether[n];
+      if (anchor >= 0 && invMass[n] > 0) {
+        const a = anchor * 3;
+        const dx = pos[k] - pos[a];
+        const dy = pos[k + 1] - pos[a + 1];
+        const dz = pos[k + 2] - pos[a + 2];
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const limit = tetherLength[n];
+        if (d > limit && d > 0) {
+          const s = limit / d;
+          pos[k] = pos[a] + dx * s;
+          pos[k + 1] = pos[a + 1] + dy * s;
+          pos[k + 2] = pos[a + 2] + dz * s;
+        }
       }
-      cum = 0;
-      for (let k = anchor - 1; k >= 0; k--) {
-        const i = base + k * axisStride;
-        const dz = zField[i] - zField[i + axisStride];
-        cum += ds - Math.sqrt(Math.max(ds2 - dz * dz, 0));
-        offsetData[i * 2 + comp] = cum;
+      if (pos[k + 2] < 0) {
+        pos[k + 2] = 0;
+        prev[k + 2] = Math.min(prev[k + 2], 0) * 0.5;
+      }
+    }
+
+    /* contact last, so neither the tethers nor the wall undo it */
+    collide(thickness);
+    layer(thickness);
+    for (let n = 0; n < count; n++) {
+      if (pos[n * 3 + 2] < 0) pos[n * 3 + 2] = 0;
+    }
+
+    /* floating: bends set where they are left, so the cloth keeps its
+       shape instead of springing flat */
+    if (floating) {
+      for (let c = 0; c < links; c++) {
+        if (linkKind[c] !== 1) continue;
+        const a = linkA[c] * 3;
+        const b = linkB[c] * 3;
+        const d = Math.hypot(pos[b] - pos[a], pos[b + 1] - pos[a + 1], pos[b + 2] - pos[a + 2]);
+        linkLength[c] += (Math.max(d, baseLength[c] * CREASE) - linkLength[c]) * 0.05;
       }
     }
   }
 
-  function composeOffsets(width: number, height: number) {
-    const cellW = width / SEG;
-    const cellH = height / SEG;
-    const mid = SEG >> 1;
-    if (config.pin === "top" || config.pin === "bottom") {
-      foreshorten(NODES, 1, cellH, config.pin === "top" ? 0 : SEG, 1);
-      foreshorten(1, NODES, cellW, mid, 0);
+  /* The canvas reaches past the cloth by a margin that grows while the
+     cloth is dragged out of its box and shrinks back once it settles, so
+     a fold pulled past the edge is never cut off. */
+  let roomyFrames = 0;
+  function fitBleed(final = false) {
+    const f = focal();
+    let over = 0;
+    for (let n = 0; n < count; n++) {
+      const k = n * 3;
+      const z = pos[k + 2];
+      const scale = f / Math.max(f - z, 1);
+      const sx = width / 2 + (pos[k] - width / 2) * scale;
+      const sy = height / 2 + (pos[k + 1] - height / 2) * scale;
+      const lift = Math.max(z, 0) + 6;
+      const hx = pos[k] + 0.32 * lift;
+      const hy = pos[k + 1] + 0.46 * lift;
+      over = Math.max(
+        over,
+        -sx,
+        sx - width,
+        -sy,
+        sy - height,
+        hx - width + 30,
+        hy - height + 30,
+        30 - hx,
+        30 - hy,
+      );
+    }
+    const need = over + 48;
+    if (need > bleed) {
+      roomyFrames = 0;
+      resizeBleed(Math.min(MAX_BLEED, Math.ceil(need / 128) * 128));
+    } else if (bleed > BASE_BLEED && need < bleed - (final ? 0 : 160)) {
+      roomyFrames++;
+      if (final || roomyFrames > 45) {
+        roomyFrames = 0;
+        resizeBleed(Math.max(BASE_BLEED, Math.ceil(need / 128) * 128));
+      }
     } else {
-      foreshorten(1, NODES, cellW, config.pin === "left" ? 0 : SEG, 0);
-      foreshorten(NODES, 1, cellH, mid, 1);
+      roomyFrames = 0;
     }
   }
 
-  function composeVertices(width: number, height: number) {
-    const amp = Math.max(config.amplitude, 0);
-    const drape = config.drape * (0.3 + 0.7 * gust);
-    const cellW = width / SEG;
-    const cellH = height / SEG;
-    let energy = 0;
-
-    for (let y = 0; y < NODES; y++) {
-      const row = y * NODES;
-      for (let x = 0; x < NODES; x++) {
-        const i = row + x;
-        const h = hCur[i];
-        energy = Math.max(energy, Math.abs(h));
-        const [a] = axisFor(x, y);
-        zField[i] = amp * Math.tanh(h) + drape * hangCurve[a];
-      }
-    }
-    fieldEnergy = energy;
-
-    for (let y = 0; y < NODES; y++) {
-      const up = Math.max(y - 1, 0) * NODES;
-      const down = Math.min(y + 1, SEG) * NODES;
-      const row = y * NODES;
-      for (let x = 0; x < NODES; x++) {
-        const i = row + x;
-        const l = row + Math.max(x - 1, 0);
-        const r = row + Math.min(x + 1, SEG);
-        const dzdx = (zField[r] - zField[l]) / (2 * cellW);
-        const dzdy = (zField[down + x] - zField[up + x]) / (2 * cellH);
-        const inv = 1 / Math.hypot(dzdx, dzdy, 1);
-        const curve =
-          zField[l] +
-          zField[r] +
-          zField[up + x] +
-          zField[down + x] -
-          4 * zField[i];
-        let fold = 1 - curve * 0.01;
-        if (fold < 0.86) fold = 0.86;
-        else if (fold > 1.06) fold = 1.06;
-        const o = i * 4;
-        vertexData[o] = zField[i];
-        vertexData[o + 1] = -dzdx * inv;
-        vertexData[o + 2] = -dzdy * inv;
-        vertexData[o + 3] = fold;
-      }
-    }
-
-    composeOffsets(width, height);
+  function resizeBleed(next: number) {
+    if (next === bleed) return;
+    styleBleed(next);
+    sizeOutput();
   }
 
   let backingRgb: [number, number, number] = [1, 1, 1];
@@ -631,91 +1501,188 @@ export function createCloth(
       return;
     }
     backingRgb = [1, 1, 1];
-    if (probeCtx) {
-      let el: Element | null = content;
-      while (el) {
-        const bg = getComputedStyle(el).backgroundColor;
-        if (bg && bg !== "transparent") {
-          probeCtx.clearRect(0, 0, 1, 1);
-          probeCtx.fillStyle = bg;
-          probeCtx.fillRect(0, 0, 1, 1);
-          const [r, g, b, a] = probeCtx.getImageData(0, 0, 1, 1).data;
-          if (a > 0) {
-            backingRgb = [r / 255, g / 255, b / 255];
-            break;
-          }
+    if (!probeCtx) return;
+    let el: Element | null = content;
+    while (el) {
+      const bg = getComputedStyle(el).backgroundColor;
+      if (bg && bg !== "transparent") {
+        probeCtx.clearRect(0, 0, 1, 1);
+        probeCtx.fillStyle = bg;
+        probeCtx.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = probeCtx.getImageData(0, 0, 1, 1).data;
+        if (a > 0) {
+          backingRgb = [r / 255, g / 255, b / 255];
+          break;
         }
-        el = el.parentElement;
       }
+      el = el.parentElement;
+    }
+  }
+
+  function sizeOutput() {
+    const dpr = getCanvasPixelRatio(output, gl!);
+    const w = Math.max(1, Math.round(output.clientWidth * dpr));
+    const h = Math.max(1, Math.round(output.clientHeight * dpr));
+    if (output.width !== w || output.height !== h) {
+      output.width = w;
+      output.height = h;
+    }
+    sizeTarget(
+      shadowTargets[0],
+      Math.max(1, Math.ceil(output.clientWidth * SHADOW_SCALE)),
+      Math.max(1, Math.ceil(output.clientHeight * SHADOW_SCALE)),
+    );
+    sizeTarget(shadowTargets[1], shadowTargets[0].width, shadowTargets[0].height);
+    return dpr;
+  }
+
+  function syncCanvasSize() {
+    const dpr = sizeOutput();
+    contentMaxX = Math.min(
+      1,
+      Math.max(0.05, content.clientWidth / Math.max(wrapper.clientWidth, 1)),
+    );
+    const sourceWidth = Math.max(1, Math.round(source.clientWidth * dpr));
+    const sourceHeight = Math.max(1, Math.round(source.clientHeight * dpr));
+    if (source.width !== sourceWidth || source.height !== sourceHeight) {
+      source.width = sourceWidth;
+      source.height = sourceHeight;
+    }
+    paintable.requestPaint!();
+    if (
+      Math.abs(wrapper.clientWidth - width) > 1 ||
+      Math.abs(wrapper.clientHeight - height) > 1
+    ) {
+      buildCloth();
     }
   }
 
   const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
   let reducedMotion = motionQuery.matches;
 
-  syncCanvasSize();
   syncBacking();
+  syncCanvasSize();
+
+  function upload() {
+    for (let n = 0; n < count; n++) {
+      packed[n * 4] = pos[n * 3];
+      packed[n * 4 + 1] = pos[n * 3 + 1];
+      packed[n * 4 + 2] = pos[n * 3 + 2];
+      packed[n * 4 + 3] = 0;
+    }
+    gl!.bindTexture(gl!.TEXTURE_2D, posTexture);
+    gl!.texSubImage2D(gl!.TEXTURE_2D, 0, 0, 0, cols, rows, gl!.RGBA, gl!.FLOAT, packed);
+    gl!.bindTexture(gl!.TEXTURE_2D, nrmTexture);
+    gl!.texSubImage2D(gl!.TEXTURE_2D, 0, 0, 0, cols, rows, gl!.RGBA, gl!.FLOAT, normals);
+    gl!.bindTexture(gl!.TEXTURE_2D, broadTexture);
+    gl!.texSubImage2D(gl!.TEXTURE_2D, 0, 0, 0, cols, rows, gl!.RGBA, gl!.FLOAT, broad);
+  }
+
+  function bindSurface(uniforms: Record<string, WebGLUniformLocation>) {
+    gl!.activeTexture(gl!.TEXTURE0);
+    gl!.bindTexture(gl!.TEXTURE_2D, posTexture);
+    gl!.uniform1i(uniforms.uPos, 0);
+    gl!.activeTexture(gl!.TEXTURE1);
+    gl!.bindTexture(gl!.TEXTURE_2D, nrmTexture);
+    gl!.uniform1i(uniforms.uNrm, 1);
+    gl!.uniform2i(uniforms.uGrid, cols, rows);
+    gl!.uniform2f(uniforms.uCell, cellX, cellY);
+    gl!.uniform2f(uniforms.uOut, Math.max(output.clientWidth, 1), Math.max(output.clientHeight, 1));
+    gl!.uniform1f(uniforms.uBleed, bleed);
+  }
 
   function render() {
-    const resW = Math.max(wrapper.clientWidth, 1);
-    const resH = Math.max(wrapper.clientHeight, 1);
-    const outW = Math.max(output.clientWidth, 1);
-    const outH = Math.max(output.clientHeight, 1);
-    const light = Math.min(Math.max(config.light, 0), 1);
+    upload();
     const radius = Math.max(config.cornerRadius, 0);
-    const shadowAlpha = Math.min(Math.max(config.shadow, 0), 1);
-    const lum =
-      0.299 * backingRgb[0] + 0.587 * backingRgb[1] + 0.114 * backingRgb[2];
+    const light = Math.min(Math.max(config.light, 0), 1);
+    const shadow = Math.min(Math.max(config.shadow, 0), 1);
+    const lum = 0.299 * backingRgb[0] + 0.587 * backingRgb[1] + 0.114 * backingRgb[2];
     const dark = Math.min(Math.max((0.5 - lum) / 0.35, 0), 1);
+
+    gl!.disable(gl!.DEPTH_TEST);
+    gl!.disable(gl!.BLEND);
+    if (shadow > 0.001) {
+      const [a, b] = shadowTargets;
+      gl!.bindFramebuffer(gl!.FRAMEBUFFER, a.framebuffer);
+      gl!.viewport(0, 0, a.width, a.height);
+      gl!.clearColor(0, 0, 0, 0);
+      gl!.clear(gl!.COLOR_BUFFER_BIT);
+      gl!.enable(gl!.BLEND);
+      gl!.blendEquation(gl!.MAX);
+      gl!.useProgram(shadowPass.program);
+      bindSurface(shadowPass.uniforms);
+      gl!.uniform2f(shadowPass.uniforms.uSize, width, height);
+      gl!.uniform1f(shadowPass.uniforms.uRadius, radius);
+      gl!.uniform2f(shadowPass.uniforms.uShift, 0.32, 0.46);
+      gl!.bindVertexArray(meshVao);
+      gl!.drawElements(gl!.TRIANGLES, indexCount, gl!.UNSIGNED_INT, 0);
+      gl!.blendEquation(gl!.FUNC_ADD);
+      gl!.disable(gl!.BLEND);
+
+      gl!.bindVertexArray(quadVao);
+      gl!.useProgram(blurPass.program);
+      gl!.activeTexture(gl!.TEXTURE0);
+      gl!.uniform1i(blurPass.uniforms.uTex, 0);
+      for (let pass = 0; pass < 2; pass++) {
+        gl!.bindFramebuffer(gl!.FRAMEBUFFER, b.framebuffer);
+        gl!.bindTexture(gl!.TEXTURE_2D, a.texture);
+        gl!.uniform2f(blurPass.uniforms.uStep, 2.2 / a.width, 0);
+        gl!.drawArrays(gl!.TRIANGLE_STRIP, 0, 4);
+        gl!.bindFramebuffer(gl!.FRAMEBUFFER, a.framebuffer);
+        gl!.bindTexture(gl!.TEXTURE_2D, b.texture);
+        gl!.uniform2f(blurPass.uniforms.uStep, 0, 2.2 / a.height);
+        gl!.drawArrays(gl!.TRIANGLE_STRIP, 0, 4);
+      }
+    }
 
     gl!.bindFramebuffer(gl!.FRAMEBUFFER, null);
     gl!.viewport(0, 0, output.width, output.height);
     gl!.clearColor(0, 0, 0, 0);
-    gl!.clear(gl!.COLOR_BUFFER_BIT);
+    gl!.clearDepth(1);
+    gl!.clear(gl!.COLOR_BUFFER_BIT | gl!.DEPTH_BUFFER_BIT);
     gl!.enable(gl!.BLEND);
     gl!.blendFunc(gl!.ONE, gl!.ONE_MINUS_SRC_ALPHA);
 
-    gl!.bindVertexArray(clothVao);
-    gl!.bindBuffer(gl!.ARRAY_BUFFER, dataBuffer);
-    gl!.bufferSubData(gl!.ARRAY_BUFFER, 0, vertexData);
-    gl!.bindBuffer(gl!.ARRAY_BUFFER, offsetBuffer);
-    gl!.bufferSubData(gl!.ARRAY_BUFFER, 0, offsetData);
+    if (shadow > 0.001) {
+      gl!.bindVertexArray(quadVao);
+      gl!.useProgram(shadePass.program);
+      gl!.activeTexture(gl!.TEXTURE0);
+      gl!.bindTexture(gl!.TEXTURE_2D, shadowTargets[0].texture);
+      gl!.uniform1i(shadePass.uniforms.uTex, 0);
+      gl!.uniform1f(shadePass.uniforms.uShadow, shadow * mix(0.32, 0.6, dark));
+      gl!.drawArrays(gl!.TRIANGLE_STRIP, 0, 4);
+    }
 
-    gl!.useProgram(shadow.program);
-    gl!.uniform2f(shadow.uniforms.uRes, resW, resH);
-    gl!.uniform2f(shadow.uniforms.uOut, outW, outH);
-    gl!.uniform1f(shadow.uniforms.uBleed, BLEED);
-    gl!.uniform1f(shadow.uniforms.uShadow, shadowAlpha);
-    gl!.uniform1f(shadow.uniforms.uRadius, radius);
-    gl!.uniform1f(shadow.uniforms.uDark, dark);
-    gl!.drawElements(gl!.TRIANGLES, gridIndices.length, gl!.UNSIGNED_INT, 0);
-
-    gl!.useProgram(cloth.program);
-    gl!.activeTexture(gl!.TEXTURE0);
+    gl!.enable(gl!.DEPTH_TEST);
+    gl!.depthFunc(gl!.LEQUAL);
+    gl!.useProgram(clothPass.program);
+    const u = clothPass.uniforms;
+    bindSurface(u);
+    gl!.activeTexture(gl!.TEXTURE2);
     gl!.bindTexture(gl!.TEXTURE_2D, contentTexture);
-    gl!.uniform1i(cloth.uniforms.uContent, 0);
-    gl!.uniform2f(cloth.uniforms.uRes, resW, resH);
-    gl!.uniform2f(cloth.uniforms.uOut, outW, outH);
-    gl!.uniform1f(cloth.uniforms.uBleed, BLEED);
-    gl!.uniform1f(cloth.uniforms.uFocal, Math.max(config.perspective, 200));
-    gl!.uniform1f(cloth.uniforms.uMaxX, contentMaxX);
-    gl!.uniform1f(cloth.uniforms.uLight, light);
-    gl!.uniform1f(cloth.uniforms.uSheen, Math.max(config.sheen, 0));
-    gl!.uniform1f(cloth.uniforms.uRadius, radius);
-    gl!.uniform1f(cloth.uniforms.uDark, dark);
-    gl!.uniform3f(
-      cloth.uniforms.uBacking,
-      backingRgb[0],
-      backingRgb[1],
-      backingRgb[2],
-    );
-    gl!.drawElements(gl!.TRIANGLES, gridIndices.length, gl!.UNSIGNED_INT, 0);
+    gl!.uniform1i(u.uContent, 2);
+    gl!.activeTexture(gl!.TEXTURE3);
+    gl!.bindTexture(gl!.TEXTURE_2D, broadTexture);
+    gl!.uniform1i(u.uBroad, 3);
+    gl!.uniform2f(u.uCenter, width / 2, height / 2);
+    gl!.uniform1f(u.uFocal, focal());
+    gl!.uniform2f(u.uSize, width, height);
+    gl!.uniform1f(u.uMaxX, contentMaxX);
+    gl!.uniform3f(u.uBacking, backingRgb[0], backingRgb[1], backingRgb[2]);
+    gl!.uniform1f(u.uRadius, radius);
+    gl!.uniform1f(u.uLight, light);
+    gl!.uniform1f(u.uSheen, Math.min(Math.max(config.sheen, 0), 1));
+    gl!.uniform1f(u.uWeave, Math.min(Math.max(config.weave, 0), 1));
+    gl!.uniform1f(u.uDark, dark);
+    gl!.bindVertexArray(meshVao);
+    gl!.drawElements(gl!.TRIANGLES, indexCount, gl!.UNSIGNED_INT, 0);
     gl!.bindVertexArray(null);
+    gl!.disable(gl!.DEPTH_TEST);
   }
 
   let raf = 0;
   let lastTime = performance.now();
-  let simDebt = 0;
+  let debt = 0;
   let destroyed = false;
   let running = false;
   let visible = true;
@@ -728,47 +1695,30 @@ export function createCloth(
     }
     const delta = Math.min((now - lastTime) / 1000, 1 / 20);
     lastTime = now;
+    pointer.energy *= Math.exp(-delta * 5);
+    pointer.vx *= Math.exp(-delta * 8);
+    pointer.vy *= Math.exp(-delta * 8);
 
-    const width = Math.max(wrapper.clientWidth, 1);
-    const height = Math.max(wrapper.clientHeight, 1);
-
-    if (!reducedMotion) {
-      const t = simTime;
-      const target = Math.max(
-        0.55 +
-          0.35 * Math.sin(t * 0.31 + 1.3) +
-          0.25 * Math.sin(t * 0.83) * (0.5 + 0.5 * Math.sin(t * 0.17)),
-        0.15,
-      );
-      gust += (target - gust) * Math.min(delta * 2, 1);
-
-      const sTarget = pointer.inside && config.brush > 0 ? 1 : 0;
-      const sRate = pointer.inside ? 8 : 2.5;
-      touch.s += (sTarget - touch.s) * Math.min(delta * sRate, 1);
-
-      const omega = 14;
-      touch.vx +=
-        ((pointer.x - touch.x) * omega * omega - 2 * omega * touch.vx) * delta;
-      touch.vy +=
-        ((pointer.y - touch.y) * omega * omega - 2 * omega * touch.vy) * delta;
-      touch.x += touch.vx * delta;
-      touch.y += touch.vy * delta;
-      touchImprint(delta, width, height);
-
-      simDebt = Math.min(simDebt + delta, DT * 5);
-      while (simDebt >= DT) {
-        stepSim(DT);
-        simDebt -= DT;
-      }
+    let moved = 0;
+    debt = Math.min(debt + delta * Math.max(config.speed, 0), STEP * 4);
+    while (debt >= STEP) {
+      step(STEP);
+      debt -= STEP;
     }
-
-    composeVertices(width, height);
+    for (let k = 0; k < pos.length; k++) {
+      const d = Math.abs(pos[k] - prev[k]);
+      if (d > moved) moved = d;
+    }
+    computeNormals();
+    fitBleed();
     render();
+    if (hoverAt.on && held < 0) updateHover();
 
-    if (
-      reducedMotion ||
-      (config.wind <= 0.001 && fieldEnergy < 0.004 && touch.s < 0.01)
-    ) {
+    const windy = !reducedMotion && !config.float && config.wind > 0.001;
+    settledFrames = held < 0 && !windy && moved < 0.01 && pointer.energy < 0.01 ? settledFrames + 1 : 0;
+    if (settledFrames > 30) {
+      fitBleed(true);
+      render();
       running = false;
       return;
     }
@@ -776,9 +1726,9 @@ export function createCloth(
   }
 
   function start() {
-    if (!htmlInCanvas) return;
     if (destroyed || running || !visible) return;
     running = true;
+    settledFrames = 0;
     lastTime = performance.now();
     raf = requestAnimationFrame(frame);
   }
@@ -802,7 +1752,6 @@ export function createCloth(
       start();
     }, 300);
   }
-
   const themeObserver = new MutationObserver(onThemeShift);
   themeObserver.observe(document.documentElement, {
     attributes: true,
@@ -835,44 +1784,475 @@ export function createCloth(
   document.addEventListener("visibilitychange", syncVisibility);
   intersection.observe(output);
 
-  const listenTarget = wrapper;
-
   const rectCache = createRectCache(wrapper);
 
-  function onPointerMove(event: PointerEvent) {
-    if (!htmlInCanvas) return;
+  function local(event: PointerEvent) {
     const rect = rectCache.current;
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    if (touch.s < 0.01) {
-      touch.x = x;
-      touch.y = y;
-      touch.vx = 0;
-      touch.vy = 0;
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }
+
+  /* ── the page under the fabric ──
+     The page is laid out flat under the canvas, so once the cloth moves the
+     browser would hit-test a press against where the content sits on the
+     flat sheet, not where it is drawn. Every press, click and selection is
+     traced through the folded mesh instead: the frontmost triangle under the
+     pointer gives the point on the flat page it shows, and the event is
+     carried out there. */
+  type Hit = { x: number; y: number; front: boolean };
+  let projected = new Float32Array(0);
+
+  function hitCloth(clientX: number, clientY: number): Hit | null {
+    const rect = rectCache.current;
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
+    const f = focal();
+    if (projected.length !== count * 3) projected = new Float32Array(count * 3);
+    for (let n = 0; n < count; n++) {
+      const k = n * 3;
+      const z = pos[k + 2];
+      const scale = f / Math.max(f - z, 1);
+      projected[k] = width / 2 + (pos[k] - width / 2) * scale;
+      projected[k + 1] = height / 2 + (pos[k + 1] - height / 2) * scale;
+      projected[k + 2] = z;
     }
-    pointer.x = x;
-    pointer.y = y;
+    let best: Hit | null = null;
+    let bestZ = -Infinity;
+    const test = (a: number, b: number, c: number) => {
+      const ax = projected[a * 3];
+      const ay = projected[a * 3 + 1];
+      const bx = projected[b * 3];
+      const by = projected[b * 3 + 1];
+      const cx = projected[c * 3];
+      const cy = projected[c * 3 + 1];
+      if (
+        px < Math.min(ax, bx, cx) ||
+        px > Math.max(ax, bx, cx) ||
+        py < Math.min(ay, by, cy) ||
+        py > Math.max(ay, by, cy)
+      ) {
+        return;
+      }
+      const area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+      if (Math.abs(area) < 1e-6) return;
+      const u = ((bx - px) * (cy - py) - (by - py) * (cx - px)) / area;
+      const v = ((cx - px) * (ay - py) - (cy - py) * (ax - px)) / area;
+      const w = 1 - u - v;
+      if (u < -0.001 || v < -0.001 || w < -0.001) return;
+      const z = u * projected[a * 3 + 2] + v * projected[b * 3 + 2] + w * projected[c * 3 + 2];
+      if (z <= bestZ) return;
+      bestZ = z;
+      best = {
+        x: u * rest[a * 3] + v * rest[b * 3] + w * rest[c * 3],
+        y: u * rest[a * 3 + 1] + v * rest[b * 3 + 1] + w * rest[c * 3 + 1],
+        front: area > 0,
+      };
+    };
+    for (let j = 0; j < rows - 1; j++) {
+      for (let i = 0; i < cols - 1; i++) {
+        const a = j * cols + i;
+        test(a, a + 1, a + cols);
+        test(a + 1, a + cols + 1, a + cols);
+      }
+    }
+    return best;
+  }
+
+  function pageClient(hit: Hit) {
+    const rect = rectCache.current;
+    return { x: rect.left + hit.x, y: rect.top + hit.y };
+  }
+
+  function caretAt(clientX: number, clientY: number) {
+    const doc = document as Document & {
+      caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+      caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    };
+    const position = doc.caretPositionFromPoint?.(clientX, clientY);
+    if (position) return { node: position.offsetNode, offset: position.offset };
+    const range = doc.caretRangeFromPoint?.(clientX, clientY);
+    return range ? { node: range.startContainer, offset: range.startOffset } : null;
+  }
+
+  /* Text keeps its selection: a press that lands on a glyph of selectable
+     text selects, and only fabric around it grabs. */
+  function overText(clientX: number, clientY: number) {
+    const caret = caretAt(clientX, clientY);
+    if (!caret || caret.node.nodeType !== Node.TEXT_NODE || !content.contains(caret.node)) {
+      return false;
+    }
+    const parent = caret.node.parentElement;
+    if (parent && getComputedStyle(parent).userSelect === "none") return false;
+    const text = caret.node as Text;
+    const range = document.createRange();
+    for (const at of [caret.offset - 1, caret.offset]) {
+      if (at < 0 || at >= text.length) continue;
+      range.setStart(text, at);
+      range.setEnd(text, at + 1);
+      for (const rect of range.getClientRects()) {
+        if (
+          clientX >= rect.left - 2 &&
+          clientX <= rect.right + 2 &&
+          clientY >= rect.top - 2 &&
+          clientY <= rect.bottom + 2
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  let selecting = false;
+  let lastPress = { time: 0, x: 0, y: 0, count: 0 };
+  let swallowNext = false;
+  let forwarding = false;
+
+  function startSelection(clientX: number, clientY: number, event: PointerEvent) {
+    const caret = caretAt(clientX, clientY);
+    const selection = window.getSelection();
+    if (!caret || !selection || !content.contains(caret.node)) return;
+    const now = performance.now();
+    const again =
+      now - lastPress.time < 450 &&
+      Math.hypot(event.clientX - lastPress.x, event.clientY - lastPress.y) < 6;
+    lastPress = { time: now, x: event.clientX, y: event.clientY, count: again ? lastPress.count + 1 : 1 };
+    selection.removeAllRanges();
+    selection.collapse(caret.node, caret.offset);
+    const modify = (selection as Selection & {
+      modify?: (alter: string, direction: string, granularity: string) => void;
+    }).modify?.bind(selection);
+    if (lastPress.count === 2 && modify) {
+      modify("move", "backward", "word");
+      modify("extend", "forward", "word");
+      return;
+    }
+    if (lastPress.count >= 3 && modify) {
+      modify("move", "backward", "paragraphboundary");
+      modify("extend", "forward", "paragraphboundary");
+      return;
+    }
+    selecting = true;
+  }
+
+  /* Only events aimed at the cloth or at the page behind it are traced;
+     anything drawn above it (a popup, a toolbar) keeps its own events. */
+  function ours(target: EventTarget | null) {
+    return target instanceof Node && (wrapper.contains(target) || target.contains(wrapper));
+  }
+
+  patchHoverRules();
+  content.setAttribute(CONTENT_ATTR, "");
+  let hoverChain: Element[] = [];
+  let hoverTarget: Element | null = null;
+  const hoverAt = { x: 0, y: 0, target: null as EventTarget | null, on: false };
+
+  /* This runs every frame while the pointer rests on moving fabric, so it
+     only touches the DOM when the answer changes. */
+  function setHover(target: Element | null) {
+    if (target === hoverTarget) return;
+    hoverTarget = target;
+    const next = new Set<Element>();
+    for (let el: Element | null = target; el; el = el.parentElement) {
+      next.add(el);
+      if (el === content) break;
+    }
+    for (const el of hoverChain) if (!next.has(el)) el.removeAttribute(HOVER_ATTR);
+    for (const el of next) el.setAttribute(HOVER_ATTR, "");
+    hoverChain = Array.from(next);
+  }
+
+  type Styled = Element & ElementCSSInlineStyle;
+  let forced: { el: Styled; value: string; priority: string; native: string; cursor: string } | null = null;
+
+  function unforce() {
+    if (!forced) return;
+    const { el, value, priority } = forced;
+    if (value) el.style.setProperty("cursor", value, priority);
+    else el.style.removeProperty("cursor");
+    el.removeAttribute(NATIVE_ATTR);
+    forced = null;
+  }
+
+  /* The browser shows the cursor of the element under the real pointer,
+     which lies flat under the canvas, so the drawn element's cursor is
+     forced onto that one element. */
+  function force(at: Element | null, cursor: string) {
+    if (forced && (!cursor || forced.el !== at)) unforce();
+    if (!cursor || !at || !("style" in at)) return;
+    const el = at as Styled;
+    if (!forced) {
+      const native = getComputedStyle(el).cursor;
+      forced = {
+        el,
+        value: el.style.getPropertyValue("cursor"),
+        priority: el.style.getPropertyPriority("cursor"),
+        native,
+        cursor: "",
+      };
+      if (CURSOR_KEYWORDS.has(native)) el.setAttribute(NATIVE_ATTR, native);
+    }
+    if (forced.cursor !== cursor) {
+      forced.cursor = cursor;
+      el.style.setProperty("cursor", cursor, "important");
+    }
+  }
+
+  /* The forced element reports the cursor it had before; everything else
+     still computes its own, since the forced value stops at its children. */
+  function cursorOf(el: Element) {
+    return forced && forced.el === el ? forced.native : getComputedStyle(el).cursor;
+  }
+
+  function updateHover() {
+    if (!hoverAt.on || held >= 0 || !ours(hoverAt.target)) {
+      setHover(null);
+      force(null, "");
+      return;
+    }
+    const behind = !wrapper.contains(hoverAt.target as Node);
+    const under = document.elementFromPoint(hoverAt.x, hoverAt.y);
+    const at = under && ours(under) ? under : null;
+    const hit = hitCloth(hoverAt.x, hoverAt.y);
+    if (!hit) {
+      setHover(null);
+      force(at, behind ? "" : "default");
+      return;
+    }
+    const fabric = config.drag ? "grab" : "default";
+    if (!hit.front) {
+      setHover(null);
+      force(at, fabric);
+      return;
+    }
+    const point = pageClient(hit);
+    const drawn = document.elementFromPoint(point.x, point.y);
+    const target = drawn && content.contains(drawn) ? drawn : null;
+    setHover(target);
+    let cursor = target ? cursorOf(target) : fabric;
+    if (cursor === "auto") cursor = overText(point.x, point.y) ? "text" : fabric;
+    force(at, cursor);
+  }
+
+  function onHoverScroll() {
+    if (hoverAt.on) updateHover();
+  }
+  content.addEventListener("scroll", onHoverScroll, { capture: true, passive: true });
+
+  function onPointerDown(event: PointerEvent) {
+    if (event.button !== 0 || forwarding) return;
+    if (!ours(event.target)) return;
+    const target = event.target as Node | null;
+    const onPage = Boolean(target && (target === wrapper || wrapper.contains(target)));
+    const hit = hitCloth(event.clientX, event.clientY);
+    if (!hit) {
+      if (onPage) event.preventDefault();
+      return;
+    }
+    let shifted = true;
+    if (hit.front) {
+      const point = pageClient(hit);
+      shifted = !onPage || Math.hypot(point.x - event.clientX, point.y - event.clientY) > 3;
+      const under = shifted ? document.elementFromPoint(point.x, point.y) : (target as Element);
+      if (under && content.contains(under)) {
+        if (under.closest?.(INTERACTIVE)) {
+          if (shifted) event.preventDefault();
+          return;
+        }
+        if (overText(point.x, point.y)) {
+          if (shifted) {
+            event.preventDefault();
+            startSelection(point.x, point.y, event);
+          }
+          return;
+        }
+      }
+    }
+    if (!config.drag) {
+      if (shifted) event.preventDefault();
+      return;
+    }
+    event.preventDefault();
+    const p = local(event);
+    pending = { id: event.pointerId, x: p.x, y: p.y };
+    dragged = false;
+  }
+
+  function onClick(event: MouseEvent) {
+    if (forwarding) return;
+    if (swallowNext) {
+      swallowNext = false;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (!ours(event.target)) return;
+    const target = event.target as Node | null;
+    const onPage = Boolean(target && (target === wrapper || wrapper.contains(target)));
+    const hit = hitCloth(event.clientX, event.clientY);
+    if (!hit) {
+      if (onPage) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return;
+    }
+    if (!hit.front) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    const point = pageClient(hit);
+    if (onPage && Math.hypot(point.x - event.clientX, point.y - event.clientY) <= 3) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const under = document.elementFromPoint(point.x, point.y);
+    if (!under || !content.contains(under)) return;
+    forwarding = true;
+    try {
+      under.dispatchEvent(
+        new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          view: window,
+          detail: event.detail,
+          clientX: point.x,
+          clientY: point.y,
+          screenX: event.screenX,
+          screenY: event.screenY,
+          ctrlKey: event.ctrlKey,
+          shiftKey: event.shiftKey,
+          altKey: event.altKey,
+          metaKey: event.metaKey,
+          button: event.button,
+        }),
+      );
+      const field = (under as Element).closest?.("input, textarea, select, [contenteditable]");
+      if (field instanceof HTMLElement) field.focus();
+    } finally {
+      forwarding = false;
+    }
+  }
+
+  function onPointerMove(event: PointerEvent) {
+    const p = local(event);
+    const now = performance.now() / 1000;
+    if (event.isPrimary) {
+      hoverAt.x = event.clientX;
+      hoverAt.y = event.clientY;
+      hoverAt.target = event.target;
+      hoverAt.on = true;
+      updateHover();
+    }
+    if (selecting) {
+      if (!(event.buttons & 1)) {
+        selecting = false;
+      } else {
+        const hit = hitCloth(event.clientX, event.clientY);
+        const caret = hit && hit.front ? caretAt(pageClient(hit).x, pageClient(hit).y) : null;
+        const selection = window.getSelection();
+        if (caret && selection?.anchorNode && content.contains(caret.node)) {
+          selection.extend(caret.node, caret.offset);
+        }
+      }
+    }
+    const near =
+      p.x >= -40 && p.y >= -40 && p.x <= width + 40 && p.y <= height + 40;
+    if (!near && held < 0 && !pending) {
+      pointer.inside = false;
+      return;
+    }
+    if (pointer.inside) {
+      const dt = Math.max(now - pointer.time, 1 / 240);
+      const vx = Math.max(-2400, Math.min(2400, (p.x - pointer.x) / dt));
+      const vy = Math.max(-2400, Math.min(2400, (p.y - pointer.y) / dt));
+      pointer.vx += (vx - pointer.vx) * 0.4;
+      pointer.vy += (vy - pointer.vy) * 0.4;
+      pointer.energy = Math.min(1, pointer.energy + Math.hypot(vx, vy) / 3000);
+    }
+    pointer.x = p.x;
+    pointer.y = p.y;
+    pointer.time = now;
     pointer.inside = true;
+
+    if (pending && pending.id === event.pointerId && held < 0) {
+      if (Math.hypot(p.x - pending.x, p.y - pending.y) > 5) {
+        if (grab(pending.x, pending.y)) {
+          dragged = true;
+          window.getSelection()?.removeAllRanges();
+          wrapper.style.userSelect = "none";
+          wrapper.style.cursor = "grabbing";
+          try {
+            wrapper.setPointerCapture(event.pointerId);
+          } catch {}
+        }
+        pending = null;
+      }
+    }
+    if (held >= 0) {
+      window.getSelection()?.removeAllRanges();
+      aim(p.x, p.y);
+    }
     start();
   }
 
-  function onPointerLeave() {
-    pointer.inside = false;
+  function onPointerUp(event: PointerEvent) {
+    pending = null;
+    selecting = false;
+    if (held < 0) return;
+    release();
+    wrapper.style.userSelect = "";
+    wrapper.style.cursor = "";
+    try {
+      wrapper.releasePointerCapture(event.pointerId);
+    } catch {}
+    if (dragged) {
+      swallowNext = true;
+      window.setTimeout(() => {
+        swallowNext = false;
+      }, 0);
+    }
+    dragged = false;
+    start();
   }
 
-  listenTarget.addEventListener("pointermove", onPointerMove);
-  listenTarget.addEventListener("pointerleave", onPointerLeave);
+  function onDocumentLeave() {
+    hoverAt.on = false;
+    updateHover();
+  }
+  document.documentElement.addEventListener("pointerleave", onDocumentLeave);
+
+  window.addEventListener("pointerdown", onPointerDown, true);
+  window.addEventListener("click", onClick, true);
+  window.addEventListener("pointermove", onPointerMove, { passive: true });
+  window.addEventListener("pointerup", onPointerUp);
+  window.addEventListener("pointercancel", onPointerUp);
 
   return {
     setOptions(next) {
       next = resolveOptions(DEFAULTS, next);
-      if (
-        !Object.entries(next).some(
-          ([key, value]) => config[key as keyof ClothOptions] !== value,
-        )
-      )
-        return;
+      let changed = false;
+      for (const [key, value] of Object.entries(next)) {
+        const prevValue = config[key as keyof typeof config];
+        if (Array.isArray(value) && Array.isArray(prevValue)) {
+          if (value.some((item, i) => item !== prevValue[i])) changed = true;
+        } else if (prevValue !== value) {
+          changed = true;
+        }
+        if (changed) break;
+      }
+      if (!changed) return;
+      const pinChanged = next.pin !== undefined && next.pin !== config.pin;
+      const floatChanged = next.float !== undefined && next.float !== config.float;
       Object.assign(config, next);
+      if (pinChanged) {
+        release();
+        applyPins();
+      }
+      if (floatChanged && !config.float) {
+        linkLength.set(baseLength);
+        recover = 1;
+      }
       syncBacking();
       start();
     },
@@ -891,21 +2271,38 @@ export function createCloth(
       schemeQuery.removeEventListener("change", onThemeShift);
       window.clearTimeout(themeTimer);
       motionQuery.removeEventListener("change", onMotionChange);
-      listenTarget.removeEventListener("pointermove", onPointerMove);
-      listenTarget.removeEventListener("pointerleave", onPointerLeave);
-      gl!.deleteTexture(contentTexture);
-      gl!.deleteProgram(cloth.program);
-      gl!.deleteShader(cloth.vert);
-      gl!.deleteShader(cloth.frag);
-      gl!.deleteProgram(shadow.program);
-      gl!.deleteShader(shadow.vert);
-      gl!.deleteShader(shadow.frag);
-      gl!.deleteBuffer(gridBuffer);
-      gl!.deleteBuffer(dataBuffer);
-      gl!.deleteBuffer(offsetBuffer);
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      document.documentElement.removeEventListener("pointerleave", onDocumentLeave);
+      content.removeEventListener("scroll", onHoverScroll, true);
+      hoverAt.on = false;
+      setHover(null);
+      force(null, "");
+      content.removeAttribute(CONTENT_ATTR);
+      window.removeEventListener("click", onClick, true);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+      wrapper.style.userSelect = "";
+      wrapper.style.cursor = "";
+      for (const texture of [contentTexture, posTexture, nrmTexture, broadTexture]) {
+        gl!.deleteTexture(texture);
+      }
+      for (const t of shadowTargets) {
+        gl!.deleteTexture(t.texture);
+        gl!.deleteFramebuffer(t.framebuffer);
+      }
+      for (const program of programs) gl!.deleteProgram(program);
+      for (const shader of shaders) gl!.deleteShader(shader);
+      gl!.deleteBuffer(quadBuffer);
+      gl!.deleteBuffer(meshBuffer);
       gl!.deleteBuffer(indexBuffer);
-      gl!.deleteVertexArray(clothVao);
-      if (htmlInCanvas) paintable.onpaint = null;
+      gl!.deleteVertexArray(quadVao);
+      gl!.deleteVertexArray(meshVao);
+      paintable.onpaint = null;
     },
   };
+}
+
+function mix(a: number, b: number, t: number) {
+  return a + (b - a) * t;
 }

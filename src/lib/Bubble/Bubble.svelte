@@ -18,38 +18,55 @@
 
   interface Props extends BubbleOptions {
     class?: string;
+    fixed?: boolean;
     children?: import("svelte").Snippet;
   }
 
-  let { class: className = "", children, ...options }: Props = $props();
+  let {
+    class: className = "",
+    fixed = false,
+    children,
+    ...options
+  }: Props = $props();
 
-  let sourceEl = $state<HTMLCanvasElement>()!;
-  let contentEl = $state<HTMLDivElement>()!;
+  let sourceEl = $state<HTMLCanvasElement | null>(null);
+  let contentEl = $state<HTMLDivElement | null>(null);
   let outputEl = $state<HTMLCanvasElement>()!;
-  let native = $state(false);
+  let supported = $state(false);
+  let failed = $state(false);
+  let mounted = $state(false);
   let instance: BubbleInstance | null = null;
 
+  const native = $derived(
+    supported && !failed && Boolean(children),
+  );
+  const rootStyle = $derived(
+    fixed
+      ? `position: fixed; inset: 0; z-index: 50;${children ? "" : " pointer-events: none;"}`
+      : "position: relative;",
+  );
+
   onMount(() => {
-    native = supportsHtmlInCanvas();
+    supported = supportsHtmlInCanvas();
+    mounted = true;
+  });
+
+  $effect(() => {
+    if (!mounted) return;
+    const useNative = native;
     let disposed = false;
     (async () => {
       await tick();
-      if (disposed) return;
-      if (!sourceEl || !contentEl || !outputEl) return;
+      if (disposed || !outputEl) return;
       instance = createBubble(
-        { source: sourceEl, content: contentEl, output: outputEl },
+        {
+          source: useNative ? sourceEl : null,
+          content: contentEl,
+          output: outputEl,
+        },
         options,
       );
-      if (native && !instance) {
-        native = false;
-        await tick();
-        if (disposed) return;
-        if (!sourceEl || !contentEl || !outputEl) return;
-        instance = createBubble(
-          { source: sourceEl, content: contentEl, output: outputEl },
-          options,
-        );
-      }
+      if (useNative && !instance) failed = true;
     })();
     return () => {
       disposed = true;
@@ -63,29 +80,26 @@
   });
 </script>
 
-<div class={className} style="position: relative;">
-  <canvas
-    bind:this={sourceEl}
-    layoutsubtree="true"
-    style={native
-      ? "position: absolute; inset: 0; width: 100%; height: 100%;"
-      : "display: none;"}
-  >
-    {#if native}
+<div class={className} style={rootStyle}>
+  {#if native}
+    <canvas
+      bind:this={sourceEl}
+      layoutsubtree="true"
+      style="position: absolute; inset: 0; width: 100%; height: 100%;"
+    >
       <div
         bind:this={contentEl}
         style="position: relative; width: 100%; height: 100%; overflow: auto;"
       >
         {@render children?.()}
       </div>
-    {/if}
-  </canvas>
-  {#if !native}
+    </canvas>
+  {:else if children}
     <div
       bind:this={contentEl}
       style="position: relative; width: 100%; height: 100%; overflow: auto;"
     >
-      {@render children?.()}
+      {@render children()}
     </div>
   {/if}
   <canvas

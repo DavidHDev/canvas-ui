@@ -132,6 +132,40 @@ const API_REFERENCE: ApiProp[] = [
     defaultValue: "1",
   },
   {
+    name: "click",
+    description:
+      "What a click does: \"pop\" bursts the droplet into smaller droplets before it re-forms.",
+    type: '"none" | "pop"',
+    defaultValue: '"none"',
+  },
+  {
+    name: "wobble",
+    description:
+      "Jelly-like squash and stretch as the droplet speeds up and stops, and how much it overshoots when it appears (0 to 1).",
+    type: "number",
+    defaultValue: "0",
+  },
+  {
+    name: "drift",
+    description:
+      "How fast the droplet wanders by itself while the cursor is away (0 to 1). 0 hides it instead.",
+    type: "number",
+    defaultValue: "0",
+  },
+  {
+    name: "fixed",
+    description:
+      "Cover the whole viewport as a fixed overlay. Use it without children to add the droplet to a full site.",
+    type: "boolean",
+    defaultValue: "false",
+  },
+  {
+    name: "children",
+    description:
+      "Content to wrap and refract. Leave it out to use Bubble as an overlay on whatever sits beneath it, drawn as the translucent soap film.",
+    type: "ReactNode",
+  },
+  {
     name: "className",
     description: "Classes applied to the wrapper element.",
     type: "string",

@@ -3,6 +3,8 @@ import { isHtmlInCanvasBlocked, prepareHtmlInCanvas, drawHtmlInCanvas } from "..
 import { createRectCache } from "../rect-cache";
 import { resolveOptions } from "../options";
 
+export type BubbleClick = "pop" | "none";
+
 export type BubbleOptions = {
   size?: number;
   trail?: number;
@@ -21,12 +23,15 @@ export type BubbleOptions = {
   colorA?: [number, number, number];
   colorB?: [number, number, number];
   fallbackOpacity?: number;
+  click?: BubbleClick;
+  wobble?: number;
+  drift?: number;
 };
 
 export type BubbleElements = {
-  source: HTMLCanvasElement;
-  content: HTMLElement;
   output: HTMLCanvasElement;
+  source?: HTMLCanvasElement | null;
+  content?: HTMLElement | null;
 };
 
 export type BubbleInstance = {
@@ -53,9 +58,16 @@ const DEFAULTS: Required<BubbleOptions> = {
   colorA: [0.2902, 0.4549, 0.7216],
   colorB: [0.4118, 0.4118, 0.4157],
   fallbackOpacity: 1,
+  click: "none",
+  wobble: 0,
+  drift: 0,
 };
 
 const MAX_TRAIL = 24;
+const SPRAY = 10;
+const MAX_BLOBS = MAX_TRAIL + SPRAY;
+const HISTORY = 256;
+const TRAIL_STEP = 1 / 60;
 
 type PaintableCanvas = HTMLCanvasElement & {
   onpaint?: (() => void) | null;
@@ -83,8 +95,8 @@ uniform float uDpr;
 uniform float uTime;
 uniform float uHasContent;
 uniform int uCount;
-uniform vec2 uTrail[${MAX_TRAIL}];
-uniform float uBaseRadius;
+uniform vec3 uBlobs[${MAX_BLOBS}];
+uniform vec3 uDeform;
 uniform float uBlend;
 uniform float uRefraction;
 uniform float uDispersion;
@@ -102,11 +114,36 @@ uniform float uFallbackAlpha;
 const float EPS = 1e-4;
 const int ITR = 16;
 
+vec3 cubic (vec2 uv, float level) {
+  vec2 size = max(floor(vec2(textureSize(uContent, 0)) / exp2(level)), vec2(1.0));
+  vec2 st = uv * size - 0.5;
+  vec2 f = fract(st);
+  vec2 corner = st - f + 0.5;
+  vec2 w0 = (1.0 - f) * (1.0 - f) * (1.0 - f) / 6.0;
+  vec2 w1 = (3.0 * f * f * f - 6.0 * f * f + 4.0) / 6.0;
+  vec2 w3 = f * f * f / 6.0;
+  vec2 g0 = w0 + w1;
+  vec2 g1 = 1.0 - g0;
+  vec2 p0 = (corner + w1 / g0 - 1.0) / size;
+  vec2 p1 = (corner + w3 / g1 + 1.0) / size;
+  return g0.y * (g0.x * textureLod(uContent, vec2(p0.x, p0.y), level).rgb +
+      g1.x * textureLod(uContent, vec2(p1.x, p0.y), level).rgb) +
+    g1.y * (g0.x * textureLod(uContent, vec2(p0.x, p1.y), level).rgb +
+      g1.x * textureLod(uContent, vec2(p1.x, p1.y), level).rgb);
+}
+
 vec3 page (vec2 px, float lod) {
   vec2 uv = px / uResolution;
   uv.x = clamp(uv.x, 0.0005, uMaxX - 0.0005);
   uv.y = clamp(uv.y, 0.0005, 0.9995);
-  return pow(textureLod(uContent, vec2(uv.x, 1.0 - uv.y), lod).rgb, vec3(2.2));
+  uv.y = 1.0 - uv.y;
+  vec3 color = textureLod(uContent, uv, lod).rgb;
+  if (lod > 0.01) {
+    float lower = floor(lod);
+    vec3 soft = mix(cubic(uv, lower), cubic(uv, lower + 1.0), lod - lower);
+    color = mix(color, soft, min(lod, 1.0));
+  }
+  return pow(color, vec3(2.2));
 }
 
 float rnd3D (vec3 p) {
@@ -147,12 +184,12 @@ float smoothMin (float d1, float d2, float k) {
 }
 
 float map (vec3 p) {
-  float radius = uBaseRadius * float(uCount);
   float d = 1e5;
-  for (int i = 0; i < ${MAX_TRAIL}; i++) {
+  for (int i = 0; i < ${MAX_BLOBS}; i++) {
     if (i >= uCount) break;
-    float sphere = length(p - vec3(uTrail[i], 0.0)) -
-      (radius - uBaseRadius * float(i));
+    vec2 o = p.xy - uBlobs[i].xy;
+    vec2 q = vec2(uDeform.x * o.x + uDeform.y * o.y, uDeform.y * o.x + uDeform.z * o.y);
+    float sphere = length(vec3(q, p.z)) - uBlobs[i].z;
     d = smoothMin(d, sphere, uBlend);
   }
   return d;
@@ -251,7 +288,9 @@ export function createBubble(
   options: BubbleOptions = {},
 ): BubbleInstance | null {
   const config = { ...DEFAULTS, ...resolveOptions(DEFAULTS, options) };
-  const { source, content, output } = elements;
+  const { output } = elements;
+  const source = elements.source ?? null;
+  const content = elements.content ?? null;
 
   const gl = output.getContext("webgl2", {
     alpha: true,
@@ -262,26 +301,30 @@ export function createBubble(
   });
   if (!gl || gl.isContextLost()) return null;
 
-  const sourceCtx = source.getContext("2d") as ElementImageContext | null;
-  const paintable = source as PaintableCanvas;
+  const sourceCtx = source
+    ? (source.getContext("2d") as ElementImageContext | null)
+    : null;
+  const paintable = source as PaintableCanvas | null;
   const htmlInCanvas = Boolean(
     !isHtmlInCanvasBlocked() &&
+    source &&
+    content &&
     source.contains(content) &&
     sourceCtx &&
     typeof sourceCtx.drawElementImage === "function" &&
-    typeof paintable.requestPaint === "function",
+    typeof paintable?.requestPaint === "function",
   );
 
-  if (htmlInCanvas) prepareHtmlInCanvas(source, content);
+  if (htmlInCanvas) prepareHtmlInCanvas(source!, content!);
 
   let contentDirty = false;
   let wake = () => {};
 
   if (htmlInCanvas) {
-    paintable.onpaint = () => {
+    paintable!.onpaint = () => {
       try {
         sourceCtx!.reset();
-        drawHtmlInCanvas(source, sourceCtx!, content, true);
+        drawHtmlInCanvas(source!, sourceCtx!, content!, true);
         contentDirty = true;
         wake();
       } catch {}
@@ -355,18 +398,20 @@ export function createBubble(
       output.width = width;
       output.height = height;
     }
-    contentMaxX = Math.min(
-      1,
-      Math.max(0.05, content.clientWidth / Math.max(output.clientWidth, 1)),
-    );
+    contentMaxX = content
+      ? Math.min(
+          1,
+          Math.max(0.05, content.clientWidth / Math.max(output.clientWidth, 1)),
+        )
+      : 1;
     if (htmlInCanvas) {
-      const sourceWidth = Math.max(1, Math.round(source.clientWidth * dpr));
-      const sourceHeight = Math.max(1, Math.round(source.clientHeight * dpr));
-      if (source.width !== sourceWidth || source.height !== sourceHeight) {
-        source.width = sourceWidth;
-        source.height = sourceHeight;
+      const sourceWidth = Math.max(1, Math.round(source!.clientWidth * dpr));
+      const sourceHeight = Math.max(1, Math.round(source!.clientHeight * dpr));
+      if (source!.width !== sourceWidth || source!.height !== sourceHeight) {
+        source!.width = sourceWidth;
+        source!.height = sourceHeight;
       }
-      paintable.requestPaint!();
+      paintable!.requestPaint!();
     }
   }
 
@@ -382,28 +427,101 @@ export function createBubble(
       gl!.RGBA,
       gl!.RGBA,
       gl!.UNSIGNED_BYTE,
-      source,
+      source!,
     );
     gl!.generateMipmap(gl!.TEXTURE_2D);
   }
 
-  const trailX = new Float32Array(MAX_TRAIL);
-  const trailY = new Float32Array(MAX_TRAIL);
-  const trailData = new Float32Array(MAX_TRAIL * 2);
+  const historyX = new Float32Array(HISTORY);
+  const historyY = new Float32Array(HISTORY);
+  const historyTime = new Float64Array(HISTORY);
+  let historyHead = 0;
+  let historyLength = 0;
+  let clock = 0;
+
+  function pushHistory(x: number, y: number) {
+    historyHead = (historyHead + 1) % HISTORY;
+    historyX[historyHead] = x;
+    historyY[historyHead] = y;
+    historyTime[historyHead] = clock;
+    historyLength = Math.min(historyLength + 1, HISTORY);
+  }
+
+  function resetHistory(x: number, y: number) {
+    historyLength = 0;
+    pushHistory(x, y);
+  }
+
+  const sampled = { x: 0, y: 0 };
+
+  function sampleHistory(at: number) {
+    let newer = historyHead;
+    for (let step = 1; step < historyLength; step++) {
+      const older = (historyHead - step + HISTORY) % HISTORY;
+      if (historyTime[older] <= at) {
+        const span = historyTime[newer] - historyTime[older];
+        const k = span > 0 ? (at - historyTime[older]) / span : 0;
+        sampled.x = historyX[older] + (historyX[newer] - historyX[older]) * k;
+        sampled.y = historyY[older] + (historyY[newer] - historyY[older]) * k;
+        return;
+      }
+      newer = older;
+    }
+    sampled.x = historyX[newer];
+    sampled.y = historyY[newer];
+  }
+
   let headX = output.clientWidth / 2;
   let headY = output.clientHeight / 2;
   let targetX = headX;
   let targetY = headY;
-  trailX.fill(headX);
-  trailY.fill(headY);
+  resetHistory(headX, headY);
   let presence = 0;
-  let presenceTarget = 0;
-  let hasPointer = false;
+  let presenceVelocity = 0;
+  let pointerInside = false;
+  let shown = false;
+  let mass = 1;
+  let massVelocity = 0;
   let time = 0;
+  let driftTime = 0;
+  let lastMove = 0;
+
+  let stretchX = 0;
+  let stretchY = 0;
+  let stretchVelocityX = 0;
+  let stretchVelocityY = 0;
+
+  const sprayX = new Float32Array(SPRAY);
+  const sprayY = new Float32Array(SPRAY);
+  const sprayVelocityX = new Float32Array(SPRAY);
+  const sprayVelocityY = new Float32Array(SPRAY);
+  const sprayRadius = new Float32Array(SPRAY);
+  const sprayAge = new Float32Array(SPRAY);
+  const sprayTurn = new Float32Array(SPRAY);
+  const sprayAlive = new Uint8Array(SPRAY);
+  const sprayMerge = new Float32Array(SPRAY);
+  const sprayKeep = new Float32Array(SPRAY);
+  let spraying = false;
 
   function activeCount(): number {
     return Math.min(Math.max(Math.round(config.trail), 1), MAX_TRAIL);
   }
+
+  function pooledRadius(): number {
+    const beads = activeCount();
+    const blend = Math.max(config.blend, 0.5);
+    const unit = Math.min(output.clientWidth, output.clientHeight) / 2;
+    const base = Math.max(config.size, 4) / (unit * beads);
+    let swell = 0;
+    for (let i = 0; i < beads; i++) swell += Math.exp(blend * base * (beads - i));
+    return (Math.log(swell) / blend) * unit;
+  }
+
+  function driftAmount(): number {
+    return reducedMotion ? 0 : Math.min(Math.max(config.drift, 0), 1);
+  }
+
+  const blobData = new Float32Array(MAX_BLOBS * 3);
 
   function render() {
     uploadContent();
@@ -413,28 +531,64 @@ export function createBubble(
     gl!.disable(gl!.SCISSOR_TEST);
     gl!.clearColor(0, 0, 0, 0);
     gl!.clear(gl!.COLOR_BUFFER_BIT);
-    if (presence <= 0.004) return;
 
-    const count = activeCount();
     const minRes = Math.min(output.width, output.height);
-    const headRadius = Math.max(config.size, 4) * dpr * presence;
-    const baseRadius = (headRadius * 2) / (minRes * count);
     const blend = Math.max(config.blend, 0.5);
-
+    let count = 0;
+    let headRadius = 0;
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
-    for (let i = 0; i < count; i++) {
-      const dx = trailX[i] * dpr;
-      const dy = output.height - trailY[i] * dpr;
-      trailData[i * 2] = (dx * 2 - output.width) / minRes;
-      trailData[i * 2 + 1] = (dy * 2 - output.height) / minRes;
+
+    const push = (x: number, y: number, radius: number) => {
+      const dx = x * dpr;
+      const dy = output.height - y * dpr;
+      blobData[count * 3] = (dx * 2 - output.width) / minRes;
+      blobData[count * 3 + 1] = (dy * 2 - output.height) / minRes;
+      blobData[count * 3 + 2] = radius;
+      count++;
       minX = Math.min(minX, dx);
       maxX = Math.max(maxX, dx);
       minY = Math.min(minY, dy);
       maxY = Math.max(maxY, dy);
+    };
+
+    if (presence > 0.004 && mass > 0.001) {
+      const beads = activeCount();
+      headRadius = Math.max(config.size, 4) * dpr * presence;
+      const baseRadius = (headRadius * 2) / (minRes * beads);
+      let shrink = 0;
+      if (mass < 1) {
+        let swell = 0;
+        for (let i = 0; i < beads; i++) {
+          swell += Math.exp(blend * baseRadius * (beads - i));
+        }
+        shrink = ((1 - mass) * Math.log(swell)) / blend;
+      }
+      for (let i = 0; i < beads; i++) {
+        sampleHistory(clock - i * TRAIL_STEP);
+        push(sampled.x, sampled.y, baseRadius * (beads - i) - shrink);
+      }
     }
+    if (spraying && presence > 0.004) {
+      for (let i = 0; i < SPRAY; i++) {
+        if (!sprayAlive[i]) continue;
+        let overlap = 1;
+        for (let j = 0; j < SPRAY; j++) {
+          if (j === i || !sprayAlive[j]) continue;
+          const gap = Math.hypot(sprayX[i] - sprayX[j], sprayY[i] - sprayY[j]);
+          overlap += sprayKeep[j] * Math.exp((-blend * gap * dpr * 2) / minRes);
+        }
+        push(
+          sprayX[i],
+          sprayY[i],
+          ((sprayRadius[i] * dpr * 2) / minRes) * presence * sprayKeep[i] +
+            Math.log(Math.max(sprayKeep[i], 1e-4) / overlap) / blend,
+        );
+      }
+    }
+    if (count === 0) return;
 
     const pad =
       headRadius +
@@ -461,8 +615,16 @@ export function createBubble(
     gl!.uniform1f(uniforms.uTime, time);
     gl!.uniform1f(uniforms.uHasContent, htmlInCanvas ? 1 : 0);
     gl!.uniform1i(uniforms.uCount, count);
-    gl!.uniform2fv(uniforms["uTrail[0]"], trailData);
-    gl!.uniform1f(uniforms.uBaseRadius, baseRadius);
+    const amount = Math.min(Math.hypot(stretchX, stretchY), 0.35);
+    const angle = Math.atan2(stretchY, stretchX) / 2;
+    const stretch = Math.exp(amount);
+    const axisX = Math.cos(angle);
+    const axisY = Math.sin(angle);
+    const deform00 = (axisX * axisX) / stretch + stretch * axisY * axisY;
+    const deform01 = axisX * axisY * (1 / stretch - stretch);
+    const deform11 = (axisY * axisY) / stretch + stretch * axisX * axisX;
+    gl!.uniform3fv(uniforms["uBlobs[0]"], blobData);
+    gl!.uniform3f(uniforms.uDeform, deform00, deform01, deform11);
     gl!.uniform1f(uniforms.uBlend, blend);
     gl!.uniform1f(uniforms.uRefraction, config.refraction);
     gl!.uniform1f(uniforms.uDispersion, Math.max(config.dispersion, 0));
@@ -518,42 +680,152 @@ export function createBubble(
     }
     const delta = Math.min((now - lastTime) / 1000, 1 / 30);
     lastTime = now;
+    clock += delta;
     if (!reducedMotion) time += delta * Math.max(config.speed, 0);
+
+    const drifting = !pointerInside && driftAmount() > 0;
+    if (drifting) {
+      driftTime += delta * (0.25 + driftAmount() * 1.1);
+      const width = output.clientWidth;
+      const height = output.clientHeight;
+      targetX =
+        width *
+        (0.5 + 0.3 * Math.sin(driftTime * 0.9 + 1.3) + 0.08 * Math.sin(driftTime * 2.3));
+      targetY =
+        height *
+        (0.5 + 0.26 * Math.cos(driftTime * 0.7) + 0.08 * Math.sin(driftTime * 1.9 + 0.5));
+      if (!shown) {
+        headX = targetX;
+        headY = targetY;
+        resetHistory(headX, headY);
+        shown = true;
+      }
+    }
 
     const follow = Math.min(Math.max(config.follow, 0.02), 1);
     const kHead =
       reducedMotion || follow >= 1
         ? 1
-        : 1 - Math.exp(-delta * (3 + follow * 30));
-    const kScale = reducedMotion ? 1 : 1 - Math.exp(-delta * 10);
-
+        : 1 - Math.exp(-delta * (drifting ? 2.5 : 3 + follow * 30));
+    const previousX = headX;
+    const previousY = headY;
     headX += (targetX - headX) * kHead;
     headY += (targetY - headY) * kHead;
-    for (let i = MAX_TRAIL - 1; i > 0; i--) {
-      trailX[i] = trailX[i - 1];
-      trailY[i] = trailY[i - 1];
+    pushHistory(headX, headY);
+    if (Math.abs(headX - previousX) + Math.abs(headY - previousY) > 0.05) {
+      lastMove = clock;
     }
-    trailX[0] = headX;
-    trailY[0] = headY;
-    let moved = Math.abs(targetX - headX) + Math.abs(targetY - headY);
-    for (let i = 1; i < MAX_TRAIL; i++) {
-      moved = Math.max(
-        moved,
-        Math.abs(trailX[i] - trailX[i - 1]) +
-          Math.abs(trailY[i] - trailY[i - 1]),
-      );
+
+    const wobble = reducedMotion ? 0 : Math.min(Math.max(config.wobble, 0), 1);
+    const presenceTarget = pointerInside || drifting ? 1 : 0;
+    if (wobble > 0) {
+      const stiffness = 13;
+      const damping = 1 - 0.55 * wobble;
+      presenceVelocity +=
+        (stiffness * stiffness * (presenceTarget - presence) -
+          2 * damping * stiffness * presenceVelocity) *
+        delta;
+      presence += presenceVelocity * delta;
+      if (presence < 0 || (presenceTarget === 0 && presence < 0.003)) {
+        presence = 0;
+        presenceVelocity = Math.max(presenceVelocity, 0);
+      }
+    } else {
+      const kScale = reducedMotion ? 1 : 1 - Math.exp(-delta * 10);
+      presence += (presenceTarget - presence) * kScale;
+      presenceVelocity = 0;
     }
-    presence += (presenceTarget - presence) * kScale;
+    if (presence < 0.004 && presenceTarget === 0 && !pointerInside) shown = false;
+
+    if (wobble > 0 && delta > 0) {
+      const velocityX = (headX - previousX) / delta;
+      const velocityY = (headY - previousY) / delta;
+      const speed = Math.hypot(velocityX, velocityY);
+      const pull = wobble * 0.3 * Math.tanh(speed / 1100);
+      const doubled = 2 * Math.atan2(velocityY, velocityX);
+      const goalX = speed > 1 ? pull * Math.cos(doubled) : 0;
+      const goalY = speed > 1 ? pull * Math.sin(doubled) : 0;
+      const stiffness = 20;
+      const damping = 0.22;
+      stretchVelocityX +=
+        (stiffness * stiffness * (goalX - stretchX) -
+          2 * damping * stiffness * stretchVelocityX) *
+        delta;
+      stretchVelocityY +=
+        (stiffness * stiffness * (goalY - stretchY) -
+          2 * damping * stiffness * stretchVelocityY) *
+        delta;
+      stretchX += stretchVelocityX * delta;
+      stretchY += stretchVelocityY * delta;
+    } else {
+      stretchX = stretchY = stretchVelocityX = stretchVelocityY = 0;
+    }
+
+    if (spraying) {
+      spraying = false;
+      const drag = Math.exp(-delta * 3.4);
+      const pooled = pooledRadius();
+      const touch = Math.max(pooled * 0.5, mass * pooled * 0.9);
+      const cover = Math.min(Math.max((mass - 0.45) / 0.55, 0), 1);
+      const swallowed = cover * cover * (3 - 2 * cover);
+      for (let i = 0; i < SPRAY; i++) {
+        if (!sprayAlive[i]) continue;
+        sprayAge[i] += delta;
+        sprayVelocityX[i] *= drag;
+        sprayVelocityY[i] *= drag;
+        sprayX[i] += sprayVelocityX[i] * delta;
+        sprayY[i] += sprayVelocityY[i] * delta;
+        const homing = sprayAge[i] - sprayTurn[i];
+        if (homing > 0) {
+          const pull = Math.min(homing / 0.45, 1);
+          const k = 1 - Math.exp(-delta * (1 + 15 * pull * pull));
+          sprayX[i] += (headX - sprayX[i]) * k;
+          sprayY[i] += (headY - sprayY[i]) * k;
+          const gap = Math.hypot(headX - sprayX[i], headY - sprayY[i]);
+          if (sprayMerge[i] > 0 || gap < touch || homing > 2) {
+            sprayMerge[i] = Math.min(sprayMerge[i] + delta * 4, 1);
+          }
+          sprayKeep[i] = 1 - swallowed * sprayMerge[i];
+          if (sprayKeep[i] < 0.002 || homing > 4) {
+            sprayAlive[i] = 0;
+            sprayMerge[i] = 1;
+            continue;
+          }
+        }
+        spraying = true;
+      }
+    }
+    let merged = 0;
+    for (let i = 0; i < SPRAY; i++) merged += sprayMerge[i];
+    const massTarget = spraying ? Math.sqrt(merged / SPRAY) : 1;
+    if (mass !== massTarget || massVelocity !== 0) {
+      const stiffness = 10;
+      const damping = 1 - 0.55 * wobble;
+      massVelocity +=
+        (stiffness * stiffness * (massTarget - mass) -
+          2 * damping * stiffness * massVelocity) *
+        delta;
+      mass = Math.max(mass + massVelocity * delta, 0);
+    }
+    if (!spraying && Math.abs(1 - mass) < 0.002 && Math.abs(massVelocity) < 0.01) {
+      mass = 1;
+      massVelocity = 0;
+    }
 
     render();
 
     const settled = reducedMotion
-      ? moved < 0.1 &&
+      ? clock - lastMove > activeCount() * TRAIL_STEP &&
         Math.abs(presenceTarget - presence) < 0.002 &&
         !contentDirty
       : presence < 0.004 && presenceTarget === 0 && !contentDirty;
     if (settled) {
       presence = presenceTarget;
+      presenceVelocity = 0;
+      mass = 1;
+      massVelocity = 0;
+      spraying = false;
+      sprayAlive.fill(0);
       running = false;
       return;
     }
@@ -571,35 +843,100 @@ export function createBubble(
   start();
 
   const rectCache = createRectCache(output);
+  const root = output.parentElement;
+
+  function locate(event: PointerEvent) {
+    const rect = rectCache.current;
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    let inside = x >= 0 && y >= 0 && x <= rect.width && y <= rect.height;
+    if (inside && content && root) {
+      inside = event.target instanceof Node && root.contains(event.target);
+    }
+    return { x, y, inside };
+  }
+
+  function leave() {
+    if (!pointerInside) return;
+    pointerInside = false;
+    start();
+  }
 
   function onPointerMove(event: PointerEvent) {
-    const rect = rectCache.current;
-    targetX = event.clientX - rect.left;
-    targetY = event.clientY - rect.top;
-    if (!hasPointer) {
-      headX = targetX;
-      headY = targetY;
-      trailX.fill(targetX);
-      trailY.fill(targetY);
-      hasPointer = true;
+    const { x, y, inside } = locate(event);
+    if (!inside) {
+      leave();
+      return;
     }
-    presenceTarget = 1;
+    targetX = x;
+    targetY = y;
+    if (!pointerInside && !(shown && driftAmount() > 0)) {
+      headX = x;
+      headY = y;
+      resetHistory(x, y);
+    }
+    shown = true;
+    pointerInside = true;
     start();
   }
 
-  function onPointerLeave() {
-    presenceTarget = 0;
-    hasPointer = false;
+  function onPointerDown(event: PointerEvent) {
+    onPointerMove(event);
+    if (
+      !pointerInside ||
+      event.pointerType === "touch" ||
+      config.click !== "pop" ||
+      reducedMotion ||
+      presence < 0.5 ||
+      mass < 0.9
+    )
+      return;
+    const pooled = pooledRadius();
+    const spin = Math.random() * Math.PI * 2;
+    for (let i = 0; i < SPRAY; i++) {
+      const angle = spin + ((i + Math.random() * 0.7) / SPRAY) * Math.PI * 2;
+      const speed = pooled * (4.5 + Math.random() * 5);
+      sprayX[i] = headX + Math.cos(angle) * pooled * 0.55;
+      sprayY[i] = headY + Math.sin(angle) * pooled * 0.55;
+      sprayVelocityX[i] = Math.cos(angle) * speed;
+      sprayVelocityY[i] = Math.sin(angle) * speed;
+      sprayRadius[i] = pooled * (0.14 + Math.random() * 0.14);
+      sprayAge[i] = 0;
+      sprayTurn[i] = 0.2 + (i / SPRAY) * 0.3 + Math.random() * 0.08;
+      sprayAlive[i] = 1;
+      sprayMerge[i] = 0;
+      sprayKeep[i] = 1;
+    }
+    spraying = true;
+    mass = 0;
+    massVelocity = 0;
+    resetHistory(headX, headY);
     start();
   }
 
-  content.addEventListener("pointermove", onPointerMove, { passive: true });
-  content.addEventListener("pointerleave", onPointerLeave, { passive: true });
+  function onPointerEnd(event: PointerEvent) {
+    if (event.pointerType !== "mouse") leave();
+  }
+
+  function onPointerLeave(event: PointerEvent) {
+    if (event.target === document.documentElement || !locate(event).inside) {
+      leave();
+    }
+  }
+
+  window.addEventListener("pointermove", onPointerMove, { passive: true });
+  window.addEventListener("pointerdown", onPointerDown, { passive: true });
+  window.addEventListener("pointerup", onPointerEnd, { passive: true });
+  window.addEventListener("pointercancel", onPointerEnd, { passive: true });
+  window.addEventListener("pointerleave", onPointerLeave, {
+    capture: true,
+    passive: true,
+  });
 
   function onScroll() {
     start();
   }
-  content.addEventListener("scroll", onScroll, { passive: true });
+  content?.addEventListener("scroll", onScroll, { passive: true });
 
   function onMotionChange() {
     reducedMotion = motionQuery.matches;
@@ -612,7 +949,7 @@ export function createBubble(
     start();
   });
   observer.observe(output);
-  observer.observe(content);
+  if (content) observer.observe(content);
 
   let intersecting = true;
   function syncVisibility() {
@@ -651,9 +988,12 @@ export function createBubble(
       destroyed = true;
       rectCache.destroy();
       cancelAnimationFrame(raf);
-      content.removeEventListener("pointermove", onPointerMove);
-      content.removeEventListener("pointerleave", onPointerLeave);
-      content.removeEventListener("scroll", onScroll);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", onPointerEnd);
+      window.removeEventListener("pointerleave", onPointerLeave, true);
+      content?.removeEventListener("scroll", onScroll);
       observer.disconnect();
       intersection.disconnect();
       document.removeEventListener("visibilitychange", syncVisibility);
@@ -663,7 +1003,7 @@ export function createBubble(
       gl!.deleteShader(vertexShader);
       gl!.deleteShader(fragmentShader);
       gl!.deleteBuffer(quad);
-      if (htmlInCanvas) paintable.onpaint = null;
+      if (htmlInCanvas) paintable!.onpaint = null;
     },
   };
 }

@@ -11,14 +11,21 @@ import { PageDemoPhoto } from "@/demos/scenes";
 export const metadata: Metadata = {
   title: "Clouds",
   description:
-    "Overlays your content with drifting procedural clouds that cast soft, offset shadows on the page below, like weather passing over your UI. No dependencies, works in any framework.",
+    "Lit, drifting clouds that pass over your page while text stays readable, or sit behind it as a background. Cursor wind parts them. No dependencies, works in any framework.",
   alternates: { canonical: "/docs/components/clouds" },
 };
 
 const DESCRIPTION =
-  "Fog drifts over the page and blurs whatever it covers. Move the cursor and the wind parts the clouds along your trail.";
+  "Lit clouds drift over the page while text stays readable, or sit behind it as a background. Move the cursor and the wind parts them along your trail.";
 
 const API_REFERENCE: ApiProp[] = [
+  {
+    name: "layer",
+    description:
+      '"page" draws the live content into the effect so the clouds can fog, blur and bend it while text stays legible (html-in-canvas; elsewhere it falls back to "foreground"). "background" sits behind the content, "foreground" over it.',
+    type: '"page" | "background" | "foreground"',
+    defaultValue: '"page"',
+  },
   {
     name: "scale",
     description:
@@ -31,6 +38,13 @@ const API_REFERENCE: ApiProp[] = [
     description: "Drift speed multiplier (0 to 5). 0 freezes the sky.",
     type: "number",
     defaultValue: "0.6",
+  },
+  {
+    name: "direction",
+    description:
+      "Direction the clouds travel in degrees. 0 points right, 90 up.",
+    type: "number",
+    defaultValue: "225",
   },
   {
     name: "cover",
@@ -46,11 +60,25 @@ const API_REFERENCE: ApiProp[] = [
     defaultValue: "2.5",
   },
   {
+    name: "softness",
+    description:
+      "Edge feather (0 to 1). 1 is soft mist, lower values give each cloud a defined outline.",
+    type: "number",
+    defaultValue: "1",
+  },
+  {
+    name: "billow",
+    description:
+      "Rounded, cauliflower-like lumps in the cloud shapes and their shading (0 to 1). Pair it with a low softness for cumulus.",
+    type: "number",
+    defaultValue: "0",
+  },
+  {
     name: "shading",
     description:
-      "Strength of the internal depth shading of the clouds (0 to 1). Darkens crevices on light backgrounds, lifts highlights on dark ones.",
+      "How strongly the clouds are lit from the side (0 to 1). Slopes facing the light move toward lightColor, slopes facing away toward shadeColor. The light comes from the side opposite the shadow offset. 0 gives a flat color.",
     type: "number",
-    defaultValue: "0.1",
+    defaultValue: "0.5",
   },
   {
     name: "color",
@@ -60,11 +88,32 @@ const API_REFERENCE: ApiProp[] = [
     defaultValue: '"auto"',
   },
   {
+    name: "lightColor",
+    description:
+      'Color of the lit slopes as RGB in the 0 to 1 range, or "auto" to derive it from color.',
+    type: '[number, number, number] | "auto"',
+    defaultValue: '"auto"',
+  },
+  {
+    name: "shadeColor",
+    description:
+      'Color of the shaded slopes as RGB in the 0 to 1 range, or "auto" to derive it from color.',
+    type: '[number, number, number] | "auto"',
+    defaultValue: '"auto"',
+  },
+  {
     name: "opacity",
     description:
       "Maximum opacity of the cloud layer over the content (0 to 1). At 1 the thickest clouds fully hide the content.",
     type: "number",
     defaultValue: "0.64",
+  },
+  {
+    name: "legibility",
+    description:
+      'How much the clouds thin out over text so it stays readable (0 to 1). Only active with layer "page" when html-in-canvas is available.',
+    type: "number",
+    defaultValue: "0.85",
   },
   {
     name: "shadow",
@@ -96,7 +145,7 @@ const API_REFERENCE: ApiProp[] = [
   {
     name: "wind",
     description:
-      "How strongly cursor movement parts the clouds (0 to 1). The clearing drifts shut again after the pointer passes.",
+      "How strongly the cursor parts and pushes the clouds (0 to 1). A click or tap sends out a puff. The clearing drifts shut again after the pointer passes.",
     type: "number",
     defaultValue: "0.6",
   },
@@ -105,6 +154,12 @@ const API_REFERENCE: ApiProp[] = [
     description: "Radius of the cursor wind clearing in CSS pixels.",
     type: "number",
     defaultValue: "350",
+  },
+  {
+    name: "linger",
+    description: "Seconds for half of a cleared trail to close again.",
+    type: "number",
+    defaultValue: "0.7",
   },
   {
     name: "refraction",
@@ -126,6 +181,19 @@ const API_REFERENCE: ApiProp[] = [
       "Internal render resolution of the cloud field as a fraction of the viewport (0.2 to 1). Clouds are soft, so lower values look nearly identical and cost far less.",
     type: "number",
     defaultValue: "1",
+  },
+  {
+    name: "fixed",
+    description:
+      'Pins the wrapper to the viewport. With layer "background" it sits behind the page, otherwise above it.',
+    type: "boolean",
+    defaultValue: "false",
+  },
+  {
+    name: "children",
+    description:
+      "Content to cover. Leave it out to render the clouds alone, filling the wrapper.",
+    type: "ReactNode",
   },
   {
     name: "className",

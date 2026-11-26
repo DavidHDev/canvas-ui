@@ -7,6 +7,7 @@ import {
   createBlaze,
   supportsHtmlInCanvas,
   type BlazeInstance,
+  type BlazeLayer,
   type BlazeOptions,
 } from "./BlazeVanilla";
 
@@ -23,15 +24,29 @@ function useSyncExternalStore<T>(
 }
 
 export interface BlazeProps extends BlazeOptions {
-  children: ComponentChildren;
+  children?: ComponentChildren;
+  fixed?: boolean;
   className?: string;
   style?: JSX.CSSProperties;
 }
 
 const emptySubscribe = () => () => {};
 
-export function Blaze({ children, className, style, ...options }: BlazeProps) {
-  const sourceRef = useRef<HTMLCanvasElement>(null);
+const fill = {
+  position: "absolute",
+  inset: 0,
+  width: "100%",
+  height: "100%",
+} as const;
+
+export function Blaze({
+  children,
+  fixed = false,
+  className,
+  style,
+  ...options
+}: BlazeProps) {
+  const sourceRef = useRef<HTMLCanvasElement | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const outputRef = useRef<HTMLCanvasElement>(null);
   const instanceRef = useRef<BlazeInstance | null>(null);
@@ -42,15 +57,16 @@ export function Blaze({ children, className, style, ...options }: BlazeProps) {
     emptySubscribe,
     supportsHtmlInCanvas,
   );
-  const native = supported && !failed;
+  const hasContent = children !== undefined && children !== null;
+  const layer = options.layer ?? "page";
+  const native = supported && !failed && hasContent && layer === "page";
+  const behind = layer === "background";
 
   useEffect(() => {
-    const source = sourceRef.current;
-    const content = contentRef.current;
     const output = outputRef.current;
-    if (!source || !content || !output) return;
+    if (!output) return;
     instanceRef.current = createBlaze(
-      { source, content, output },
+      { source: sourceRef.current, content: contentRef.current, output },
       initialOptions,
     );
     if (native && !instanceRef.current) setFailed(true);
@@ -69,58 +85,56 @@ export function Blaze({ children, className, style, ...options }: BlazeProps) {
     if (el) el.setAttribute("layoutsubtree", "true");
   }, []);
 
+  const content = hasContent ? (
+    <div
+      ref={contentRef}
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        overflow: "auto",
+      }}
+    >
+      {children}
+    </div>
+  ) : null;
+
   return (
-    <div className={className} style={{ position: "relative", ...style }}>
-      <canvas
-        ref={sourceRefCallback}
-        style={
-          native
-            ? { position: "absolute", inset: 0, width: "100%", height: "100%" }
-            : { display: "none" }
-        }
-      >
-        {native ? (
-          <div
-            ref={contentRef}
-            style={{
-              position: "relative",
-              width: "100%",
-              height: "100%",
-              overflow: "auto",
-            }}
-          >
-            {children}
-          </div>
-        ) : null}
-      </canvas>
-      {!native ? (
-        <div
-          ref={contentRef}
-          style={{
-            position: "relative",
-            width: "100%",
-            height: "100%",
-            overflow: "auto",
-          }}
-        >
-          {children}
-        </div>
-      ) : null}
+    <div
+      className={className}
+      style={
+        fixed
+          ? {
+              position: "fixed",
+              inset: 0,
+              zIndex: behind ? -1 : 50,
+              pointerEvents: hasContent ? undefined : "none",
+              isolation: "isolate",
+              ...style,
+            }
+          : { position: "relative", isolation: "isolate", ...style }
+      }
+    >
+      {native ? (
+        <canvas ref={sourceRefCallback} style={fill}>
+          {content}
+        </canvas>
+      ) : (
+        content
+      )}
       <canvas
         ref={outputRef}
         aria-hidden
         style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
+          ...fill,
           pointerEvents: "none",
+          zIndex: behind && hasContent ? -1 : undefined,
         }}
       />
     </div>
   );
 }
 
-export type { BlazeInstance, BlazeOptions };
+export type { BlazeInstance, BlazeLayer, BlazeOptions };
 
 export default Blaze;

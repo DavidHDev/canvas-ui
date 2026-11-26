@@ -18,38 +18,62 @@
 
   interface Props extends BlazeOptions {
     class?: string;
+    fixed?: boolean;
     children?: import("svelte").Snippet;
   }
 
-  let { class: className = "", children, ...options }: Props = $props();
+  let {
+    class: className = "",
+    fixed = false,
+    children,
+    ...options
+  }: Props = $props();
 
-  let sourceEl = $state<HTMLCanvasElement>()!;
-  let contentEl = $state<HTMLDivElement>()!;
+  let sourceEl = $state<HTMLCanvasElement | null>(null);
+  let contentEl = $state<HTMLDivElement | null>(null);
   let outputEl = $state<HTMLCanvasElement>()!;
-  let native = $state(false);
+  let supported = $state(false);
+  let failed = $state(false);
+  let mounted = $state(false);
   let instance: BlazeInstance | null = null;
 
+  const layer = $derived(options.layer ?? "page");
+  const native = $derived(
+    supported && !failed && Boolean(children) && layer === "page",
+  );
+  const behind = $derived(layer === "background");
+  const rootStyle = $derived(
+    fixed
+      ? `position: fixed; inset: 0; z-index: ${behind ? -1 : 50}; isolation: isolate;${children ? "" : " pointer-events: none;"}`
+      : "position: relative; isolation: isolate;",
+  );
+  const contentStyle =
+    "position: relative; width: 100%; height: 100%; overflow: auto;";
+  const outputStyle = $derived(
+    `position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;${behind && children ? " z-index: -1;" : ""}`,
+  );
+
   onMount(() => {
-    native = supportsHtmlInCanvas();
+    supported = supportsHtmlInCanvas();
+    mounted = true;
+  });
+
+  $effect(() => {
+    if (!mounted) return;
+    const useNative = native;
     let disposed = false;
     (async () => {
       await tick();
-      if (disposed) return;
-      if (!sourceEl || !contentEl || !outputEl) return;
+      if (disposed || !outputEl) return;
       instance = createBlaze(
-        { source: sourceEl, content: contentEl, output: outputEl },
+        {
+          source: useNative ? sourceEl : null,
+          content: contentEl,
+          output: outputEl,
+        },
         options,
       );
-      if (native && !instance) {
-        native = false;
-        await tick();
-        if (disposed) return;
-        if (!sourceEl || !contentEl || !outputEl) return;
-        instance = createBlaze(
-          { source: sourceEl, content: contentEl, output: outputEl },
-          options,
-        );
-      }
+      if (useNative && !instance) failed = true;
     })();
     return () => {
       disposed = true;
@@ -63,34 +87,21 @@
   });
 </script>
 
-<div class={className} style="position: relative;">
-  <canvas
-    bind:this={sourceEl}
-    layoutsubtree="true"
-    style={native
-      ? "position: absolute; inset: 0; width: 100%; height: 100%;"
-      : "display: none;"}
-  >
-    {#if native}
-      <div
-        bind:this={contentEl}
-        style="position: relative; width: 100%; height: 100%; overflow: auto;"
-      >
+<div class={className} style={rootStyle}>
+  {#if native}
+    <canvas
+      bind:this={sourceEl}
+      layoutsubtree="true"
+      style="position: absolute; inset: 0; width: 100%; height: 100%;"
+    >
+      <div bind:this={contentEl} style={contentStyle}>
         {@render children?.()}
       </div>
-    {/if}
-  </canvas>
-  {#if !native}
-    <div
-      bind:this={contentEl}
-      style="position: relative; width: 100%; height: 100%; overflow: auto;"
-    >
-      {@render children?.()}
+    </canvas>
+  {:else if children}
+    <div bind:this={contentEl} style={contentStyle}>
+      {@render children()}
     </div>
   {/if}
-  <canvas
-    bind:this={outputEl}
-    aria-hidden="true"
-    style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;"
-  ></canvas>
+  <canvas bind:this={outputEl} aria-hidden="true" style={outputStyle}></canvas>
 </div>

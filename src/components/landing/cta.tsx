@@ -18,17 +18,12 @@ export function Cta() {
         <div className="dark relative mx-auto min-h-[72rem] w-full overflow-hidden rounded-2xl bg-[#0a0a0a] sm:min-h-[52rem]">
           <Blaze
             style={{ position: "absolute", inset: 0 }}
-            sparkColor={[0.45, 0.65, 1]}
-            smokeColor={[0.2, 0.45, 1]}
-            height={1}
-            distortion={0.6}
-            distortionScale={0.5}
-            layers={4}
-            sparkDensity={1.5}
-            smoke={0.5}
+            colors={["#020617", "#0b2a6f", "#2563eb", "#60a5fa", "#e0f2fe"]}
+            height={0.9}
+            glow={0.7}
+            smoke={0.55}
             sparks={0.5}
-            sparkSize={1.0}
-            glow={1.5}
+            haze={0.4}
           >
             <div className="flex min-h-full flex-col bg-[#0a0a0a]">
               <div className="flex flex-1 flex-col items-center justify-center px-6 pt-28 pb-20 text-center sm:pt-36 sm:pb-24">

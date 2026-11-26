@@ -8,7 +8,10 @@ import {
   type ClothOptions,
 } from "./ClothVanilla";
 
-const props = defineProps<ClothOptions>();
+const props = withDefaults(defineProps<ClothOptions>(), {
+  drag: undefined,
+  float: undefined,
+});
 
 const sourceEl = ref<HTMLCanvasElement | null>(null);
 const contentEl = ref<HTMLDivElement | null>(null);

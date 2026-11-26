@@ -1,6 +1,12 @@
 "use client";
 
-import { color, hexToRgb, presets, scrub } from "@/components/demos/control-schema";
+import {
+  color,
+  hexToRgb,
+  presets,
+  radio,
+  scrub,
+} from "@/components/demos/control-schema";
 import { DemoControls } from "@/components/demos/demo-controls";
 import { StageHint } from "@/components/demos/demo-stage";
 import { useDemoSurface, type DemoProps } from "@/components/demos/demo-surface";
@@ -25,6 +31,17 @@ const CONTROLS = {
     decimals: 1,
     group: "Droplet",
   }),
+  click: radio(
+    "Click",
+    "none",
+    [
+      { value: "none", label: "None" },
+      { value: "pop", label: "Pop" },
+    ],
+    { group: "Motion" },
+  ),
+  wobble: scrub("Wobble", 0, { min: 0, max: 1, step: 0.05, group: "Motion" }),
+  drift: scrub("Idle drift", 0, { min: 0, max: 1, step: 0.05, group: "Motion" }),
   refraction: scrub("Refraction", 80, {
     min: -120,
     max: 120,
@@ -72,6 +89,53 @@ const PRESETS = presets(CONTROLS, [
     values: { iridescence: 0, dispersion: 0.3, refraction: 110, shine: 0.7, rim: 0.2 },
   },
   { label: "Frosted", values: { size: 56, frost: 0.6, iridescence: 0.4, trail: 12 } },
+  {
+    label: "Lens",
+    values: {
+      trail: 1,
+      size: 90,
+      refraction: 120,
+      dispersion: 0.4,
+      iridescence: 0,
+      rim: 0.3,
+    },
+  },
+  {
+    label: "Honey",
+    values: {
+      tint: "#f59e0b",
+      tintStrength: 0.7,
+      blend: 10,
+      trail: 12,
+      follow: 0.15,
+      frost: 0.12,
+      iridescence: 0.3,
+      shine: 1,
+    },
+  },
+  {
+    label: "Oil",
+    values: {
+      colorA: "#7c3aed",
+      colorB: "#06b6d4",
+      iridescence: 1.5,
+      intensity: 1.15,
+      dispersion: 2.5,
+      speed: 3,
+    },
+  },
+  {
+    label: "Jelly",
+    values: {
+      click: "pop",
+      wobble: 1,
+      drift: 0.35,
+      trail: 12,
+      tint: "#fb7185",
+      tintStrength: 0.5,
+      refraction: 40,
+    },
+  },
 ]);
 
 export function BubbleDemo({ children }: DemoProps) {

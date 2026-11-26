@@ -41,7 +41,7 @@ const COMPONENTS: Record<string, ComponentDef> = {
   blaze: {
     base: "Blaze",
     description:
-      "Fire sparks, smoke, and heat distortion rising from the bottom of your page. The HTML stays interactive. No dependencies.",
+      "Firelight, lit smoke and drifting embers rising from the bottom of your page, behind or over your content. With html-in-canvas the heat haze bends your live HTML. The cursor stirs the smoke like liquid. No dependencies.",
   },
   bubble: {
     base: "Bubble",
@@ -56,7 +56,7 @@ const COMPONENTS: Record<string, ComponentDef> = {
   cloth: {
     base: "Cloth",
     description:
-      "Hangs your live HTML on a piece of fabric rippling in the wind, with softly lit folds. Cursor strokes send waves across the cloth. The HTML stays interactive. No dependencies.",
+      "Hangs your live HTML on a piece of fabric you can grab, fold and fling. It sways in the wind and falls back into place, and the HTML stays interactive, even across folds. No dependencies.",
   },
   clouds: {
     base: "Clouds",

@@ -87,9 +87,9 @@ export const COMPONENTS: ComponentEntry[] = [
     href: "/docs/components/blaze",
     name: "Blaze",
     description:
-      "Sparks, smoke, and heat haze rise from the bottom of the page and warp the content above them.",
+      "Firelight, lit smoke and drifting embers rise from below the page, and the heat haze bends live HTML above them.",
     video: "/assets/videos/blaze.webm",
-    support: "html-in-canvas",
+    support: "both",
   },
   {
     href: "/docs/components/bubble",
@@ -121,7 +121,7 @@ export const COMPONENTS: ComponentEntry[] = [
     href: "/docs/components/cloth",
     name: "Cloth",
     description:
-      "The page hangs on fabric that ripples in the wind. Cursor strokes send waves through it.",
+      "The page hangs on a piece of fabric. Grab it to fold and fling it, and it falls back into place.",
     video: "/assets/videos/cloth.webm",
     support: "html-in-canvas",
   },

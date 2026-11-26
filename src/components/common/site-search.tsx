@@ -83,7 +83,7 @@ const HINTS: Record<string, string> = {
   "asciify":
     "ascii text characters cursor trail overlay gradient glyph terminal matrix ripple click",
   "bend": "scroll cube fold",
-  "blaze": "fire sparks smoke heat",
+  "blaze": "fire sparks embers smoke heat haze glow background footer hero",
   "bubble":
     "droplet metaball glass refraction cursor trail liquid blob",
   "canvas":

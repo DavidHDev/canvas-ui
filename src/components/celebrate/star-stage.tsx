@@ -94,8 +94,15 @@ export function StarStage({ stars, slug, hex, ref }: StarStageProps) {
   }, [runId, stars]);
 
   const flame = hexToRgb(hex);
-  const spark = lighten(flame, 0.35);
-  const smoke = lighten(flame, 0.05);
+  const css = ([r, g, b]: [number, number, number], k = 1) =>
+    `rgb(${Math.round(r * k * 255)} ${Math.round(g * k * 255)} ${Math.round(b * k * 255)})`;
+  const ramp = [
+    css(flame, 0.1),
+    css(flame, 0.5),
+    css(flame),
+    css(lighten(flame, 0.35)),
+    css(lighten(flame, 0.8)),
+  ];
 
   const scale = width / DESIGN_W;
   const px = (value: number) => value * scale;
@@ -115,18 +122,17 @@ export function StarStage({ stars, slug, hex, ref }: StarStageProps) {
       }}
     >
       <Blaze
-        height={0.97}
+        layer="page"
+        height={lerp(0.18, 0.62, heat)}
+        intensity={lerp(0.35, 1, heat)}
         speed={lerp(0.5, 1.35, heat)}
-        distortion={lerp(0, 0.8, heat)}
-        distortionScale={0.6}
-        sparks={lerp(0, 1.1, heat) + burst * 0.5}
-        sparkDensity={1.4}
+        haze={lerp(0, 0.8, heat)}
+        turbulence={0.55}
+        sparks={Math.min(1, lerp(0, 0.9, heat) + burst * 0.4)}
         sparkSize={1.1}
-        layers={5}
-        smoke={lerp(0, 0.65, heat)}
-        glow={lerp(0.25, 1.9, heat) + burst * 0.5}
-        sparkColor={spark}
-        smokeColor={smoke}
+        smoke={lerp(0, 0.5, heat)}
+        glow={Math.min(1, lerp(0.2, 0.9, heat) + burst * 0.3)}
+        colors={ramp}
         style={{ position: "absolute", inset: 0 }}
       >
         <div
